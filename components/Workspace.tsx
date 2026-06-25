@@ -69,12 +69,18 @@ export default function Workspace() {
   const [activeTab, setActiveTab] = useState<'editor' | 'tree' | 'focus'>('editor')
   const [parsedSpec, setSpecParsed] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     system: true,
     components: true,
     schema_file: false,
     ledger_files: false,
   })
+
+  // Set isMounted to true on client-side mount
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Parse YAML dynamically as the user types
   useEffect(() => {
@@ -303,7 +309,7 @@ export default function Workspace() {
           {/* Excalidraw Component Container */}
           <div className="flex-1 relative overflow-hidden" id="excalidraw-container">
             {/* Safe dynamic loader to support non-browser testing */}
-            {typeof window !== 'undefined' ? (
+            {isMounted ? (
               <Excalidraw 
                 initialData={{
                   appState: {
