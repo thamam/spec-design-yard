@@ -1,6 +1,5 @@
-import React from 'react'
-import Workspace from '../components/Workspace'
+import { WorkspaceLayout } from "@/components/workspace/workspace-layout"
 
-export default function Home() {
-  return <Workspace />
+export default function Page() {
+  return <WorkspaceLayout />
 }
