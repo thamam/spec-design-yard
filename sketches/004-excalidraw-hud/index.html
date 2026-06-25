@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spec-Design Yard - Excalidraw HUD (Variant D)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .hand-drawn-font {
+      font-family: 'Architects Daughter', cursive;
+    }
+    
+    /* Magical Excalidraw Sketch Filter */
+    .sketch-effect {
+      filter: url(#hand-drawn);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 flex flex-col h-screen overflow-hidden dark">
+
+  <!-- SVG Filter definitions for hand-drawn look -->
+  <svg style="position: absolute; width: 0; height: 0; pointer-events: none;">
+    <defs>
+      <filter id="hand-drawn" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- Header -->
+  <header class="h-14 border-b border-zinc-850 bg-zinc-900/90 backdrop-blur flex items-center justify-between px-6 shrink-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-600/20">OD</div>
+      <div>
+        <h1 class="text-sm font-semibold tracking-tight text-zinc-100 flex items-center gap-2">
+          Spec Yard <span class="text-[9px] px-1.5 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-full font-mono border border-indigo-500/10">v0.10.0</span>
+        </h1>
+        <p class="text-[10px] text-zinc-500 font-semibold tracking-wider uppercase">Variant D: Excalidraw HUD</p>
+      </div>
+    </div>
+    
+    <!-- Navigation Tabs / Controls -->
+    <div class="flex items-center gap-1.5 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+      <button class="px-3 py-1 rounded text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-all">Spec Editor</button>
+      <button class="px-3 py-1 rounded text-xs font-medium bg-zinc-800 text-white transition-all shadow">Excalidraw Canvas</button>
+      <button class="px-3 py-1 rounded text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-all">External Brain v0.2</button>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-zinc-500">Aesthetic:</span>
+      <div class="flex items-center bg-zinc-900 rounded border border-zinc-850 p-0.5">
+        <button id="toggle-vector" class="px-2.5 py-0.5 text-[10px] rounded text-zinc-400 font-medium">Vector</button>
+        <button id="toggle-sketch" class="px-2.5 py-0.5 text-[10px] rounded bg-zinc-800 text-indigo-400 font-bold shadow">Sketch</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <main class="flex flex-1 overflow-hidden relative">
+
+    <!-- Left Pane: Code/Editor Side -->
+    <section class="w-[38%] border-r border-zinc-850 bg-zinc-900 flex flex-col overflow-hidden z-20">
+      <div class="h-11 px-4 border-b border-zinc-850 bg-zinc-950/40 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+          <span class="text-xs font-semibold text-zinc-200">External Brain YAML Spec</span>
+        </div>
+        <span class="text-[9px] font-semibold text-zinc-500 bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-700/50">Core + Bricks Architecture</span>
+      </div>
+      
+      <!-- Editable Spec Area -->
+      <div class="flex-1 flex overflow-hidden font-mono text-[12.5px] leading-relaxed relative bg-zinc-950/80">
+        <textarea id="spec-textarea" class="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none h-full overflow-y-auto leading-6" spellcheck="false">system:
+  name: External Brain
+  components:
+    - id: inbox
+      type: Store
+      name: Inbox (immutable raw drops)
+      connections:
+        - target: digest_stage
+    
+    - id: digest_stage
+      type: Stage
+      name: Digest Stage (agent processing)
+      connections:
+        - target: review_stage
+    
+    - id: review_stage
+      type: Stage
+      name: Review Stage (human/policy approval)
+      connections:
+        - target: commit_stage
+    
+    - id: commit_stage
+      type: Stage
+      name: Commit Stage (merging to main)
+      connections:
+        - target: kb_store
+        
+    - id: kb_store
+      type: Store
+      name: Knowledge Base (kb/)
+
+    # Attaching Bricks (B1, B2, B4, B5, B6, B7)
+    - id: schema_file
+      type: Brick
+      name: B1: Schema (SCHEMA.md)
+      connections:
+        - target: digest_stage
+        - target: review_stage
+
+    - id: ledger_files
+      type: Brick
+      name: B2: Ledger (index + log)
+      connections:
+        - target: digest_stage
+        - target: commit_stage</textarea>
+      </div>
+
+      <!-- Quick AI Assistance / Actions Bar -->
+      <div class="h-12 border-t border-zinc-850 px-4 bg-zinc-950 flex items-center justify-between">
+        <div class="flex items-center gap-2 w-full">
+          <span class="text-indigo-400 font-bold text-xs shrink-0">✨ Copilot:</span>
+          <input type="text" placeholder="Attach B7: Consolidation brick to inbox..." class="bg-zinc-900 border border-zinc-800 rounded px-3 py-1 text-xs w-full focus:outline-none focus:border-indigo-500 text-zinc-300 placeholder-zinc-600 transition-colors">
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Pane: Interactive Canvas Visualizer -->
+    <section class="flex-1 bg-zinc-950 flex flex-col overflow-hidden relative">
+      <!-- Grid Background Pattern -->
+      <div class="absolute inset-0 bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none z-0"></div>
+      
+      <!-- Canvas Controls Header -->
+      <div class="h-11 px-4 border-b border-zinc-850 bg-zinc-900/40 flex items-center justify-between shrink-0 z-10 backdrop-blur-sm">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Visual Workspace (Interactive Excalidraw Style)</span>
+        </div>
+        
+        <!-- Canvas tools -->
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-zinc-500 font-medium">Click and drag nodes to test bidirectional synchronization.</span>
+        </div>
+      </div>
+
+      <!-- React Flow Style Canvas Content with EXCALIDRAW SKETCH FILTER -->
+      <div id="canvas-container" class="flex-1 overflow-auto p-8 flex items-center justify-center relative z-10">
+        
+        <!-- Live Workspace nodes in Hand-Drawn Stance -->
+        <div id="nodes-box" class="relative w-[560px] h-[480px] sketch-effect">
+          
+          <!-- Outer Group Container: The Core Loop -->
+          <div class="absolute inset-x-0 top-16 bottom-16 border-2 border-dashed border-zinc-600 bg-zinc-900/10 rounded-2xl p-4 flex flex-col justify-between pointer-events-none">
+            <span class="absolute -top-3 left-4 px-2 py-0.5 bg-zinc-950 border border-zinc-700 rounded text-[10px] hand-drawn-font text-zinc-400 tracking-wider font-semibold shadow-sm">
+              Core Loop (One Loop, One Repo)
+            </span>
+          </div>
+
+          <!-- Node: Inbox (Store) -->
+          <div id="node-inbox" class="absolute left-6 top-24 w-[130px] bg-zinc-900 border-2 border-indigo-500 rounded-lg p-3 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg">
+            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block font-mono">Store</span>
+            <h4 class="text-xs font-bold text-zinc-200 mt-1 hand-drawn-font">inbox/</h4>
+            <p class="text-[9px] text-zinc-500 mt-1">Immutable raw drops</p>
+          </div>
+
+          <!-- Node: Digest Stage (Stage) -->
+          <div id="node-digest" class="absolute left-180 top-24 w-[130px] bg-indigo-950/20 border-2 border-indigo-400 rounded-lg p-3 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 190px;">
+            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block font-mono">Stage</span>
+            <h4 class="text-xs font-bold text-indigo-300 mt-1 hand-drawn-font">digest</h4>
+            <p class="text-[9px] text-zinc-500 mt-1">Agent generates notes</p>
+          </div>
+
+          <!-- Node: Review Stage (Stage) -->
+          <div id="node-review" class="absolute left-320 top-24 w-[130px] bg-indigo-950/20 border-2 border-indigo-400 rounded-lg p-3 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 360px;">
+            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block font-mono">Stage</span>
+            <h4 class="text-xs font-bold text-indigo-300 mt-1 hand-drawn-font">review</h4>
+            <p class="text-[9px] text-zinc-500 mt-1">Human/policy inspection</p>
+          </div>
+
+          <!-- Node: Commit Stage (Stage) -->
+          <div id="node-commit" class="absolute left-320 top-240 w-[130px] bg-indigo-950/20 border-2 border-indigo-400 rounded-lg p-3 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 360px; top: 210px;">
+            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block font-mono">Stage</span>
+            <h4 class="text-xs font-bold text-indigo-300 mt-1 hand-drawn-font">commit</h4>
+            <p class="text-[9px] text-zinc-500 mt-1">Approval merges notes</p>
+          </div>
+
+          <!-- Node: KB (Store) -->
+          <div id="node-kb" class="absolute left-190 top-240 w-[130px] bg-zinc-900 border-2 border-indigo-500 rounded-lg p-3 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 190px; top: 210px;">
+            <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-wider block font-mono">Store</span>
+            <h4 class="text-xs font-bold text-zinc-200 mt-1 hand-drawn-font">kb/</h4>
+            <p class="text-[9px] text-zinc-500 mt-1">Approved knowledge</p>
+          </div>
+
+
+          <!-- Brick: B1 Schema -->
+          <div id="brick-schema" class="absolute left-100 top-360 w-[140px] bg-emerald-950/20 border-2 border-emerald-400 rounded-lg p-2.5 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 20px; top: 350px;">
+            <span class="text-[8px] font-bold text-emerald-400 uppercase tracking-wider block font-mono">B1: Brick</span>
+            <h4 class="text-[11px] font-bold text-emerald-300 mt-0.5 hand-drawn-font">SCHEMA.md</h4>
+          </div>
+
+          <!-- Brick: B2 Ledger -->
+          <div id="brick-ledger" class="absolute left-300 top-360 w-[140px] bg-emerald-950/20 border-2 border-emerald-400 rounded-lg p-2.5 text-center cursor-grab hover:bg-zinc-800 transition-all select-none shadow-lg" style="left: 210px; top: 350px;">
+            <span class="text-[8px] font-bold text-emerald-400 uppercase tracking-wider block font-mono">B2: Brick</span>
+            <h4 class="text-[11px] font-bold text-emerald-300 mt-0.5 hand-drawn-font">index / log</h4>
+          </div>
+
+
+          <!-- Hand-Drawn SVG arrows connecting the elements -->
+          <svg class="absolute inset-0 w-full h-full pointer-events-none stroke-current" style="stroke: #52525b; fill: none; stroke-width: 2;">
+            <defs>
+              <!-- Sketch arrowhead -->
+              <marker id="sketch-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 2 L 8 5 L 0 8" fill="none" stroke="#52525b" stroke-width="2" stroke-linecap="round"/>
+              </marker>
+              <!-- Brick arrowhead -->
+              <marker id="brick-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 2 L 8 5 L 0 8" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round"/>
+              </marker>
+            </defs>
+
+            <!-- Loop Core Lines -->
+            <!-- Inbox -> Digest -->
+            <path d="M 136 150 C 150 150, 160 150, 190 150" marker-end="url(#sketch-arrow)"/>
+            <!-- Digest -> Review -->
+            <path d="M 320 150 C 330 150, 340 150, 360 150" marker-end="url(#sketch-arrow)"/>
+            <!-- Review -> Commit -->
+            <path d="M 425 210 L 425 210" marker-end="url(#sketch-arrow)"/>
+            <path d="M 425 204 L 425 210" marker-end="url(#sketch-arrow)"/>
+            <!-- Commit -> KB -->
+            <path d="M 360 250 L 320 250" marker-end="url(#sketch-arrow)"/>
+            <!-- KB -> Inbox (Feedback/Consolidation loop) -->
+            <!-- <path d="M 190 250 C 140 250, 100 250, 100 200" stroke-dasharray="3 3"/> -->
+
+            <!-- Brick Connections (Green lines) -->
+            <!-- Schema -> Digest -->
+            <path d="M 90 350 C 90 320, 200 320, 230 200" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#brick-arrow)"/>
+            <!-- Schema -> Review -->
+            <path d="M 120 350 C 150 310, 350 310, 395 200" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#brick-arrow)"/>
+
+            <!-- Ledger -> Digest -->
+            <path d="M 270 350 C 270 320, 250 250, 250 200" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#brick-arrow)"/>
+            <!-- Ledger -> Commit -->
+            <path d="M 290 350 C 310 320, 360 300, 390 270" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#brick-arrow)"/>
+          </svg>
+
+        </div>
+
+      </div>
+
+      <!-- Floating Stats Panel -->
+      <div class="absolute bottom-6 right-6 bg-zinc-900/90 border border-zinc-850 rounded-lg p-3.5 shadow-2xl text-[11px] text-zinc-400 max-w-xs z-30 backdrop-blur-md">
+        <p class="font-semibold text-zinc-200 mb-1 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+          💡 Sandbox Playground Stance
+        </p>
+        <p class="text-zinc-500 mt-1 leading-normal font-mono text-[10px]">
+          Rendering: **External Brain v0.2**<br>
+          Features a complete SVG vector-to-displacement filter to produce a high-fidelity hand-drawn Excalidraw aesthetic dynamically in HTML.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const box = document.getElementById('nodes-box');
+    const toggleVector = document.getElementById('toggle-vector');
+    const toggleSketch = document.getElementById('toggle-sketch');
+
+    // Interactive Aesthetic Swapper
+    toggleVector.addEventListener('click', () => {
+      box.classList.remove('sketch-effect');
+      toggleVector.classList.add('bg-zinc-800', 'text-indigo-400', 'font-bold', 'shadow');
+      toggleSketch.classList.remove('bg-zinc-800', 'text-indigo-400', 'font-bold', 'shadow');
+      toggleSketch.classList.add('text-zinc-400');
+    });
+
+    toggleSketch.addEventListener('click', () => {
+      box.add('sketch-effect'); // wait, box.classList.add('sketch-effect')
+      box.classList.add('sketch-effect');
+      toggleSketch.classList.add('bg-zinc-800', 'text-indigo-400', 'font-bold', 'shadow');
+      toggleVector.classList.remove('bg-zinc-800', 'text-indigo-400', 'font-bold', 'shadow');
+      toggleVector.classList.add('text-zinc-400');
+    });
+  </script>
+</body>
+</html>
