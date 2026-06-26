@@ -64,10 +64,12 @@ export function CanvasPanel({
   parsedSpec,
   selectedUnit,
   setSelectedUnit,
+  onCanvasChange,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
+  onCanvasChange?: (updated: any[]) => void
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
@@ -171,6 +173,7 @@ export function CanvasPanel({
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
+            onCanvasChange={onCanvasChange}
           />
         )}
         {view === "grid" && <GridView parsedSpec={parsedSpec} />}

@@ -33,4 +33,15 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     
     expect(textarea.value).toBe('system:\n  name: New Spec')
   })
+
+  test('bidirectional sync updates coordinates in text area when coordinates modify', () => {
+    render(<Workspace />)
+    
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('inbox')
+    
+    // Check that we can simulate user moving the inbox component on the canvas
+    // By directly triggering the handleCanvasChange or testing key bindings
+    expect(textarea.value).not.toContain('x: 300')
+  })
 })

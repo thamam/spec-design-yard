@@ -5,6 +5,8 @@ import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
 import yaml from "yaml"
+import { UserSession } from "./auth-panel"
+import { db } from "../../lib/db"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -94,6 +96,67 @@ export function WorkspaceLayout() {
   const [parsedSpec, setParsedSpec] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
 
+  // User Session & DB storage states
+  const [session, setSession] = useState<UserSession>({ user: null })
+
+  // Load custom saved spec when user signs in
+  useEffect(() => {
+    if (session.user) {
+      const savedDoc = db.getSpec("main")
+      if (savedDoc && savedDoc.yamlContent) {
+        setSpecText(savedDoc.yamlContent)
+      }
+    }
+  }, [session])
+
+  // Save current spec to DB on modification (if signed in)
+  useEffect(() => {
+    if (session.user && specText) {
+      db.saveSpec("main", "External Brain v0.2", specText)
+    }
+  }, [specText, session])
+
+  const handleLogin = useCallback((email: string, name: string) => {
+    setSession({ user: { email, name } })
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    setSession({ user: null })
+  }, [])
+
+  // Sync canvas position edits back into YAML spec
+  const handleCanvasChange = useCallback((updatedComponents: any[]) => {
+    try {
+      const parsed = yaml.parse(specText)
+      if (parsed && parsed.system && parsed.system.components) {
+        let changed = false
+        const updatedList = parsed.system.components.map((c: any) => {
+          const match = updatedComponents.find((uc: any) => uc.id === c.id)
+          if (match) {
+            const roundedX = Math.round(match.x)
+            const roundedY = Math.round(match.y)
+            if (c.x !== roundedX || c.y !== roundedY) {
+              changed = true
+              return {
+                ...c,
+                x: roundedX,
+                y: roundedY,
+              }
+            }
+          }
+          return c
+        })
+        if (changed) {
+          parsed.system.components = updatedList
+          const newYaml = yaml.stringify(parsed)
+          setSpecText(newYaml)
+        }
+      }
+    } catch (e) {
+      console.error("Failed to sync canvas changes to YAML: ", e)
+    }
+  }, [specText])
+
   // Dynamically parse the YAML as user types
   useEffect(() => {
     try {
@@ -144,7 +207,11 @@ export function WorkspaceLayout() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
-      <WorkspaceHeader />
+      <WorkspaceHeader
+        session={session}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+      />
 
       {/* Split pane body */}
       <div
@@ -211,6 +278,7 @@ export function WorkspaceLayout() {
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
+            onCanvasChange={handleCanvasChange}
           />
         </div>
       </div>

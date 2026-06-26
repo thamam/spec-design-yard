@@ -175,10 +175,12 @@ export function ExcalidrawCanvas({
   parsedSpec,
   selectedUnit,
   setSelectedUnit,
+  onCanvasChange,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
+  onCanvasChange?: (updated: any[]) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -196,6 +198,18 @@ export function ExcalidrawCanvas({
   }, [])
 
   const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec), [parsedSpec])
+
+  // Staging and debouncing coordinates updates to avoid dragging lag
+  const [pendingElements, setPendingElements] = useState<any[] | null>(null)
+
+  useEffect(() => {
+    if (!pendingElements || !onCanvasChange) return
+    const timer = setTimeout(() => {
+      onCanvasChange(pendingElements)
+      setPendingElements(null)
+    }, 450) // 450ms idle delay to confirm drag stop
+    return () => clearTimeout(timer)
+  }, [pendingElements, onCanvasChange])
 
   // Automatically scroll and fit canvas components to viewport
   useEffect(() => {
@@ -252,6 +266,7 @@ export function ExcalidrawCanvas({
           },
         }}
         onChange={(updatedElements: any, appState: any) => {
+          // 1. Sync selection back to list tabs
           if (setSelectedUnit && appState?.selectedElementIds) {
             const selectedIds = Object.keys(appState.selectedElementIds).filter(
               (id) => appState.selectedElementIds[id]
@@ -263,6 +278,14 @@ export function ExcalidrawCanvas({
               if (matchedId) {
                 setSelectedUnit(matchedId)
               }
+            }
+          }
+
+          // 2. Sync coordinate changes back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
+            if (rects.length > 0) {
+              setPendingElements(rects)
             }
           }
         }}
