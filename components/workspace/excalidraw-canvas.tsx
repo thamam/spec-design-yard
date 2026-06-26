@@ -247,7 +247,12 @@ export function ExcalidrawCanvas({
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
         key={elementsKey}
-        excalidrawRef={(api: any) => setExcalidrawAPI(api)}
+        excalidrawRef={(api: any) => {
+          setExcalidrawAPI(api)
+          if (typeof window !== "undefined") {
+            (window as any).excalidrawAPI = api
+          }
+        }}
         theme="dark"
         UIOptions={{
           canvasActions: {
@@ -285,7 +290,13 @@ export function ExcalidrawCanvas({
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
             if (rects.length > 0) {
-              setPendingElements(rects)
+              const hasChanged = rects.some((r: any) => {
+                const current = elements.find((el: any) => el.id === r.id)
+                return current && (Math.round(current.x) !== Math.round(r.x) || Math.round(current.y) !== Math.round(r.y))
+              })
+              if (hasChanged) {
+                setPendingElements(rects)
+              }
             }
           }
         }}
