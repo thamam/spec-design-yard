@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -14,6 +14,7 @@ import {
   FolderIcon,
 } from "lucide-react"
 import yaml from "yaml"
+import { lintSpec } from "../../lib/linter"
 
 interface EditorPanelProps {
   specText?: string
@@ -237,16 +238,25 @@ export function EditorPanel({
   const [localParsedSpec, setLocalParsedSpec] = useState<any>(null)
   const parsedSpec = propParsedSpec !== undefined ? propParsedSpec : localParsedSpec
 
+  const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
+  const [showDiagnostics, setShowDiagnostics] = useState(true)
+
   useEffect(() => {
-    if (propParsedSpec === undefined) {
-      try {
-        const parsed = yaml.parse(specText)
-        if (parsed && typeof parsed === "object") {
-          setLocalParsedSpec(parsed)
-        }
-      } catch (e) {}
+    try {
+      const parsed = yaml.parse(specText)
+      setYamlSyntaxError(null)
+      if (propParsedSpec === undefined && parsed && typeof parsed === "object") {
+        setLocalParsedSpec(parsed)
+      }
+    } catch (e: any) {
+      setYamlSyntaxError(e.message || "Invalid YAML syntax")
     }
   }, [specText, propParsedSpec])
+
+  const diagnostics = useMemo(() => {
+    if (yamlSyntaxError) return []
+    return lintSpec(parsedSpec)
+  }, [parsedSpec, yamlSyntaxError])
 
   const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
@@ -397,6 +407,97 @@ export function EditorPanel({
         style={{ background: "var(--background)" }}
       >
         <FocusTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
+      </div>
+
+      {/* Diagnostics Panel */}
+      <div
+        className="border-t shrink-0 flex flex-col font-sans select-none"
+        style={{
+          background: "var(--surface)",
+          borderColor: "var(--border)",
+        }}
+      >
+        {/* Panel header */}
+        <div
+          onClick={() => setShowDiagnostics((s) => !s)}
+          className="flex items-center justify-between px-3 h-8 cursor-pointer hover:bg-zinc-900/30 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase">
+            <span
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{
+                background:
+                  yamlSyntaxError || diagnostics.some((d) => d.severity === "error")
+                    ? "#ef4444" // red
+                    : diagnostics.some((d) => d.severity === "warning")
+                    ? "#f59e0b" // amber
+                    : "#10b981", // emerald
+              }}
+            />
+            <span>Spec Diagnostics</span>
+            {(yamlSyntaxError || diagnostics.length > 0) ? (
+              <span className="text-[10px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded font-mono font-medium">
+                {yamlSyntaxError
+                  ? "syntax error"
+                  : `${diagnostics.length} issue${diagnostics.length > 1 ? "s" : ""}`}
+              </span>
+            ) : (
+              <span className="text-[10px] text-zinc-500 font-medium">all checks passing</span>
+            )}
+          </div>
+          <span className="text-zinc-500 text-[11px] font-medium">
+            {showDiagnostics ? "Collapse" : "Expand"}
+          </span>
+        </div>
+
+        {/* Panel body */}
+        {showDiagnostics && (
+          <div
+            className="border-t overflow-y-auto max-h-32 p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
+            style={{ borderColor: "var(--border)" }}
+          >
+            {yamlSyntaxError && (
+              <div className="text-red-400 flex items-start gap-1.5">
+                <span className="text-red-500">❌</span>
+                <div>
+                  <div className="font-bold">YAML Syntax Error:</div>
+                  <div className="text-zinc-400 whitespace-pre-wrap">{yamlSyntaxError}</div>
+                </div>
+              </div>
+            )}
+
+            {!yamlSyntaxError && diagnostics.length === 0 && (
+              <div className="text-emerald-400 flex items-center gap-1.5 py-0.5">
+                <span className="text-emerald-500">✓</span>
+                <span>No issues found. Your specification is syntactically sound and logically consistent!</span>
+              </div>
+            )}
+
+            {!yamlSyntaxError &&
+              diagnostics.map((d, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-1.5 ${
+                    d.severity === "error"
+                      ? "text-red-400"
+                      : d.severity === "warning"
+                      ? "text-amber-400"
+                      : "text-blue-400"
+                  }`}
+                >
+                  <span>{d.severity === "error" ? "❌" : d.severity === "warning" ? "⚠️" : "ℹ️"}</span>
+                  <div>
+                    <span>{d.message}</span>
+                    {d.path && (
+                      <span className="text-[9px] text-zinc-600 bg-zinc-900/50 px-1 py-0.2 rounded ml-1.5">
+                        {d.path}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
     </section>
   )

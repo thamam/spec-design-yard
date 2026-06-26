@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 // We will implement Workspace in pages/index.tsx or as a standalone component
 import Workspace from '../components/Workspace'
+import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
+import { lintSpec } from '../lib/linter'
 
 describe('Workspace Split-Pane Spec-Diagram View', () => {
   test('renders editor panel and canvas panel side-by-side', () => {
@@ -43,5 +45,67 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     // Check that we can simulate user moving the inbox component on the canvas
     // By directly triggering the handleCanvasChange or testing key bindings
     expect(textarea.value).not.toContain('x: 300')
+  })
+
+  test('compileSpecToExcalidrawElements honors explicit coordinates in YAML spec', () => {
+    const mockSpec = {
+      system: {
+        name: 'Test Brain',
+        components: [
+          { id: 'inbox', type: 'Store', name: 'inbox/', x: 450, y: 250 }
+        ]
+      }
+    }
+    
+    const elements = compileSpecToExcalidrawElements(mockSpec)
+    const rectangle = elements.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    expect(rectangle).toBeDefined()
+    expect(rectangle.x).toBe(450)
+    expect(rectangle.y).toBe(250)
+  })
+
+  test('lintSpec flags duplicate component IDs, missing fields, unrecognized types, and orphan connections', () => {
+    const invalidSpec = {
+      system: {
+        name: 'Faulty Brain',
+        components: [
+          // 1. Missing type
+          { id: 'inbox', name: 'Inbox' },
+          // 2. Duplicate ID 'inbox'
+          { id: 'inbox', type: 'Store' },
+          // 3. Unrecognized type 'Database'
+          { id: 'db_node', type: 'Database' },
+          // 4. Orphan connection to non-existent 'missing_node'
+          {
+            id: 'processor',
+            type: 'Stage',
+            connections: [
+              { target: 'missing_node' }
+            ]
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(invalidSpec)
+    
+    // We expect 4 distinct errors/warnings
+    expect(diagnostics.length).toBeGreaterThanOrEqual(4)
+
+    const missingType = diagnostics.find(d => d.message.includes('Missing required field "type"'))
+    expect(missingType).toBeDefined()
+    expect(missingType?.severity).toBe('error')
+
+    const duplicateId = diagnostics.find(d => d.message.includes('Duplicate component ID "inbox"'))
+    expect(duplicateId).toBeDefined()
+    expect(duplicateId?.severity).toBe('error')
+
+    const unrecognizedType = diagnostics.find(d => d.message.includes('Unrecognized component type "Database"'))
+    expect(unrecognizedType).toBeDefined()
+    expect(unrecognizedType?.severity).toBe('warning')
+
+    const orphanConn = diagnostics.find(d => d.message.includes('Connection target "missing_node" does not exist'))
+    expect(orphanConn).toBeDefined()
+    expect(orphanConn?.severity).toBe('error')
   })
 })

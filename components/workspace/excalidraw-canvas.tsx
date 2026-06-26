@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react"
 
-function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
+export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   if (!parsedSpec?.system?.components) return []
   const elements: any[] = []
   const components = parsedSpec.system.components
@@ -15,22 +15,29 @@ function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   let brickIdx = 0
 
   components.forEach((comp: any) => {
-    const type = String(comp.type).toLowerCase()
-    
-    if (type === 'brick') {
-      // Lay out bricks in a row below the core loop
+    if (typeof comp.x === 'number' && typeof comp.y === 'number') {
       positions[comp.id] = {
-        x: 100 + brickIdx * 260,
-        y: 380,
+        x: comp.x,
+        y: comp.y,
       }
-      brickIdx++
     } else {
-      // Lay out core stages and stores in a horizontal sequence
-      positions[comp.id] = {
-        x: 60 + coreIdx * 250,
-        y: 160,
+      const type = String(comp.type).toLowerCase()
+      
+      if (type === 'brick') {
+        // Lay out bricks in a row below the core loop
+        positions[comp.id] = {
+          x: 100 + brickIdx * 260,
+          y: 380,
+        }
+        brickIdx++
+      } else {
+        // Lay out core stages and stores in a horizontal sequence
+        positions[comp.id] = {
+          x: 60 + coreIdx * 250,
+          y: 160,
+        }
+        coreIdx++
       }
-      coreIdx++
     }
   })
 
