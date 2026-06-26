@@ -1,26 +1,181 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 
-/* ── Dynamic import wrapper for Excalidraw ── */
-export function ExcalidrawCanvas() {
+function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
+  if (!parsedSpec?.system?.components) return []
+  const elements: any[] = []
+  const components = parsedSpec.system.components
+
+  // Layout positions registry
+  const positions: Record<string, { x: number; y: number }> = {}
+
+  // 1. Assign positions to nodes based on logical layout rules
+  let coreIdx = 0
+  let brickIdx = 0
+
+  components.forEach((comp: any) => {
+    const type = String(comp.type).toLowerCase()
+    
+    if (type === 'brick') {
+      // Lay out bricks in a row below the core loop
+      positions[comp.id] = {
+        x: 100 + brickIdx * 260,
+        y: 380,
+      }
+      brickIdx++
+    } else {
+      // Lay out core stages and stores in a horizontal sequence
+      positions[comp.id] = {
+        x: 60 + coreIdx * 250,
+        y: 160,
+      }
+      coreIdx++
+    }
+  })
+
+  // 2. Generate Rectangle & Text elements for each component
+  components.forEach((comp: any) => {
+    const pos = positions[comp.id] || { x: 100, y: 100 }
+    const type = String(comp.type).toLowerCase()
+    
+    // Determine colors matching our HUD and Excalidraw specs
+    let strokeColor = '#6366f1' // Indigo
+    let backgroundColor = 'rgba(99, 102, 241, 0.1)'
+    if (type === 'stage') {
+      strokeColor = '#c084fc' // Purple
+      backgroundColor = 'rgba(168, 85, 247, 0.1)'
+    } else if (type === 'brick') {
+      strokeColor = '#34d399' // Emerald
+      backgroundColor = 'rgba(52, 211, 153, 0.1)'
+    } else if (type === 'gateway') {
+      strokeColor = '#f59e0b' // Amber
+      backgroundColor = 'rgba(245, 158, 11, 0.1)'
+    }
+
+    const rectId = comp.id
+    const textId = `text-${comp.id}`
+
+    // Create the container Rectangle
+    elements.push({
+      type: 'rectangle',
+      id: rectId,
+      x: pos.x,
+      y: pos.y,
+      width: 190,
+      height: 80,
+      strokeColor,
+      backgroundColor,
+      fillStyle: 'solid',
+      strokeWidth: 2,
+      roughness: 1.5,
+      roundness: { type: 3 }, // Rounded corners
+      boundElements: [{ id: textId, type: 'text' }],
+    })
+
+    // Create the bound Label text element
+    const labelText = `${comp.name || comp.id}\n[${comp.type || 'Unit'}]`
+    elements.push({
+      type: 'text',
+      id: textId,
+      containerId: rectId,
+      x: pos.x + 5,
+      y: pos.y + 15,
+      width: 180,
+      height: 50,
+      text: labelText,
+      fontSize: 14,
+      fontFamily: 1, // Virgil
+      strokeColor: '#f4f4f5', // High contrast white
+      textAlign: 'center',
+      verticalAlign: 'middle',
+      originalText: labelText,
+      autoResize: true,
+    })
+  })
+
+  // 3. Generate Arrows for connections
+  components.forEach((comp: any) => {
+    const posSource = positions[comp.id]
+    if (!posSource || !comp.connections) return
+
+    comp.connections.forEach((conn: any) => {
+      const posTarget = positions[conn.target]
+      if (!posTarget) return
+
+      const arrowId = `arrow-${comp.id}-${conn.target}`
+      
+      // Calculate delta offsets between center of shapes
+      const sx = posSource.x + 95
+      const sy = posSource.y + 40
+      const tx = posTarget.x + 95
+      const ty = posTarget.y + 40
+
+      const dx = tx - sx
+      const dy = ty - sy
+
+      // Brick arrows are emerald, core arrows are zinc
+      const isBrickConn = comp.type?.toLowerCase() === 'brick' || conn.target?.toLowerCase() === 'brick'
+      const strokeColor = isBrickConn ? '#34d399' : '#52525b'
+
+      elements.push({
+        type: 'arrow',
+        id: arrowId,
+        x: sx,
+        y: sy,
+        width: Math.abs(dx),
+        height: Math.abs(dy),
+        points: [
+          [0, 0],
+          [dx, dy],
+        ],
+        strokeColor,
+        strokeWidth: 1.8,
+        roughness: 1.5,
+        endArrowhead: 'arrow',
+        startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
+        endBinding: { elementId: conn.target, fixedPoint: [0.5, 0.5] },
+      })
+    })
+  })
+
+  return elements
+}
+
+export function ExcalidrawCanvas({
+  parsedSpec,
+  selectedUnit,
+  setSelectedUnit,
+}: {
+  parsedSpec?: any
+  selectedUnit?: string | null
+  setSelectedUnit?: (val: string | null) => void
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<{
-    theme?: string
-    UIOptions?: Record<string, unknown>
-    initialData?: Record<string, unknown>
-  }> | null>(null)
+  const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     // Dynamically import Excalidraw only on the client
     import("@excalidraw/excalidraw")
-      .then((mod) => {
+      .then((mod: any) => {
         const Comp = mod.Excalidraw ?? mod.default
         setExcalidrawComponent(() => Comp)
       })
       .catch(() => setLoadError(true))
   }, [])
+
+  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec), [parsedSpec])
+
+  // Key to force Excalidraw to unmount/remount on component updates
+  const elementsKey = useMemo(() => {
+    if (!parsedSpec?.system?.components) return "empty"
+    return (
+      elements.length +
+      "-" +
+      parsedSpec.system.components.map((c: any) => `${c.id}-${c.name}-${c.type}`).join(",")
+    );
+  }, [parsedSpec, elements])
 
   if (loadError) {
     return <ExcalidrawFallback reason="load-error" />
@@ -33,6 +188,7 @@ export function ExcalidrawCanvas() {
   return (
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
+        key={elementsKey}
         theme="dark"
         UIOptions={{
           canvasActions: {
@@ -40,10 +196,30 @@ export function ExcalidrawCanvas() {
           },
         }}
         initialData={{
+          elements,
           appState: {
             viewBackgroundColor: "#0a0a0c",
             theme: "dark",
+            currentItemStrokeColor: "#a855f7",
+            currentItemFontFamily: 1, // Virgil
+            gridSize: 20,
+            activeTool: { type: "selection" },
           },
+        }}
+        onChange={(updatedElements: any, appState: any) => {
+          if (setSelectedUnit && appState?.selectedElementIds) {
+            const selectedIds = Object.keys(appState.selectedElementIds).filter(
+              (id) => appState.selectedElementIds[id]
+            )
+            if (selectedIds.length > 0) {
+              const matchedId = selectedIds.find((id) =>
+                parsedSpec?.system?.components?.some((c: any) => c.id === id)
+              )
+              if (matchedId) {
+                setSelectedUnit(matchedId)
+              }
+            }
+          }
         }}
       />
     </div>

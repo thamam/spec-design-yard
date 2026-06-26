@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -12,155 +12,18 @@ import {
   ChevronDownIcon,
   FileJsonIcon,
   FolderIcon,
-  FolderOpenIcon,
 } from "lucide-react"
+import yaml from "yaml"
 
-/* ── Sample spec document ── */
-const SPEC_CODE = `{
-  "$schema": "https://spec.dev/v1/schema.json",
-  "name": "UserAuthService",
-  "version": "2.4.1",
-  "description": "Authentication and session management service",
-
-  "endpoints": [
-    {
-      "id": "auth.login",
-      "method": "POST",
-      "path": "/auth/login",
-      "summary": "Authenticate a user and return a session token",
-      "request": {
-        "body": {
-          "email": { "type": "string", "format": "email" },
-          "password": { "type": "string", "minLength": 8 }
-        }
-      },
-      "response": {
-        "200": {
-          "token": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" },
-          "user": { "$ref": "#/components/User" }
-        },
-        "401": { "$ref": "#/errors/Unauthorized" }
-      }
-    },
-    {
-      "id": "auth.refresh",
-      "method": "POST",
-      "path": "/auth/refresh",
-      "summary": "Refresh an existing session token",
-      "security": ["bearerAuth"],
-      "response": {
-        "200": {
-          "token": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" }
-        }
-      }
-    },
-    {
-      "id": "auth.logout",
-      "method": "DELETE",
-      "path": "/auth/session",
-      "summary": "Invalidate the current session",
-      "security": ["bearerAuth"],
-      "response": { "204": {} }
-    }
-  ],
-
-  "components": {
-    "User": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "format": "uuid" },
-        "email": { "type": "string", "format": "email" },
-        "displayName": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "member", "viewer"] },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    }
-  },
-
-  "errors": {
-    "Unauthorized": {
-      "code": 401,
-      "message": "Invalid credentials or expired token"
-    }
-  }
-}`
-
-/* ── Syntax token types ── */
-type TokenType = "punctuation" | "key" | "string" | "number" | "keyword" | "comment" | "plain"
-
-interface Token {
-  type: TokenType
-  text: string
+interface EditorPanelProps {
+  specText?: string
+  setSpecText?: (val: string) => void
+  parsedSpec?: any
+  selectedUnit?: string | null
+  setSelectedUnit?: (val: string | null) => void
 }
 
-function tokenizeLine(line: string): Token[] {
-  const tokens: Token[] = []
-  let rest = line
-
-  // Leading whitespace
-  const wsMatch = rest.match(/^(\s+)/)
-  if (wsMatch) {
-    tokens.push({ type: "plain", text: wsMatch[1] })
-    rest = rest.slice(wsMatch[1].length)
-  }
-
-  while (rest.length > 0) {
-    // JSON key: "key":
-    const keyMatch = rest.match(/^("(?:[^"\\]|\\.)*")(\s*:)/)
-    if (keyMatch) {
-      tokens.push({ type: "key", text: keyMatch[1] })
-      tokens.push({ type: "punctuation", text: keyMatch[2] })
-      rest = rest.slice(keyMatch[0].length)
-      continue
-    }
-    // String value
-    const strMatch = rest.match(/^"(?:[^"\\]|\\.)*"/)
-    if (strMatch) {
-      tokens.push({ type: "string", text: strMatch[0] })
-      rest = rest.slice(strMatch[0].length)
-      continue
-    }
-    // Number
-    const numMatch = rest.match(/^-?\d+(\.\d+)?/)
-    if (numMatch) {
-      tokens.push({ type: "number", text: numMatch[0] })
-      rest = rest.slice(numMatch[0].length)
-      continue
-    }
-    // Keywords
-    const kwMatch = rest.match(/^(true|false|null)\b/)
-    if (kwMatch) {
-      tokens.push({ type: "keyword", text: kwMatch[0] })
-      rest = rest.slice(kwMatch[0].length)
-      continue
-    }
-    // Punctuation
-    const pMatch = rest.match(/^[{}[\],]/)
-    if (pMatch) {
-      tokens.push({ type: "punctuation", text: pMatch[0] })
-      rest = rest.slice(1)
-      continue
-    }
-    // Anything else
-    tokens.push({ type: "plain", text: rest[0] })
-    rest = rest.slice(1)
-  }
-  return tokens
-}
-
-const TOKEN_COLORS: Record<TokenType, string> = {
-  key:        "#79c0ff",
-  string:     "#a5d6ff",
-  number:     "#f2cc60",
-  keyword:    "#ff7b72",
-  punctuation:"#8b949e",
-  comment:    "#4f6279",
-  plain:      "#c9d1d9",
-}
-
-/* ── Code tab ── */
+/* ── Code Tab ── */
 interface CodeTabProps {
   value: string
   onChange: (val: string) => void
@@ -174,286 +37,172 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         id="spec-textarea"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6"
+        className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto"
         spellCheck="false"
       />
     </div>
   )
 }
 
-/* ── Tree tab ── */
-interface TreeNode {
-  key: string
-  type: "object" | "array" | "string" | "number" | "boolean"
-  value?: string
-  children?: TreeNode[]
+/* ── Tree Tab ── */
+interface TreeTabProps {
+  parsedSpec: any
+  selectedUnit: string | null
+  setSelectedUnit: (val: string | null) => void
 }
 
-const SPEC_TREE: TreeNode = {
-  key: "spec",
-  type: "object",
-  children: [
-    { key: "$schema", type: "string", value: '"https://spec.dev/v1/schema.json"' },
-    { key: "name", type: "string", value: '"UserAuthService"' },
-    { key: "version", type: "string", value: '"2.4.1"' },
-    { key: "description", type: "string", value: '"Authentication and session management"' },
-    {
-      key: "endpoints",
-      type: "array",
-      children: [
-        {
-          key: "[0] auth.login",
-          type: "object",
-          children: [
-            { key: "method", type: "string", value: '"POST"' },
-            { key: "path", type: "string", value: '"/auth/login"' },
-            { key: "request", type: "object", children: [{ key: "body", type: "object", children: [{ key: "email", type: "string", value: "{ type: string }" }, { key: "password", type: "string", value: "{ type: string }" }] }] },
-            { key: "response", type: "object", children: [{ key: "200", type: "object", value: "{ token, expiresAt, user }" }, { key: "401", type: "object", value: "$ref Unauthorized" }] },
-          ],
-        },
-        {
-          key: "[1] auth.refresh",
-          type: "object",
-          children: [
-            { key: "method", type: "string", value: '"POST"' },
-            { key: "path", type: "string", value: '"/auth/refresh"' },
-            { key: "security", type: "array", value: '["bearerAuth"]' },
-          ],
-        },
-        {
-          key: "[2] auth.logout",
-          type: "object",
-          children: [
-            { key: "method", type: "string", value: '"DELETE"' },
-            { key: "path", type: "string", value: '"/auth/session"' },
-          ],
-        },
-      ],
-    },
-    {
-      key: "components",
-      type: "object",
-      children: [
-        {
-          key: "User",
-          type: "object",
-          children: [
-            { key: "id", type: "string", value: "uuid" },
-            { key: "email", type: "string", value: "email" },
-            { key: "displayName", type: "string", value: "string" },
-            { key: "role", type: "string", value: "admin | member | viewer" },
-            { key: "createdAt", type: "string", value: "date-time" },
-          ],
-        },
-      ],
-    },
-    {
-      key: "errors",
-      type: "object",
-      children: [{ key: "Unauthorized", type: "object", children: [{ key: "code", type: "number", value: "401" }, { key: "message", type: "string", value: '"Invalid credentials"' }] }],
-    },
-  ],
-}
+function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
+    system: true,
+    components: true,
+  })
 
-function TreeNode({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
-  const [open, setOpen] = useState(depth < 2)
-  const hasChildren = (node.children?.length ?? 0) > 0
-  const isContainer = hasChildren
-
-  const typeColor: Record<string, string> = {
-    object:  "var(--accent)",
-    array:   "var(--warning)",
-    string:  "#a5d6ff",
-    number:  "#f2cc60",
-    boolean: "#ff7b72",
+  const toggleNode = (nodeId: string) => {
+    setExpandedNodes((prev) => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }))
   }
 
-  return (
-    <li style={{ paddingLeft: depth > 0 ? 16 : 0 }}>
-      <button
-        className="flex items-center gap-1.5 w-full text-left py-[3px] px-2 rounded text-[12px] transition-colors"
-        style={{ color: "var(--foreground)" }}
-        onClick={() => isContainer && setOpen((o) => !o)}
-        aria-expanded={isContainer ? open : undefined}
-      >
-        {/* Chevron */}
-        <span
-          className="shrink-0 w-3 h-3 flex items-center justify-center"
-          style={{ color: "var(--foreground-muted)" }}
-        >
-          {isContainer ? (
-            open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />
-          ) : (
-            <span className="w-1 h-1 rounded-full block" style={{ background: "var(--border-subtle)" }} />
-          )}
-        </span>
-
-        {/* Key */}
-        <span className="font-medium" style={{ color: TOKEN_COLORS.key }}>
-          {node.key}
-        </span>
-
-        {/* Type badge */}
-        {isContainer && (
-          <span
-            className="text-[10px] px-1 rounded shrink-0"
-            style={{ background: "var(--surface-overlay)", color: typeColor[node.type] }}
-          >
-            {node.type}
-          </span>
-        )}
-
-        {/* Value */}
-        {node.value && !isContainer && (
-          <span
-            className="truncate font-mono text-[11px]"
-            style={{ color: TOKEN_COLORS.string }}
-          >
-            {node.value}
-          </span>
-        )}
-      </button>
-
-      {isContainer && open && (
-        <ul className="border-l" style={{ borderColor: "var(--border)", marginLeft: 8 }}>
-          {node.children!.map((child, i) => (
-            <TreeNode key={i} node={child} depth={depth + 1} />
-          ))}
-        </ul>
-      )}
-    </li>
-  )
-}
-
-function TreeTab() {
-  return (
-    <div className="flex-1 overflow-auto py-2 px-1">
-      <ul>
-        <TreeNode node={SPEC_TREE} depth={0} />
-      </ul>
-    </div>
-  )
-}
-
-/* ── Focus tab ── */
-function FocusTab() {
-  const fields = [
-    { label: "Service name", value: "UserAuthService", accent: true },
-    { label: "Version", value: "2.4.1" },
-    { label: "Schema", value: "https://spec.dev/v1/schema.json", mono: true },
-    { label: "Endpoints", value: "3 defined" },
-    { label: "Components", value: "1 model (User)" },
-    { label: "Security", value: "Bearer token (JWT)" },
-    { label: "Error types", value: "Unauthorized (401)" },
-  ]
-
-  const endpoints = [
-    { method: "POST",   path: "/auth/login",   id: "auth.login",   desc: "Authenticate user" },
-    { method: "POST",   path: "/auth/refresh",  id: "auth.refresh",  desc: "Refresh session" },
-    { method: "DELETE", path: "/auth/session",  id: "auth.logout",   desc: "Invalidate session" },
-  ]
-
-  const METHOD_COLOR: Record<string, string> = {
-    GET: "#3ecf8e",
-    POST: "var(--accent)",
-    PUT: "var(--warning)",
-    PATCH: "var(--warning)",
-    DELETE: "var(--danger)",
+  if (!parsedSpec?.system) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs min-h-[250px]">
+        <NetworkIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
+        <p>Awaiting valid YAML input to render tree structure...</p>
+      </div>
+    )
   }
 
+  const components = parsedSpec.system.components || []
+
   return (
-    <div className="flex-1 overflow-auto p-4 space-y-5">
-      {/* Meta card */}
-      <div
-        className="rounded-lg p-4 space-y-3"
-        style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-      >
-        <h3 className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--foreground-muted)" }}>
-          Specification Overview
-        </h3>
-        <dl className="space-y-2">
-          {fields.map(({ label, value, accent, mono }) => (
-            <div key={label} className="flex items-baseline justify-between gap-4">
-              <dt className="text-[12px] shrink-0" style={{ color: "var(--foreground-muted)" }}>{label}</dt>
-              <dd
-                className={`text-[12px] truncate font-medium ${mono ? "font-mono" : ""}`}
-                style={{ color: accent ? "var(--accent)" : "var(--foreground)" }}
-              >
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+    <div className="flex-1 overflow-auto py-3 px-4 text-sm select-none">
+      <div className="mb-2">
+        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-mono">System Directory Structure</span>
       </div>
-
-      {/* Endpoints */}
-      <div className="space-y-2">
-        <h3 className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--foreground-muted)" }}>
-          Endpoints
-        </h3>
-        {endpoints.map((ep) => (
-          <div
-            key={ep.id}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
-            style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-subtle)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)")}
-          >
-            <span
-              className="shrink-0 text-[10px] font-bold w-14 text-center py-0.5 rounded"
-              style={{
-                background: `${METHOD_COLOR[ep.method]}18`,
-                color: METHOD_COLOR[ep.method],
-                border: `1px solid ${METHOD_COLOR[ep.method]}30`,
-              }}
-            >
-              {ep.method}
-            </span>
-            <span className="font-mono text-[12px] truncate" style={{ color: "var(--foreground)" }}>
-              {ep.path}
-            </span>
-            <span className="ml-auto text-[11px] shrink-0" style={{ color: "var(--foreground-muted)" }}>
-              {ep.desc}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* User model */}
-      <div
-        className="rounded-lg p-4"
-        style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}
-      >
-        <h3 className="text-[11px] uppercase tracking-widest font-semibold mb-3" style={{ color: "var(--foreground-muted)" }}>
-          User Model
-        </h3>
-        <div className="space-y-1.5">
-          {[
-            { name: "id", type: "uuid" },
-            { name: "email", type: "email" },
-            { name: "displayName", type: "string" },
-            { name: "role", type: "enum" },
-            { name: "createdAt", type: "date-time" },
-          ].map((f) => (
-            <div key={f.name} className="flex items-center gap-2">
-              <span className="font-mono text-[12px] w-28 truncate" style={{ color: TOKEN_COLORS.key }}>
-                {f.name}
-              </span>
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded font-mono"
-                style={{ background: "var(--surface-overlay)", color: "var(--foreground-muted)" }}
-              >
-                {f.type}
-              </span>
-            </div>
-          ))}
+      <div className="space-y-2 mt-2">
+        <div className="flex items-center gap-1.5 text-zinc-200 cursor-pointer" onClick={() => toggleNode("system")}>
+          {expandedNodes.system ? <ChevronDownIcon size={14} className="text-zinc-500" /> : <ChevronRightIcon size={14} className="text-zinc-500" />}
+          <FolderIcon size={14} className="text-indigo-400" />
+          <span className="font-semibold">{parsedSpec.system.name || "System Root"}</span>
         </div>
+
+        {expandedNodes.system && (
+          <div className="pl-4 space-y-2 border-l border-zinc-850 ml-1.5">
+            <div className="flex items-center gap-1.5 text-zinc-300 cursor-pointer" onClick={() => toggleNode("components")}>
+              {expandedNodes.components ? <ChevronDownIcon size={14} className="text-zinc-500" /> : <ChevronRightIcon size={14} className="text-zinc-500" />}
+              <span className="text-emerald-400">❖</span>
+              <span className="font-medium text-zinc-400">components</span>
+            </div>
+
+            {expandedNodes.components && (
+              <div className="pl-4 space-y-2 border-l border-zinc-850 ml-1.5">
+                {components.map((comp: any) => {
+                  const isExpanded = !!expandedNodes[comp.id]
+                  return (
+                    <div key={comp.id} className="space-y-1.5">
+                      <div
+                        onClick={() => {
+                          toggleNode(comp.id)
+                          setSelectedUnit(comp.id)
+                        }}
+                        className={`flex items-center justify-between py-1 px-2.5 rounded border transition-all cursor-pointer ${
+                          selectedUnit === comp.id
+                            ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
+                            : "bg-zinc-900/50 border-zinc-850 hover:border-zinc-800 text-zinc-300"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="text-indigo-400">📄</span>
+                          <span className="font-mono text-xs">{comp.id}</span>
+                        </span>
+                        <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded uppercase">
+                          {comp.type}
+                        </span>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-850">
+                          <div>
+                            <span className="text-zinc-500">name:</span> {comp.name || comp.id}
+                          </div>
+                          {comp.connections && comp.connections.length > 0 && (
+                            <div>
+                              <span className="text-zinc-500">connections:</span>
+                              {comp.connections.map((conn: any, idx: number) => (
+                                <div key={idx} className="pl-3 text-emerald-400/80">
+                                  → {conn.target}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-/* ── Tab definitions ── */
+/* ── Focus Tab ── */
+interface FocusTabProps {
+  parsedSpec: any
+  selectedUnit: string | null
+  setSelectedUnit: (val: string | null) => void
+}
+
+function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
+  const getSelectedUnitSpec = () => {
+    if (!selectedUnit || !parsedSpec) return "Select a component on the diagram to inspect its isolated spec."
+    try {
+      const component = parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
+      if (component) {
+        return yaml.stringify({ component })
+      }
+      return `No component found with ID: ${selectedUnit}`
+    } catch (e) {
+      return "Error extracting focused spec."
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-auto p-4 flex flex-col h-full">
+      {selectedUnit ? (
+        <div className="flex-1 flex flex-col overflow-hidden h-full">
+          <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-t-lg flex items-center justify-between shrink-0">
+            <span className="font-mono text-indigo-300 text-[11px]">
+              Selected: <span className="font-bold">{selectedUnit}</span>
+            </span>
+            <button
+              onClick={() => setSelectedUnit(null)}
+              className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold font-sans"
+            >
+              Clear Selection
+            </button>
+          </div>
+          <pre className="flex-1 border-x border-b border-zinc-800 bg-zinc-950 p-4 rounded-b-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs">
+            {getSelectedUnitSpec()}
+          </pre>
+        </div>
+      ) : (
+        <div className="flex-1 border border-dashed border-zinc-850 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
+          <FocusIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
+          <p className="text-xs font-semibold">Diagram Selection Sync Active</p>
+          <p className="text-[11px] text-zinc-600 mt-1 max-w-xs leading-relaxed">
+            Click any component or container box in the Excalidraw diagram or the directory tree, and this view will automatically isolate and show only its specific spec block.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 type TabId = "code" | "tree" | "focus"
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -462,12 +211,19 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "focus", label: "Focus", icon: <FocusIcon size={12} /> },
 ]
 
-/* ── Main EditorPanel ── */
-export function EditorPanel() {
+export function EditorPanel({
+  specText: propSpecText,
+  setSpecText: propSetSpecText,
+  parsedSpec: propParsedSpec,
+  selectedUnit: propSelectedUnit,
+  setSelectedUnit: propSetSelectedUnit,
+}: EditorPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("code")
   const [wordWrap, setWordWrap] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [specText, setSpecText] = useState(`system:
+
+  // Standard fallback state if no props provided
+  const [localSpecText, setLocalSpecText] = useState(`system:
   name: External Brain
   components:
     - id: api_gateway
@@ -475,6 +231,26 @@ export function EditorPanel() {
       name: Public API Gateway
       connections:
         - target: inbox`)
+  const specText = propSpecText !== undefined ? propSpecText : localSpecText
+  const setSpecText = propSetSpecText || setLocalSpecText
+
+  const [localParsedSpec, setLocalParsedSpec] = useState<any>(null)
+  const parsedSpec = propParsedSpec !== undefined ? propParsedSpec : localParsedSpec
+
+  useEffect(() => {
+    if (propParsedSpec === undefined) {
+      try {
+        const parsed = yaml.parse(specText)
+        if (parsed && typeof parsed === "object") {
+          setLocalParsedSpec(parsed)
+        }
+      } catch (e) {}
+    }
+  }, [specText, propParsedSpec])
+
+  const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
+  const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
+  const setSelectedUnit = propSetSelectedUnit || setLocalSelectedUnit
 
   const handleCopy = () => {
     navigator.clipboard.writeText(specText).catch(() => {})
@@ -498,7 +274,6 @@ export function EditorPanel() {
           height: 36,
         }}
       >
-        {/* Tabs */}
         <div className="flex items-center gap-0.5" role="tablist" aria-label="Editor views">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id
@@ -521,7 +296,6 @@ export function EditorPanel() {
                   {tab.icon}
                 </span>
                 {tab.label}
-                {/* Active underline */}
                 {isActive && (
                   <span
                     className="absolute bottom-0 left-0 right-0 h-[2px] rounded-t"
@@ -533,7 +307,6 @@ export function EditorPanel() {
           })}
         </div>
 
-        {/* Toolbar actions (code-only) */}
         {activeTab === "code" && (
           <div className="flex items-center gap-1">
             <button
@@ -583,18 +356,18 @@ export function EditorPanel() {
         <span style={{ color: "var(--foreground-dim)" }}>/</span>
         <span>specs</span>
         <span style={{ color: "var(--foreground-dim)" }}>/</span>
-        <span style={{ color: "var(--foreground)" }}>main.spec.json</span>
+        <span style={{ color: "var(--foreground)" }}>main.spec.yaml</span>
         <span
           className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-mono"
           style={{ background: "var(--surface-overlay)", color: "var(--foreground-muted)" }}
         >
-          JSON
+          YAML
         </span>
       </div>
 
       {/* Tab panels */}
       <div
-        id={`tabpanel-code`}
+        id="tabpanel-code"
         role="tabpanel"
         aria-labelledby="tab-code"
         hidden={activeTab !== "code"}
@@ -605,25 +378,25 @@ export function EditorPanel() {
       </div>
 
       <div
-        id={`tabpanel-tree`}
+        id="tabpanel-tree"
         role="tabpanel"
         aria-labelledby="tab-tree"
         hidden={activeTab !== "tree"}
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <TreeTab />
+        <TreeTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
       </div>
 
       <div
-        id={`tabpanel-focus`}
+        id="tabpanel-focus"
         role="tabpanel"
         aria-labelledby="tab-focus"
         hidden={activeTab !== "focus"}
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <FocusTab />
+        <FocusTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
       </div>
     </section>
   )

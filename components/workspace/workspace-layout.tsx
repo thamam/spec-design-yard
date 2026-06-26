@@ -4,9 +4,62 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
+import yaml from "yaml"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
+
+const INITIAL_SPEC = `system:
+  name: External Brain
+  components:
+    - id: api_gateway
+      type: Gateway
+      name: Public API Gateway
+      connections:
+        - target: inbox
+
+    - id: inbox
+      type: Store
+      name: Inbox (immutable raw drops)
+      connections:
+        - target: digest_stage
+    
+    - id: digest_stage
+      type: Stage
+      name: Digest Stage (agent processing)
+      connections:
+        - target: review_stage
+    
+    - id: review_stage
+      type: Stage
+      name: Review Stage (human/policy approval)
+      connections:
+        - target: commit_stage
+    
+    - id: commit_stage
+      type: Stage
+      name: Commit Stage (merging to main)
+      connections:
+        - target: kb_store
+        
+    - id: kb_store
+      type: Store
+      name: Knowledge Base (kb/)
+
+    # Attaching Bricks
+    - id: schema_file
+      type: Brick
+      name: B1: Schema (SCHEMA.md)
+      connections:
+        - target: digest_stage
+        - target: review_stage
+
+    - id: ledger_files
+      type: Brick
+      name: B2: Ledger (index + log)
+      connections:
+        - target: digest_stage
+        - target: commit_stage`
 
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -14,6 +67,23 @@ export function WorkspaceLayout() {
   const [isDragging, setIsDragging] = useState(false)
   const dragStartX = useRef(0)
   const dragStartSplit = useRef(DEFAULT_SPLIT)
+
+  // Shared application states
+  const [specText, setSpecText] = useState(INITIAL_SPEC)
+  const [parsedSpec, setParsedSpec] = useState<any>(null)
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
+
+  // Dynamically parse the YAML as user types
+  useEffect(() => {
+    try {
+      const parsed = yaml.parse(specText)
+      if (parsed && typeof parsed === "object") {
+        setParsedSpec(parsed)
+      }
+    } catch (e) {
+      // Ignore invalid parse on typos, keep last valid parse
+    }
+  }, [specText])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -66,7 +136,13 @@ export function WorkspaceLayout() {
           style={{ width: `${splitPercent}%`, minWidth: MIN_PANEL_WIDTH }}
           className="flex flex-col min-w-0 overflow-hidden"
         >
-          <EditorPanel />
+          <EditorPanel
+            specText={specText}
+            setSpecText={setSpecText}
+            parsedSpec={parsedSpec}
+            selectedUnit={selectedUnit}
+            setSelectedUnit={setSelectedUnit}
+          />
         </div>
 
         {/* Drag handle */}
@@ -110,7 +186,11 @@ export function WorkspaceLayout() {
           style={{ width: `${100 - splitPercent}%`, minWidth: MIN_PANEL_WIDTH }}
           className="flex flex-col min-w-0 overflow-hidden"
         >
-          <CanvasPanel />
+          <CanvasPanel
+            parsedSpec={parsedSpec}
+            selectedUnit={selectedUnit}
+            setSelectedUnit={setSelectedUnit}
+          />
         </div>
       </div>
 
@@ -139,12 +219,12 @@ function StatusBar() {
           Ready
         </span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
-        <span>spec.json</span>
+        <span>main.spec.yaml</span>
       </div>
       <div className="flex items-center gap-4">
         <span>UTF-8</span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
-        <span>TypeScript</span>
+        <span>YAML</span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>Ln 1, Col 1</span>
       </div>

@@ -60,9 +60,19 @@ const CANVAS_VIEWS: { id: CanvasView; icon: React.ReactNode; label: string }[] =
   { id: "layers",  icon: <LayersIcon size={12} />,        label: "Layers"  },
 ]
 
-export function CanvasPanel() {
+export function CanvasPanel({
+  parsedSpec,
+  selectedUnit,
+  setSelectedUnit,
+}: {
+  parsedSpec?: any
+  selectedUnit?: string | null
+  setSelectedUnit?: (val: string | null) => void
+}) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
+
+  const systemName = parsedSpec?.system?.name || "External Brain"
 
   return (
     <section
@@ -143,7 +153,7 @@ export function CanvasPanel() {
           style={{ background: "var(--accent)", opacity: 0.7 }}
           aria-hidden="true"
         />
-        <span>UserAuthService</span>
+        <span>{systemName}</span>
         <span style={{ color: "var(--foreground-dim)" }}>/</span>
         <span style={{ color: "var(--foreground)" }}>Architecture Diagram</span>
         <span
@@ -156,29 +166,52 @@ export function CanvasPanel() {
 
       {/* Canvas content */}
       <div className="flex flex-col flex-1 min-h-0 relative overflow-hidden">
-        {view === "diagram" && <ExcalidrawCanvas />}
-        {view === "grid" && <GridView />}
-        {view === "layers" && <LayersView />}
+        {view === "diagram" && (
+          <ExcalidrawCanvas
+            parsedSpec={parsedSpec}
+            selectedUnit={selectedUnit}
+            setSelectedUnit={setSelectedUnit}
+          />
+        )}
+        {view === "grid" && <GridView parsedSpec={parsedSpec} />}
+        {view === "layers" && <LayersView parsedSpec={parsedSpec} />}
       </div>
     </section>
   )
 }
 
 /* ── Grid view ── */
-function GridView() {
-  const cards = [
-    { label: "auth.login",   method: "POST",   color: "#4f8ef7", desc: "POST /auth/login" },
-    { label: "auth.refresh", method: "POST",   color: "#4f8ef7", desc: "POST /auth/refresh" },
-    { label: "auth.logout",  method: "DELETE", color: "#f06060", desc: "DELETE /auth/session" },
-    { label: "User",         method: "MODEL",  color: "#3ecf8e", desc: "components/User" },
-    { label: "Unauthorized", method: "ERROR",  color: "#f5a623", desc: "errors/401" },
-    { label: "bearerAuth",   method: "SEC",    color: "#8b949e", desc: "security/bearerAuth" },
-  ]
+function GridView({ parsedSpec }: { parsedSpec: any }) {
+  const components = parsedSpec?.system?.components || []
+  
+  const cards = components.map((comp: any) => {
+    const type = String(comp.type).toLowerCase()
+    let color = "#6366f1" // Store/default: Indigo
+    if (type === "stage") color = "#c084fc" // Stage: Purple
+    else if (type === "brick") color = "#34d399" // Brick: Emerald
+    else if (type === "gateway") color = "#f59e0b" // Gateway: Amber
+
+    return {
+      label: comp.id,
+      method: String(comp.type).toUpperCase(),
+      color,
+      desc: comp.name || comp.id,
+    }
+  })
+
+  if (cards.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 text-xs p-6 min-h-[250px]">
+        <GridIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
+        <p>Awaiting valid specification components to render grid...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 overflow-auto p-6">
       {/* Dot grid overlay */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30" aria-hidden="true">
         <defs>
           <pattern id="canvas-dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="0.7" fill="rgba(255,255,255,0.05)" />
@@ -186,8 +219,8 @@ function GridView() {
         </defs>
         <rect width="100%" height="100%" fill="url(#canvas-dots)" />
       </svg>
-      <div className="relative grid grid-cols-2 lg:grid-cols-3 gap-4 max-w-xl">
-        {cards.map((c) => (
+      <div className="relative grid grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl">
+        {cards.map((c: any) => (
           <div
             key={c.label}
             className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150"
@@ -224,18 +257,42 @@ function GridView() {
 }
 
 /* ── Layers view ── */
-function LayersView() {
-  const layers = [
-    { name: "Endpoints",   count: 3, color: "var(--accent)",   visible: true },
-    { name: "Components",  count: 1, color: "var(--success)",  visible: true },
-    { name: "Errors",      count: 1, color: "var(--warning)",  visible: true },
-    { name: "Security",    count: 1, color: "var(--foreground-muted)", visible: false },
-    { name: "Meta",        count: 4, color: "var(--foreground-muted)", visible: true },
-  ]
+function LayersView({ parsedSpec }: { parsedSpec: any }) {
+  const components = parsedSpec?.system?.components || []
+  
+  // Count types
+  const counts: Record<string, number> = {}
+  components.forEach((comp: any) => {
+    const t = comp.type || "Unit"
+    counts[t] = (counts[t] || 0) + 1
+  })
+
+  const typeColors: Record<string, string> = {
+    Gateway: "#f59e0b",
+    Stage: "#c084fc",
+    Store: "#6366f1",
+    Brick: "#34d399",
+  }
+
+  const layers = Object.entries(counts).map(([name, count]) => ({
+    name,
+    count,
+    color: typeColors[name] || "var(--foreground-muted)",
+    visible: true,
+  }))
 
   const [vis, setVis] = useState<Record<string, boolean>>(
     Object.fromEntries(layers.map((l) => [l.name, l.visible]))
   )
+
+  if (layers.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 text-xs p-6 min-h-[250px]">
+        <LayersIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
+        <p>Awaiting specification components to display layers...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 overflow-auto p-4">
