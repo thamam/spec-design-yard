@@ -114,10 +114,10 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
     comp.connections.forEach((conn: any, connIdx: number) => {
       const connPath = `${pathPrefix}[${connIdx}]`
-      if (!conn || typeof conn !== "object" || !conn.target) {
+      if (!conn || typeof conn !== "object" || typeof conn.target !== "string" || conn.target.trim() === "") {
         diagnostics.push({
           severity: "error",
-          message: `Invalid connection entry at index ${connIdx} for component "${comp.id}".`,
+          message: `Invalid connection entry at index ${connIdx} for component "${comp.id}". Target must be a non-empty string.`,
           path: connPath,
         })
         return

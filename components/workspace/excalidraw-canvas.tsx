@@ -2,8 +2,16 @@
 
 import { useEffect, useRef, useState, useMemo } from "react"
 
+const getDeterministicSeed = (id: string) => {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return (Math.abs(hash) % 100000) + 1
+}
+
 export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
-  if (!parsedSpec?.system?.components) return []
+  if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const components = parsedSpec.system.components
 
@@ -15,13 +23,14 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   let brickIdx = 0
 
   components.forEach((comp: any) => {
+    if (!comp || typeof comp !== "object" || !comp.id) return
     if (typeof comp.x === 'number' && typeof comp.y === 'number') {
       positions[comp.id] = {
         x: comp.x,
         y: comp.y,
       }
     } else {
-      const type = String(comp.type).toLowerCase()
+      const type = String(comp.type || "").toLowerCase()
       
       if (type === 'brick') {
         // Lay out bricks in a row below the core loop
@@ -43,8 +52,9 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
   // 2. Generate Rectangle & Text elements for each component
   components.forEach((comp: any) => {
+    if (!comp || typeof comp !== "object" || !comp.id) return
     const pos = positions[comp.id] || { x: 100, y: 100 }
-    const type = String(comp.type).toLowerCase()
+    const type = String(comp.type || "").toLowerCase()
     
     // Determine colors matching our HUD and Excalidraw specs
     let strokeColor = '#6366f1' // Indigo
@@ -77,9 +87,9 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       strokeWidth: 2,
       roughness: 1.2,
       roundness: { type: 3 }, // Rounded corners
-      seed: Math.floor(Math.random() * 100000) + 1,
+      seed: getDeterministicSeed(rectId),
       version: 1,
-      versionNonce: Math.floor(Math.random() * 100000) + 1,
+      versionNonce: getDeterministicSeed(`${rectId}-rect-nonce`),
       isDeleted: false,
       groupIds: [],
       frameId: null,
@@ -107,9 +117,9 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       verticalAlign: 'middle',
       originalText: labelText,
       autoResize: true,
-      seed: Math.floor(Math.random() * 100000) + 1,
+      seed: getDeterministicSeed(textId),
       version: 1,
-      versionNonce: Math.floor(Math.random() * 100000) + 1,
+      versionNonce: getDeterministicSeed(`${textId}-text-nonce`),
       isDeleted: false,
       groupIds: [],
       frameId: null,
@@ -122,10 +132,12 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
   // 3. Generate Arrows for connections
   components.forEach((comp: any) => {
+    if (!comp || typeof comp !== "object" || !comp.id || !comp.connections) return
     const posSource = positions[comp.id]
-    if (!posSource || !comp.connections) return
+    if (!posSource) return
 
     comp.connections.forEach((conn: any) => {
+      if (!conn || typeof conn !== "object" || !conn.target) return
       const posTarget = positions[conn.target]
       if (!posTarget) return
 
@@ -141,7 +153,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       const dy = ty - sy
 
       // Brick arrows are emerald, core arrows are zinc
-      const isBrickConn = comp.type?.toLowerCase() === 'brick' || conn.target?.toLowerCase() === 'brick'
+      const isBrickConn = String(comp.type || "").toLowerCase() === 'brick' || String(conn.target || "").toLowerCase() === 'brick'
       const strokeColor = isBrickConn ? '#34d399' : '#52525b'
 
       elements.push({
@@ -161,9 +173,9 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         endArrowhead: 'arrow',
         startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
         endBinding: { elementId: conn.target, fixedPoint: [0.5, 0.5] },
-        seed: Math.floor(Math.random() * 100000) + 1,
+        seed: getDeterministicSeed(arrowId),
         version: 1,
-        versionNonce: Math.floor(Math.random() * 100000) + 1,
+        versionNonce: getDeterministicSeed(`${arrowId}-arrow-nonce`),
         isDeleted: false,
         groupIds: [],
         frameId: null,
@@ -218,9 +230,11 @@ export function ExcalidrawCanvas({
     return () => clearTimeout(timer)
   }, [pendingElements, onCanvasChange])
 
-  // Automatically scroll and fit canvas components to viewport
+  // Automatically scroll and fit canvas components to viewport on initial load
+  const hasInitialScrolled = useRef(false)
   useEffect(() => {
-    if (excalidrawAPI && elements.length > 0) {
+    if (excalidrawAPI && elements.length > 0 && !hasInitialScrolled.current) {
+      hasInitialScrolled.current = true
       const timer = setTimeout(() => {
         try {
           excalidrawAPI.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.85 })
@@ -232,15 +246,16 @@ export function ExcalidrawCanvas({
     }
   }, [excalidrawAPI, elements])
 
-  // Key to force Excalidraw to unmount/remount on component updates
-  const elementsKey = useMemo(() => {
-    if (!parsedSpec?.system?.components) return "empty"
-    return (
-      elements.length +
-      "-" +
-      parsedSpec.system.components.map((c: any) => `${c.id}-${c.name}-${c.type}`).join(",")
-    );
-  }, [parsedSpec, elements])
+  // Sync elements dynamically on the fly without remounting Excalidraw
+  useEffect(() => {
+    if (excalidrawAPI && elements.length > 0) {
+      try {
+        excalidrawAPI.updateScene({ elements })
+      } catch (e) {
+        console.error("Failed to update Excalidraw scene: ", e)
+      }
+    }
+  }, [excalidrawAPI, elements])
 
   if (loadError) {
     return <ExcalidrawFallback reason="load-error" />
@@ -253,7 +268,6 @@ export function ExcalidrawCanvas({
   return (
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
-        key={elementsKey}
         excalidrawRef={(api: any) => {
           setExcalidrawAPI(api)
           if (typeof window !== "undefined") {
