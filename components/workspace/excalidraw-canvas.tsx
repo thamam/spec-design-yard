@@ -68,9 +68,18 @@ function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       backgroundColor,
       fillStyle: 'solid',
       strokeWidth: 2,
-      roughness: 1.5,
+      roughness: 1.2,
       roundness: { type: 3 }, // Rounded corners
+      seed: Math.floor(Math.random() * 100000) + 1,
+      version: 1,
+      versionNonce: Math.floor(Math.random() * 100000) + 1,
+      isDeleted: false,
+      groupIds: [],
+      frameId: null,
       boundElements: [{ id: textId, type: 'text' }],
+      updated: Date.now(),
+      link: null,
+      locked: false,
     })
 
     // Create the bound Label text element
@@ -91,6 +100,16 @@ function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       verticalAlign: 'middle',
       originalText: labelText,
       autoResize: true,
+      seed: Math.floor(Math.random() * 100000) + 1,
+      version: 1,
+      versionNonce: Math.floor(Math.random() * 100000) + 1,
+      isDeleted: false,
+      groupIds: [],
+      frameId: null,
+      boundElements: [],
+      updated: Date.now(),
+      link: null,
+      locked: false,
     })
   })
 
@@ -131,10 +150,20 @@ function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         ],
         strokeColor,
         strokeWidth: 1.8,
-        roughness: 1.5,
+        roughness: 1.3,
         endArrowhead: 'arrow',
         startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
         endBinding: { elementId: conn.target, fixedPoint: [0.5, 0.5] },
+        seed: Math.floor(Math.random() * 100000) + 1,
+        version: 1,
+        versionNonce: Math.floor(Math.random() * 100000) + 1,
+        isDeleted: false,
+        groupIds: [],
+        frameId: null,
+        boundElements: [],
+        updated: Date.now(),
+        link: null,
+        locked: false,
       })
     })
   })
@@ -153,6 +182,7 @@ export function ExcalidrawCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
+  const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null)
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
@@ -166,6 +196,20 @@ export function ExcalidrawCanvas({
   }, [])
 
   const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec), [parsedSpec])
+
+  // Automatically scroll and fit canvas components to viewport
+  useEffect(() => {
+    if (excalidrawAPI && elements.length > 0) {
+      const timer = setTimeout(() => {
+        try {
+          excalidrawAPI.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.85 })
+        } catch (e) {
+          console.error("Failed to scroll to content: ", e)
+        }
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [excalidrawAPI, elements])
 
   // Key to force Excalidraw to unmount/remount on component updates
   const elementsKey = useMemo(() => {
@@ -189,6 +233,7 @@ export function ExcalidrawCanvas({
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
         key={elementsKey}
+        excalidrawRef={(api: any) => setExcalidrawAPI(api)}
         theme="dark"
         UIOptions={{
           canvasActions: {

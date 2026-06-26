@@ -10,56 +10,77 @@ const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
 
 const INITIAL_SPEC = `system:
-  name: External Brain
+  name: External Brain v0.2
   components:
-    - id: api_gateway
-      type: Gateway
-      name: Public API Gateway
-      connections:
-        - target: inbox
-
     - id: inbox
       type: Store
-      name: Inbox (immutable raw drops)
+      name: inbox/
       connections:
         - target: digest_stage
     
     - id: digest_stage
       type: Stage
-      name: Digest Stage (agent processing)
+      name: digest
       connections:
         - target: review_stage
     
     - id: review_stage
       type: Stage
-      name: Review Stage (human/policy approval)
+      name: review
       connections:
         - target: commit_stage
     
     - id: commit_stage
       type: Stage
-      name: Commit Stage (merging to main)
+      name: commit
       connections:
         - target: kb_store
         
     - id: kb_store
       type: Store
-      name: Knowledge Base (kb/)
+      name: kb/
 
     # Attaching Bricks
-    - id: schema_file
+    - id: b1_schema
       type: Brick
-      name: B1: Schema (SCHEMA.md)
+      name: "B1: Schema"
       connections:
         - target: digest_stage
         - target: review_stage
 
-    - id: ledger_files
+    - id: b2_ledger
       type: Brick
-      name: B2: Ledger (index + log)
+      name: "B2: Ledger"
       connections:
         - target: digest_stage
-        - target: commit_stage`
+        - target: commit_stage
+
+    - id: b4_context
+      type: Brick
+      name: "B4: Context"
+      connections:
+        - target: digest_stage
+
+    - id: b5_prompt
+      type: Brick
+      name: "B5: Prompt"
+      connections:
+        - target: digest_stage
+        - target: review_stage
+
+    - id: b6_verify
+      type: Brick
+      name: "B6: Verify"
+      connections:
+        - target: review_stage
+        - target: commit_stage
+
+    - id: b7_consolidate
+      type: Brick
+      name: "B7: Consolidate"
+      connections:
+        - target: commit_stage
+        - target: inbox`
 
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)

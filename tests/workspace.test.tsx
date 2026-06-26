@@ -22,7 +22,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     expect(textarea.value).toContain('system:')
-    expect(textarea.value).toContain('api_gateway')
+    expect(textarea.value).toContain('inbox')
   })
 
   test('updates editor value on user input', () => {
