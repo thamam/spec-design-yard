@@ -9,8 +9,17 @@ import {
   ShareIcon,
   TerminalIcon,
 } from "lucide-react"
+import { AuthPanel, UserSession } from "./auth-panel"
 
-export function WorkspaceHeader() {
+export function WorkspaceHeader({
+  session,
+  onLogin,
+  onLogout,
+}: {
+  session: UserSession
+  onLogin: (email: string, name: string) => void
+  onLogout: () => void
+}) {
   const [saved, setSaved] = useState(true)
 
   const handleSave = () => {
@@ -111,6 +120,16 @@ export function WorkspaceHeader() {
           icon={<SettingsIcon size={13} />}
           label="Settings"
           onClick={() => {}}
+        />
+        <div
+          className="w-px h-4 mx-1"
+          style={{ background: "var(--border-subtle)" }}
+          aria-hidden="true"
+        />
+        <AuthPanel
+          session={session}
+          onLogin={onLogin}
+          onLogout={onLogout}
         />
       </div>
     </header>
