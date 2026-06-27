@@ -295,6 +295,172 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             modified = true
           }
         }
+      } else if (fixType === "delete-component") {
+        const compIdx = parts[parts.length - 1] as number
+        const compsNode = doc.getIn(["system", "components"]) as any
+        if (compsNode && typeof compsNode.delete === 'function') {
+          const compNode = compsNode.get(compIdx) as any
+          let compId = ""
+          if (compNode && typeof compNode.get === 'function') {
+            compId = compNode.get('id')
+          }
+          compsNode.delete(compIdx)
+          modified = true
+
+          if (compId && compsNode.items) {
+            compsNode.items.forEach((cNode: any) => {
+              if (!cNode || typeof cNode.get !== 'function') return
+              const conns = cNode.get('connections')
+              if (conns && conns.items && Array.isArray(conns.items)) {
+                for (let i = conns.items.length - 1; i >= 0; i--) {
+                  const connNode = conns.items[i]
+                  if (connNode && typeof connNode.get === 'function') {
+                    const target = connNode.get('target')
+                    if (target === compId) {
+                      conns.delete(i)
+                      modified = true
+                    }
+                  }
+                }
+                if (conns.items.length === 0) {
+                  cNode.delete('connections')
+                  modified = true
+                }
+              }
+            })
+          }
+        }
+      } else if (fixType === "connect-from-gateway") {
+        const compIdx = parts[parts.length - 1] as number
+        const compsNode = doc.getIn(["system", "components"]) as any
+        if (compsNode && compsNode.items) {
+          const targetNode = compsNode.get(compIdx) as any
+          let targetId = ""
+          if (targetNode && typeof targetNode.get === 'function') {
+            targetId = targetNode.get('id')
+          }
+
+          if (targetId) {
+            let gatewayId = ""
+            compsNode.items.forEach((cNode: any) => {
+              if (gatewayId) return
+              if (cNode && typeof cNode.get === 'function') {
+                const type = String(cNode.get('type') || "").toLowerCase()
+                if (type === "gateway") {
+                  gatewayId = cNode.get('id')
+                }
+              }
+            })
+
+            if (!gatewayId && compsNode.items.length > 0) {
+              const firstNode = compsNode.get(0) as any
+              if (firstNode && typeof firstNode.get === 'function') {
+                const firstId = firstNode.get('id')
+                if (firstId !== targetId) {
+                  gatewayId = firstId
+                }
+              }
+            }
+
+            if (gatewayId) {
+              compsNode.items.forEach((cNode: any) => {
+                if (cNode && typeof cNode.get === 'function' && cNode.get('id') === gatewayId) {
+                  let conns = cNode.get('connections')
+                  if (!conns || typeof conns.get !== 'function') {
+                    cNode.set('connections', doc.createNode([]))
+                    conns = cNode.get('connections')
+                  }
+
+                  let connExists = false
+                  if (conns && conns.items) {
+                    connExists = conns.items.some((connNode: any) => {
+                      if (!connNode || typeof connNode.get !== 'function') return false
+                      return connNode.get('target') === targetId
+                    })
+                  }
+
+                  if (!connExists) {
+                    const newConn = doc.createNode({ target: targetId })
+                    if (conns && typeof conns.add === 'function') {
+                      conns.add(newConn)
+                      modified = true
+                    }
+                  }
+                }
+              })
+            }
+          }
+        }
+      } else if (fixType === "insert-stage") {
+        const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
+        const connIdx = resolvedParts[resolvedParts.length - 1] as number
+        const connsArrayPath = resolvedParts.slice(0, -1)
+        const connsNode = doc.getIn(connsArrayPath) as any
+        if (connsNode) {
+          const connNode = connsNode.get(connIdx) as any
+          if (connNode && typeof connNode.get === 'function') {
+            const targetId = connNode.get('target')
+            const compPath = resolvedParts.slice(0, -2)
+            const compNode = doc.getIn(compPath) as any
+            let sourceId = ""
+            if (compNode && typeof compNode.get === 'function') {
+              sourceId = compNode.get('id')
+            }
+
+            if (sourceId && targetId) {
+              let newStageId = `${sourceId}_to_${targetId}`
+              const compsNode = doc.getIn(["system", "components"]) as any
+              const existingIds = new Set<string>()
+              if (compsNode && compsNode.items) {
+                compsNode.items.forEach((c: any) => {
+                  if (c && typeof c.get === 'function') {
+                    const id = c.get('id')
+                    if (id) existingIds.add(String(id).trim())
+                  }
+                })
+              }
+              if (existingIds.has(newStageId)) {
+                let suffix = 1
+                let uniqueId = `${newStageId}_${suffix}`
+                while (existingIds.has(uniqueId)) {
+                  suffix++
+                  uniqueId = `${newStageId}_${suffix}`
+                }
+                newStageId = uniqueId
+              }
+
+              const newCompNode = doc.createNode({
+                id: newStageId,
+                type: "Stage",
+                name: `${sourceId} to ${targetId} stage`,
+              }) as any
+
+              let sourceX = compNode.get('x')
+              let sourceY = compNode.get('y')
+              let targetX: number | undefined
+              let targetY: number | undefined
+              if (compsNode && compsNode.items) {
+                compsNode.items.forEach((c: any) => {
+                  if (c && typeof c.get === 'function' && c.get('id') === targetId) {
+                    targetX = c.get('x')
+                    targetY = c.get('y')
+                  }
+                })
+              }
+              if (typeof sourceX === 'number' && typeof sourceY === 'number' && typeof targetX === 'number' && typeof targetY === 'number') {
+                newCompNode.set('x', Math.round((sourceX + targetX) / 2))
+                newCompNode.set('y', Math.round((sourceY + targetY) / 2))
+              }
+
+              newCompNode.set('connections', doc.createNode([{ target: targetId }]))
+              if (compsNode && typeof compsNode.add === 'function') {
+                compsNode.add(newCompNode)
+                connNode.set('target', newStageId)
+                modified = true
+              }
+            }
+          }
+        }
       }
     }
 

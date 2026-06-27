@@ -286,4 +286,72 @@ system:
     expect(updated).toContain('connections:')
     expect(updated).toContain('target: inbox')
   })
+
+  test('quick-fix delete-component', () => {
+    const specWithIsolated = `system:
+  name: Isolated Test
+  components:
+    - id: inbox
+      type: Store
+    - id: isolated_node
+      type: Stage
+`
+    const updated = reconcileSpec(specWithIsolated, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1]',
+        fixType: 'delete-component'
+      }
+    })
+
+    expect(updated).not.toContain('id: isolated_node')
+    expect(updated).toContain('id: inbox')
+  })
+
+  test('quick-fix connect-from-gateway', () => {
+    const specWithUnreachable = `system:
+  name: Unreachable Test
+  components:
+    - id: main_gateway
+      type: Gateway
+    - id: unreachable_node
+      type: Stage
+`
+    const updated = reconcileSpec(specWithUnreachable, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1]',
+        fixType: 'connect-from-gateway'
+      }
+    })
+
+    expect(updated).toContain('id: main_gateway')
+    expect(updated).toContain('connections:')
+    expect(updated).toContain('target: unreachable_node')
+  })
+
+  test('quick-fix insert-stage between gateway and store', () => {
+    const specWithDirect = `system:
+  name: Direct Test
+  components:
+    - id: api_gateway
+      type: Gateway
+      connections:
+        - target: db_store
+    - id: db_store
+      type: Store
+`
+    const updated = reconcileSpec(specWithDirect, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0].target',
+        fixType: 'insert-stage'
+      }
+    })
+
+    expect(updated).toContain('id: api_gateway_to_db_store')
+    expect(updated).toContain('type: Stage')
+    expect(updated).toContain('target: api_gateway_to_db_store')
+    expect(updated).toContain('target: db_store')
+  })
 })

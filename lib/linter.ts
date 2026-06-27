@@ -256,6 +256,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "warning",
           message: `Component "${compId}" is disconnected (no inbound or outbound connections).`,
           path: `system.components[${compIdx}]`,
+          code: "disconnected-component",
         })
       } else if (hasGateway && compType !== "gateway" && !incomingSet.has(compId)) {
         diagnostics.push({
