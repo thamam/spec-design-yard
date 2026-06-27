@@ -103,4 +103,88 @@ system:
     expect(updated).toContain('x: 120')
     expect(updated).toContain('y: 180')
   })
+
+  test('quick-fix unrecognized component type', () => {
+    const invalidSpec = `system:
+  name: Invalid Type
+  components:
+    - id: node1
+      type: InvalidType
+      name: Node 1
+`
+    const updated = reconcileSpec(invalidSpec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].type',
+        fixType: 'unrecognized-type',
+        extraData: { type: 'Store' }
+      }
+    })
+
+    expect(updated).toContain('type: Store')
+    expect(updated).not.toContain('type: InvalidType')
+  })
+
+  test('quick-fix orphan connection target', () => {
+    const specWithOrphan = `system:
+  name: Orphan Test
+  components:
+    - id: node1
+      type: Stage
+      connections:
+        - target: missing_node
+`
+    const updated = reconcileSpec(specWithOrphan, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0].target',
+        fixType: 'orphan-connection'
+      }
+    })
+
+    expect(updated).toContain('id: missing_node')
+    expect(updated).toContain('type: Stage') // default type for new node
+  })
+
+  test('quick-fix self-connection', () => {
+    const specWithSelfConn = `system:
+  name: Self Connection Test
+  components:
+    - id: node1
+      type: Stage
+      connections:
+        - target: node1
+        - target: node2
+`
+    const updated = reconcileSpec(specWithSelfConn, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0].target',
+        fixType: 'self-connection'
+      }
+    })
+
+    expect(updated).not.toContain('target: node1')
+    expect(updated).toContain('target: node2')
+  })
+
+  test('quick-fix duplicate component ID', () => {
+    const duplicateSpec = `system:
+  name: Duplicate Test
+  components:
+    - id: node1
+      type: Store
+    - id: node1
+      type: Stage
+`
+    const updated = reconcileSpec(duplicateSpec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1].id',
+        fixType: 'duplicate-id'
+      }
+    })
+
+    expect(updated).toContain('id: node1_1')
+  })
 })

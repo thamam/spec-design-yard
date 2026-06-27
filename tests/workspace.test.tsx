@@ -185,4 +185,30 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(orphanText).toBeDefined()
     expect(orphanText.text).toBe('Missing: missing_stage')
   })
+
+  test('renders quick fix button and updates specText on click', () => {
+    render(<Workspace />)
+    
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    
+    // Set text to have an unrecognized type
+    fireEvent.change(textarea, { target: { value: `system:
+  name: Invalid Type
+  components:
+    - id: node1
+      type: InvalidType
+      name: Node 1
+` } })
+
+    // Look for the quick fix button "SET TO STORE"
+    const fixButton = screen.getByRole('button', { name: /SET TO STORE/i })
+    expect(fixButton).toBeInTheDocument()
+
+    // Click the button
+    fireEvent.click(fixButton)
+
+    // Verify it changed to Store!
+    expect(textarea.value).toContain('type: Store')
+    expect(textarea.value).not.toContain('type: InvalidType')
+  })
 })

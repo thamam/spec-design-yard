@@ -2,6 +2,7 @@ export interface Diagnostic {
   severity: "error" | "warning" | "info"
   message: string
   path?: string
+  code?: string
 }
 
 export function lintSpec(parsedSpec: any): Diagnostic[] {
@@ -72,6 +73,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "error",
           message: `Duplicate component ID "${id}".`,
           path: `${pathPrefix}.id`,
+          code: "duplicate-id",
         })
       } else {
         ids.add(id)
@@ -93,6 +95,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "warning",
           message: `Unrecognized component type "${comp.type}" for component "${comp.id || idx}". Valid types are: Store, Stage, Brick, Gateway.`,
           path: `${pathPrefix}.type`,
+          code: "unrecognized-type",
         })
       }
     }
@@ -137,6 +140,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "error",
           message: `Connection target "${target}" does not exist in the components list.`,
           path: `${connPath}.target`,
+          code: "orphan-connection",
         })
       }
 
@@ -146,6 +150,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "error",
           message: `Component "${compId}" has a self-connection.`,
           path: `${connPath}.target`,
+          code: "self-connection",
         })
       }
     })
