@@ -326,14 +326,32 @@ export function ExcalidrawCanvas({
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
 
   const deletedIdsRef = useRef<Set<string>>(new Set())
+  const addedIdsRef = useRef<Set<string>>(new Set())
+  const connectedArrowsRef = useRef<Set<string>>(new Set())
   const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
 
-  // Synchronize deleted IDs ref with current elements
+  // Synchronize deleted, added, and connected IDs ref with current elements
   useEffect(() => {
     const currentIds = new Set(elements.map((el) => el.id))
+    
+    // Prune stale deleted ids
     deletedIdsRef.current.forEach((id) => {
       if (!currentIds.has(id)) {
         deletedIdsRef.current.delete(id)
+      }
+    })
+
+    // Prune stale added ids
+    addedIdsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        addedIdsRef.current.delete(id)
+      }
+    })
+
+    // Prune stale connected arrow ids
+    connectedArrowsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        connectedArrowsRef.current.delete(id)
       }
     })
   }, [elements])
@@ -435,6 +453,15 @@ export function ExcalidrawCanvas({
             }
           }
 
+          // Optimization: single-pass element set lookup
+          const currentElementIds = new Set(elements.map((el) => el.id))
+
+          // Avoid interrupting active drawing/resizing/editing gestures
+          const isUserInteracting =
+            !!appState?.draggingElement ||
+            !!appState?.resizingElement ||
+            !!appState?.editingElement
+
           // 2. Sync deletions back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const newlyDeletedRects = updatedElements.filter(
@@ -452,6 +479,64 @@ export function ExcalidrawCanvas({
                 payload: { ids: idsToDelete },
               })
               return
+            }
+          }
+
+          // If the user is actively drawing/dragging/resizing, do not sync additions/connections mid-gesture
+          if (isUserInteracting) return
+
+          // 2b. Sync node additions back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const newlyCreatedRects = updatedElements.filter(
+              (el: any) =>
+                el.type === "rectangle" &&
+                !el.isDeleted &&
+                !addedIdsRef.current.has(el.id) &&
+                !currentElementIds.has(el.id)
+            )
+            if (newlyCreatedRects.length > 0) {
+              const rect = newlyCreatedRects[0] // process one at a time for stability
+              addedIdsRef.current.add(rect.id)
+              onCanvasChange({
+                type: "add",
+                payload: {
+                  id: rect.id,
+                  x: rect.x,
+                  y: rect.y,
+                  type: "Stage",
+                  name: `New Component ${rect.id.slice(0, 4)}`,
+                },
+              })
+              return
+            }
+          }
+
+          // 2c. Sync connection/arrow creations back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const newlyCreatedArrows = updatedElements.filter(
+              (el: any) =>
+                el.type === "arrow" &&
+                !el.isDeleted &&
+                el.startBinding?.elementId &&
+                el.endBinding?.elementId &&
+                !connectedArrowsRef.current.has(el.id) &&
+                !currentElementIds.has(el.id)
+            )
+            if (newlyCreatedArrows.length > 0) {
+              const arrow = newlyCreatedArrows[0]
+              const source = arrow.startBinding.elementId
+              const target = arrow.endBinding.elementId
+              const sourceExists = parsedSpec?.system?.components?.some((c: any) => c.id === source)
+              const targetExists = parsedSpec?.system?.components?.some((c: any) => c.id === target)
+
+              if (sourceExists && targetExists) {
+                connectedArrowsRef.current.add(arrow.id)
+                onCanvasChange({
+                  type: "connect",
+                  payload: { source, target },
+                })
+                return
+              }
             }
           }
 

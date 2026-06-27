@@ -261,4 +261,29 @@ system:
     expect(updated).not.toContain('connections:')
     expect(updated).not.toContain('target:')
   })
+
+  test('reconciles adding a new component', () => {
+    const updated = reconcileSpec(initialSpec, {
+      type: 'add',
+      payload: { id: 'new_component', x: 500, y: 350, type: 'Stage', name: 'New Component' }
+    })
+
+    expect(updated).toContain('id: new_component')
+    expect(updated).toContain('type: Stage')
+    expect(updated).toContain('name: New Component')
+    expect(updated).toContain('x: 500')
+    expect(updated).toContain('y: 350')
+  })
+
+  test('reconciles adding a connection between components', () => {
+    const updated = reconcileSpec(initialSpec, {
+      type: 'connect',
+      payload: { source: 'digest_stage', target: 'inbox' }
+    })
+
+    // digest_stage should now have a connection targeting inbox
+    expect(updated).toContain('id: digest_stage')
+    expect(updated).toContain('connections:')
+    expect(updated).toContain('target: inbox')
+  })
 })
