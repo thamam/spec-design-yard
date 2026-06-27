@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useMemo } from "react"
+import { CanvasChange } from "../../lib/reconciler"
 
 const getDeterministicSeed = (id: string) => {
   let hash = 0
@@ -72,6 +73,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
     const rectId = comp.id
     const textId = `text-${comp.id}`
+    const rectVersion = getDeterministicSeed(`${rectId}-${Math.round(pos.x)}-${Math.round(pos.y)}-${strokeColor}-${backgroundColor}`)
 
     // Create the container Rectangle
     elements.push({
@@ -88,19 +90,20 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       roughness: 1.2,
       roundness: { type: 3 }, // Rounded corners
       seed: getDeterministicSeed(rectId),
-      version: 1,
-      versionNonce: getDeterministicSeed(`${rectId}-rect-nonce`),
+      version: rectVersion,
+      versionNonce: rectVersion,
       isDeleted: false,
       groupIds: [],
       frameId: null,
       boundElements: [{ id: textId, type: 'text' }],
-      updated: Date.now(),
+      updated: rectVersion,
       link: null,
       locked: false,
     })
 
     // Create the bound Label text element
     const labelText = `${comp.name || comp.id}\n[${comp.type || 'Unit'}]`
+    const textVersion = getDeterministicSeed(`${textId}-${labelText}-${Math.round(pos.x)}-${Math.round(pos.y)}`)
     elements.push({
       type: 'text',
       id: textId,
@@ -118,13 +121,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       originalText: labelText,
       autoResize: true,
       seed: getDeterministicSeed(textId),
-      version: 1,
-      versionNonce: getDeterministicSeed(`${textId}-text-nonce`),
+      version: textVersion,
+      versionNonce: textVersion,
       isDeleted: false,
       groupIds: [],
       frameId: null,
       boundElements: [],
-      updated: Date.now(),
+      updated: textVersion,
       link: null,
       locked: false,
     })
@@ -199,7 +202,7 @@ export function ExcalidrawCanvas({
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
-  onCanvasChange?: (updated: any[]) => void
+  onCanvasChange?: (change: any[] | CanvasChange) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -220,6 +223,30 @@ export function ExcalidrawCanvas({
 
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
+
+  const deletedIdsRef = useRef<Set<string>>(new Set())
+  const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
+
+  // Synchronize deleted IDs ref with current elements
+  useEffect(() => {
+    const currentIds = new Set(elements.map((el) => el.id))
+    deletedIdsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        deletedIdsRef.current.delete(id)
+      }
+    })
+  }, [elements])
+
+  // Clear pending renames once they are reflected in parsedSpec
+  useEffect(() => {
+    if (pendingRenameRef.current) {
+      const { id, name, type } = pendingRenameRef.current
+      const comp = parsedSpec?.system?.components?.find((c: any) => c.id === id)
+      if (comp && comp.name === name && (!type || comp.type === type)) {
+        pendingRenameRef.current = null
+      }
+    }
+  }, [parsedSpec])
 
   useEffect(() => {
     if (!pendingElements || !onCanvasChange) return
@@ -301,13 +328,92 @@ export function ExcalidrawCanvas({
               const matchedId = selectedIds.find((id) =>
                 parsedSpec?.system?.components?.some((c: any) => c.id === id)
               )
-              if (matchedId) {
+              if (matchedId && matchedId !== selectedUnit) {
                 setSelectedUnit(matchedId)
               }
             }
           }
 
-          // 2. Sync coordinate changes back to editor spec
+          // 2. Sync deletions back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const newlyDeletedRects = updatedElements.filter(
+              (el: any) =>
+                el.type === "rectangle" &&
+                el.isDeleted &&
+                !deletedIdsRef.current.has(el.id) &&
+                elements.some((old: any) => old.id === el.id && !old.isDeleted)
+            )
+            if (newlyDeletedRects.length > 0) {
+              const idsToDelete = newlyDeletedRects.map((r: any) => r.id)
+              idsToDelete.forEach((id: string) => deletedIdsRef.current.add(id))
+              onCanvasChange({
+                type: "delete",
+                payload: { ids: idsToDelete },
+              })
+              return
+            }
+          }
+
+          // 3. Sync renames back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const changedTextElement = updatedElements.find((el: any) => {
+              if (el.type !== "text" || !el.containerId || el.isDeleted) return false
+              const oldEl = elements.find((old: any) => old.id === el.id)
+              return oldEl && oldEl.text !== el.text
+            })
+            if (changedTextElement) {
+              const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
+              if (!isEditingThisElement) {
+                const lines = changedTextElement.text.split("\n")
+                const firstLine = lines[0] ? lines[0].trim() : ""
+                let newType: string | undefined = undefined
+                
+                if (lines[1]) {
+                  const match = lines[1].trim().match(/^\[(.*)\]$/)
+                  if (match && match[1]) {
+                    newType = match[1].trim()
+                  }
+                }
+
+                // Guard: Check if actually different from parsedSpec to avoid loops/redundant sets
+                const comp = parsedSpec?.system?.components?.find((c: any) => c.id === changedTextElement.containerId)
+                if (comp) {
+                  const currentName = comp.name || comp.id
+                  const currentType = comp.type || "Unit"
+                  const nameChanged = currentName !== firstLine
+                  const typeChanged = newType !== undefined && currentType !== newType
+
+                  if (nameChanged || typeChanged) {
+                    if (
+                      pendingRenameRef.current &&
+                      pendingRenameRef.current.id === changedTextElement.containerId &&
+                      pendingRenameRef.current.name === firstLine &&
+                      pendingRenameRef.current.type === newType
+                    ) {
+                      return
+                    }
+
+                    pendingRenameRef.current = {
+                      id: changedTextElement.containerId,
+                      name: firstLine,
+                      type: newType,
+                    }
+
+                    onCanvasChange({
+                      type: "rename",
+                      payload: {
+                        id: changedTextElement.containerId,
+                        newName: firstLine,
+                        newType,
+                      }
+                    })
+                  }
+                }
+              }
+            }
+          }
+
+          // 4. Sync coordinate changes back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
             if (rects.length > 0) {

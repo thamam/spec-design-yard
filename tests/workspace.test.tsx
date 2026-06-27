@@ -5,6 +5,8 @@ import React from 'react'
 import Workspace from '../components/Workspace'
 import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
 import { lintSpec } from '../lib/linter'
+import { reconcileSpec } from '../lib/reconciler'
+import yaml from 'yaml'
 
 describe('Workspace Split-Pane Spec-Diagram View', () => {
   test('renders editor panel and canvas panel side-by-side', () => {
@@ -107,5 +109,33 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     const orphanConn = diagnostics.find(d => d.message.includes('Connection target "missing_node" does not exist'))
     expect(orphanConn).toBeDefined()
     expect(orphanConn?.severity).toBe('error')
+  })
+
+  test('deleting a component via reconcileSpec prunes connections and leaves linter clean', () => {
+    const faultySpec = `system:
+  name: Faulty Brain
+  components:
+    - id: inbox
+      type: Store
+      name: inbox
+      connections:
+        - target: processor
+    - id: processor
+      type: Stage
+      name: processor
+`
+    // If we delete "processor", "inbox" has a connection to "processor" which would become an orphan!
+    // But reconcileSpec's deletion of "processor" also prunes the connection!
+    const reconciled = reconcileSpec(faultySpec, {
+      type: 'delete',
+      payload: { ids: ['processor'] }
+    })
+
+    const parsed = yaml.parse(reconciled)
+    const diagnostics = lintSpec(parsed)
+    
+    // There should be no orphan connections
+    const orphanConn = diagnostics.find(d => d.message.includes('does not exist'))
+    expect(orphanConn).toBeUndefined()
   })
 })
