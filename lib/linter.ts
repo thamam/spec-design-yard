@@ -99,14 +99,20 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   })
 
   // Second pass: validate connections (orphan targets, self-connections)
+  const pass2Seen = new Set<string>()
   components.forEach((comp: any, compIdx: number) => {
-    if (!comp || !comp.id || !comp.connections) return
+    if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
+    const compId = comp.id.trim()
+    if (!ids.has(compId) || pass2Seen.has(compId)) return
+    pass2Seen.add(compId)
+
+    if (!comp.connections) return
     const pathPrefix = `system.components[${compIdx}].connections`
 
     if (!Array.isArray(comp.connections)) {
       diagnostics.push({
         severity: "error",
-        message: `"connections" for component "${comp.id}" must be an array.`,
+        message: `"connections" for component "${compId}" must be an array.`,
         path: pathPrefix,
       })
       return
@@ -117,14 +123,13 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (!conn || typeof conn !== "object" || typeof conn.target !== "string" || conn.target.trim() === "") {
         diagnostics.push({
           severity: "error",
-          message: `Invalid connection entry at index ${connIdx} for component "${comp.id}". Target must be a non-empty string.`,
+          message: `Invalid connection entry at index ${connIdx} for component "${compId}". Target must be a non-empty string.`,
           path: connPath,
         })
         return
       }
 
       const target = conn.target.trim()
-      const compId = comp.id.trim()
 
       // 5. Orphan Connection Target
       if (!ids.has(target)) {
@@ -149,10 +154,14 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   // Third pass: find disconnected/isolated components
   const outgoingCount: Record<string, number> = Object.create(null)
   const incomingSet = new Set<string>()
+  const pass3Seen = new Set<string>()
 
   components.forEach((comp: any) => {
-    if (!comp || !comp.id) return
+    if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
     const compId = comp.id.trim()
+    if (!ids.has(compId) || pass3Seen.has(compId)) return
+    pass3Seen.add(compId)
+
     outgoingCount[compId] = 0
 
     if (Array.isArray(comp.connections)) {
@@ -169,9 +178,13 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   })
 
   if (components.length > 1) {
+    const pass3ReportSeen = new Set<string>()
     components.forEach((comp: any, compIdx: number) => {
-      if (!comp || !comp.id) return
+      if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
       const compId = comp.id.trim()
+      if (!ids.has(compId) || pass3ReportSeen.has(compId)) return
+      pass3ReportSeen.add(compId)
+
       if (outgoingCount[compId] === 0 && !incomingSet.has(compId)) {
         diagnostics.push({
           severity: "warning",
@@ -184,9 +197,13 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
   // Fourth pass: Cycle detection using DFS
   const adj: Record<string, string[]> = Object.create(null)
+  const pass4Seen = new Set<string>()
   components.forEach((comp: any) => {
-    if (!comp || !comp.id) return
+    if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
     const compId = comp.id.trim()
+    if (!ids.has(compId) || pass4Seen.has(compId)) return
+    pass4Seen.add(compId)
+
     adj[compId] = []
     if (Array.isArray(comp.connections)) {
       comp.connections.forEach((conn: any) => {
@@ -204,6 +221,19 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   const recStack: string[] = []
   const detectedCycles = new Set<string>()
 
+  // Build component paths mapping for cycle diagnostics
+  const componentPaths: Record<string, string> = Object.create(null)
+  const passPathsSeen = new Set<string>()
+  components.forEach((comp: any, compIdx: number) => {
+    if (comp && typeof comp.id === "string" && comp.id.trim() !== "") {
+      const compId = comp.id.trim()
+      if (ids.has(compId) && !passPathsSeen.has(compId)) {
+        passPathsSeen.add(compId)
+        componentPaths[compId] = `system.components[${compIdx}]`
+      }
+    }
+  })
+
   function dfs(node: string) {
     visited.add(node)
     recStack.push(node)
@@ -216,12 +246,14 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         const cyclePath = recStack.slice(stackIdx)
         cyclePath.push(neighbor)
         const cycleKey = cyclePath.join(" → ")
-        const sortedCycleNodes = [...cyclePath.slice(0, -1)].sort().join(",")
-        if (!detectedCycles.has(sortedCycleNodes)) {
-          detectedCycles.add(sortedCycleNodes)
+        const sortedCycleNodes = [...cyclePath.slice(0, -1)].sort()
+        const cycleKeyHash = JSON.stringify(sortedCycleNodes)
+        if (!detectedCycles.has(cycleKeyHash)) {
+          detectedCycles.add(cycleKeyHash)
           diagnostics.push({
             severity: "warning",
             message: `Circular dependency loop detected: ${cycleKey}`,
+            path: componentPaths[neighbor] || undefined,
           })
         }
       } else if (!visited.has(neighbor)) {
