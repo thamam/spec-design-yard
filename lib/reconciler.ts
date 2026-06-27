@@ -4,6 +4,21 @@ export type CanvasChange =
   | { type: "coords"; payload: { id: string; x: number; y: number }[] }
   | { type: "delete"; payload: { ids: string[] } }
   | { type: "rename"; payload: { id: string; newName: string; newType?: string } }
+  | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
+
+export function parsePath(path: string): (string | number)[] {
+  const parts: (string | number)[] = []
+  const regex = /([^.\[\]]+)|\[(\d+)\]/g
+  let match
+  while ((match = regex.exec(path)) !== null) {
+    if (match[1] !== undefined) {
+      parts.push(match[1])
+    } else if (match[2] !== undefined) {
+      parts.push(parseInt(match[2], 10))
+    }
+  }
+  return parts
+}
 
 export function reconcileSpec(specText: string, change: CanvasChange): string {
   try {
@@ -105,6 +120,64 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         })
+      }
+    } else if (change.type === "quick-fix") {
+      const { path, fixType, extraData } = change.payload
+      const parts = parsePath(path)
+      
+      if (fixType === "unrecognized-type") {
+        const newType = extraData?.type || "Stage"
+        doc.setIn(parts, newType)
+        modified = true
+      } else if (fixType === "self-connection") {
+        const connIdx = parts[parts.length - 2] as number
+        const connArrayPath = parts.slice(0, parts.length - 2)
+        const connsNode = doc.getIn(connArrayPath) as any
+        if (connsNode && typeof connsNode.delete === 'function') {
+          connsNode.delete(connIdx)
+          modified = true
+          if (connsNode.items && connsNode.items.length === 0) {
+            const compPath = parts.slice(0, parts.length - 3)
+            const compNode = doc.getIn(compPath) as any
+            if (compNode && typeof compNode.delete === 'function') {
+              compNode.delete('connections')
+            }
+          }
+        }
+      } else if (fixType === "duplicate-id") {
+        const currentId = String(doc.getIn(parts) || "")
+        const compsNode = doc.getIn(["system", "components"]) as any
+        const existingIds = new Set<string>()
+        if (compsNode && compsNode.items) {
+          compsNode.items.forEach((compNode: any) => {
+            if (compNode && typeof compNode.get === 'function') {
+              const id = compNode.get('id')
+              if (id) existingIds.add(String(id).trim())
+            }
+          })
+        }
+        let suffix = 1
+        let uniqueId = `${currentId}_${suffix}`
+        while (existingIds.has(uniqueId)) {
+          suffix++
+          uniqueId = `${currentId}_${suffix}`
+        }
+        doc.setIn(parts, uniqueId)
+        modified = true
+      } else if (fixType === "orphan-connection") {
+        const targetId = String(doc.getIn(parts) || "").trim()
+        if (targetId) {
+          const compsNode = doc.getIn(["system", "components"]) as any
+          if (compsNode && typeof compsNode.add === 'function') {
+            const newNode = doc.createNode({
+              id: targetId,
+              type: "Stage",
+              name: targetId,
+            })
+            compsNode.add(newNode)
+            modified = true
+          }
+        }
       }
     }
 

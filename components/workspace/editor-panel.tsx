@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec } from "../../lib/linter"
+import { reconcileSpec } from "../../lib/reconciler"
 
 interface EditorPanelProps {
   specText?: string
@@ -262,6 +263,16 @@ export function EditorPanel({
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
   const setSelectedUnit = propSetSelectedUnit || setLocalSelectedUnit
 
+  const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
+    const updated = reconcileSpec(specText, {
+      type: "quick-fix",
+      payload: { path, fixType, extraData }
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+    }
+  }
+
   const handleCopy = () => {
     navigator.clipboard.writeText(specText).catch(() => {})
     setCopied(true)
@@ -477,23 +488,68 @@ export function EditorPanel({
               diagnostics.map((d, i) => (
                 <div
                   key={i}
-                  className={`flex items-start gap-1.5 ${
-                    d.severity === "error"
-                      ? "text-red-400"
-                      : d.severity === "warning"
-                      ? "text-amber-400"
-                      : "text-blue-400"
-                  }`}
+                  className="flex flex-col border-b border-zinc-900/40 pb-1.5 last:border-0"
                 >
-                  <span>{d.severity === "error" ? "❌" : d.severity === "warning" ? "⚠️" : "ℹ️"}</span>
-                  <div>
-                    <span>{d.message}</span>
-                    {d.path && (
-                      <span className="text-[9px] text-zinc-600 bg-zinc-900/50 px-1 py-0.2 rounded ml-1.5">
-                        {d.path}
-                      </span>
-                    )}
+                  <div
+                    className={`flex items-start gap-1.5 ${
+                      d.severity === "error"
+                        ? "text-red-400"
+                        : d.severity === "warning"
+                        ? "text-amber-400"
+                        : "text-blue-400"
+                    }`}
+                  >
+                    <span>{d.severity === "error" ? "❌" : d.severity === "warning" ? "⚠️" : "ℹ️"}</span>
+                    <div>
+                      <span>{d.message}</span>
+                      {d.path && (
+                        <span className="text-[9px] text-zinc-600 bg-zinc-900/50 px-1 py-0.2 rounded ml-1.5 font-mono">
+                          {d.path}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {d.path && (
+                    <div className="mt-1 flex flex-wrap gap-1.5 pl-6">
+                      {d.message.includes("Unrecognized component type") && (
+                        <>
+                          {["Store", "Stage", "Brick", "Gateway"].map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => handleQuickFix(d.path!, "unrecognized-type", { type })}
+                              className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                            >
+                              Set to {type}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {d.message.includes("does not exist") && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "orphan-connection")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
+                        >
+                          Create Component
+                        </button>
+                      )}
+                      {d.message.includes("self-connection") && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "self-connection")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Connection
+                        </button>
+                      )}
+                      {d.message.includes("Duplicate component ID") && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "duplicate-id")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Deduplicate ID
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
           </div>
