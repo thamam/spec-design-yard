@@ -307,7 +307,61 @@ export function ExcalidrawCanvas({
             }
           }
 
-          // 2. Sync coordinate changes back to editor spec
+          // 2. Sync deletions back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const deletedRect = updatedElements.find(
+              (el: any) =>
+                el.type === "rectangle" &&
+                el.isDeleted &&
+                elements.some((old: any) => old.id === el.id && !old.isDeleted)
+            )
+            if (deletedRect) {
+              onCanvasChange({
+                type: "delete",
+                payload: { id: deletedRect.id },
+              })
+              return
+            }
+          }
+
+          // 3. Sync renames back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const textElement = updatedElements.find(
+              (el: any) =>
+                el.type === "text" &&
+                el.containerId &&
+                !el.isDeleted
+            )
+            if (textElement) {
+              const oldTextElement = elements.find((el: any) => el.id === textElement.id)
+              if (oldTextElement && oldTextElement.text !== textElement.text) {
+                const isEditingThisElement = appState?.editingElement && appState.editingElement.id === textElement.id
+                if (!isEditingThisElement) {
+                  const lines = textElement.text.split("\n")
+                  const firstLine = lines[0] ? lines[0].trim() : ""
+                  let newType: string | undefined = undefined
+                  
+                  if (lines[1]) {
+                    const match = lines[1].trim().match(/^\[(.*)\]$/)
+                    if (match && match[1]) {
+                      newType = match[1].trim()
+                    }
+                  }
+                  
+                  onCanvasChange({
+                    type: "rename",
+                    payload: {
+                      id: textElement.containerId,
+                      newName: firstLine,
+                      newType,
+                    }
+                  })
+                }
+              }
+            }
+          }
+
+          // 4. Sync coordinate changes back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
             if (rects.length > 0) {

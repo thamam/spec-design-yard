@@ -7,6 +7,7 @@ import { WorkspaceHeader } from "./workspace-header"
 import yaml from "yaml"
 import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
+import { reconcileSpec } from "../../lib/reconciler"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -128,36 +129,18 @@ export function WorkspaceLayout() {
     setSession({ user: null })
   }, [])
 
-  // Sync canvas position edits back into YAML spec
-  const handleCanvasChange = useCallback((updatedComponents: any[]) => {
-    try {
-      const parsed = yaml.parse(specText)
-      if (parsed && parsed.system && parsed.system.components) {
-        let changed = false
-        const updatedList = parsed.system.components.map((c: any) => {
-          const match = updatedComponents.find((uc: any) => uc.id === c.id)
-          if (match) {
-            const roundedX = Math.round(match.x)
-            const roundedY = Math.round(match.y)
-            if (c.x !== roundedX || c.y !== roundedY) {
-              changed = true
-              return {
-                ...c,
-                x: roundedX,
-                y: roundedY,
-              }
-            }
-          }
-          return c
-        })
-        if (changed) {
-          parsed.system.components = updatedList
-          const newYaml = yaml.stringify(parsed)
-          setSpecText(newYaml)
-        }
+  // Sync canvas position edits, deletions, and renames back into YAML spec
+  const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
+    if (Array.isArray(change)) {
+      const updated = reconcileSpec(specText, { type: "coords", payload: change })
+      if (updated !== specText) {
+        setSpecText(updated)
       }
-    } catch (e) {
-      console.error("Failed to sync canvas changes to YAML: ", e)
+    } else if (change && typeof change === "object" && change.type) {
+      const updated = reconcileSpec(specText, { type: change.type as any, payload: change.payload })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
     }
   }, [specText])
 
