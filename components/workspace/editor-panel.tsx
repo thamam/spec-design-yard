@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -16,6 +16,7 @@ import {
 import yaml from "yaml"
 import { lintSpec } from "../../lib/linter"
 import { reconcileSpec } from "../../lib/reconciler"
+import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 
 interface EditorPanelProps {
   specText?: string
@@ -32,16 +33,85 @@ interface CodeTabProps {
 }
 
 function CodeTab({ value, onChange }: CodeTabProps) {
+  const [cursorPos, setCursorPos] = useState<number | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextVal = e.target.value
+    onChange(nextVal)
+    setCursorPos(e.target.selectionStart)
+  }
+
+  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    setCursorPos(e.currentTarget.selectionStart)
+  }
+
+  const autocomplete = useMemo(() => {
+    if (cursorPos === null) return null
+    const res = getAutocompleteSuggestions(value, cursorPos)
+    if (res.suggestions.length > 0) return res
+    return null
+  }, [value, cursorPos])
+
+  const handleApplySuggestion = (sug: string) => {
+    if (!autocomplete) return
+    const [start, end] = autocomplete.replaceRange
+    const newValue = value.substring(0, start) + sug + value.substring(end)
+    onChange(newValue)
+
+    // Return focus to textarea and adjust cursor position
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      const textarea = document.getElementById("spec-textarea") as HTMLTextAreaElement
+      if (textarea) {
+        textarea.focus()
+        const newCursorPos = start + sug.length
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+        setCursorPos(newCursorPos)
+      }
+    }, 0)
+  }
+
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
       <textarea
         data-testid="spec-textarea"
         id="spec-textarea"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleTextareaChange}
+        onSelect={handleTextareaSelect}
         className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto"
         spellCheck="false"
       />
+
+      {autocomplete && autocomplete.suggestions.length > 0 && (
+        <div className="absolute bottom-4 left-4 right-4 bg-zinc-900 border border-indigo-500/30 rounded-lg p-2.5 flex items-center justify-between gap-3 shadow-lg z-20">
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-[80%] scrollbar-none">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-sans pr-1">
+              Suggesting {autocomplete.type === "id" ? "IDs" : "Types"}:
+            </span>
+            {autocomplete.suggestions.map((sug) => (
+              <button
+                key={sug}
+                type="button"
+                onClick={() => handleApplySuggestion(sug)}
+                className="px-2 py-0.5 text-xs font-mono bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 rounded border border-indigo-500/20 active:scale-95 transition-all whitespace-nowrap"
+              >
+                {sug}
+              </button>
+            ))}
+          </div>
+          <span className="text-[9px] text-zinc-500 font-sans italic shrink-0 pr-1">
+            Click to auto-complete
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -241,8 +311,11 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const lastParsedTextRef = useRef<string>("")
 
   useEffect(() => {
+    if (specText === lastParsedTextRef.current) return
+    lastParsedTextRef.current = specText
     try {
       const parsed = yaml.parse(specText)
       setYamlSyntaxError(null)

@@ -211,4 +211,27 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(textarea.value).toContain('type: Store')
     expect(textarea.value).not.toContain('type: InvalidType')
   })
+
+  test('renders autocomplete suggestions when typing type: inside textarea', () => {
+    render(<Workspace />)
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    
+    // Type a type: prefix
+    fireEvent.change(textarea, { target: { value: 'system:\n  name: Test\n  components:\n    - id: node1\n      type: S' } })
+    textarea.selectionStart = textarea.value.length
+    textarea.selectionEnd = textarea.value.length
+    fireEvent.select(textarea) // trigger select to update cursorPos
+
+    // We expect suggestion buttons 'Store' and 'Stage' to be visible in the autocomplete HUD!
+    const storeButton = screen.getByRole('button', { name: /^Store$/ })
+    const stageButton = screen.getByRole('button', { name: /^Stage$/ })
+    expect(storeButton).toBeInTheDocument()
+    expect(stageButton).toBeInTheDocument()
+
+    // Click 'Store' suggestion
+    fireEvent.click(storeButton)
+
+    // Value should be updated to 'Store'
+    expect(textarea.value).toContain('type: Store')
+  })
 })
