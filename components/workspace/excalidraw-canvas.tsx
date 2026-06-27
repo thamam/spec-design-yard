@@ -497,7 +497,8 @@ export function ExcalidrawCanvas({
               
               if ((!source || !target) && arrow.id.startsWith("arrow-")) {
                 const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
-                for (const compId of compIds) {
+                const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
+                for (const compId of sortedCompIds) {
                   if (arrow.id.startsWith(`arrow-${compId}-`)) {
                     source = compId
                     target = arrow.id.substring(`arrow-${compId}-`.length)
