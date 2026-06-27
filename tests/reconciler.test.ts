@@ -187,4 +187,78 @@ system:
 
     expect(updated).toContain('id: node1_1')
   })
+
+  test('quick-fix invalid component ID', () => {
+    const invalidIdSpec = `system:
+  name: Invalid ID Test
+  components:
+    - id: node$1
+      type: Stage
+      connections:
+        - target: node2
+    - id: node2
+      type: Stage
+      connections:
+        - target: node$1
+`
+    const updated = reconcileSpec(invalidIdSpec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].id',
+        fixType: 'invalid-id-format'
+      }
+    })
+
+    expect(updated).toContain('id: node_1')
+    expect(updated).toContain('target: node_1') // should update the connection target pointing to it too!
+  })
+
+  test('quick-fix duplicate connection', () => {
+    const dupConnSpec = `system:
+  name: Duplicate Conn Test
+  components:
+    - id: node1
+      type: Stage
+      connections:
+        - target: node2
+        - target: node2
+    - id: node2
+      type: Stage
+`
+    const updated = reconcileSpec(dupConnSpec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[1]',
+        fixType: 'duplicate-connection'
+      }
+    })
+
+    // Should remove the second connection
+    expect(updated).toContain('- target: node2')
+    // Wait, let's verify if there is only one connection remaining.
+    // We can count occurrences of 'target: node2'
+    const occurrences = (updated.match(/target: node2/g) || []).length
+    expect(occurrences).toBe(1)
+  })
+
+  test('quick-fix empty connection target', () => {
+    const emptyConnSpec = `system:
+  name: Empty Conn Test
+  components:
+    - id: node1
+      type: Stage
+      connections:
+        - target: ""
+`
+    const updated = reconcileSpec(emptyConnSpec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0]',
+        fixType: 'empty-connection-target'
+      }
+    })
+
+    expect(updated).not.toContain('connections:')
+    expect(updated).not.toContain('target:')
+  })
 })

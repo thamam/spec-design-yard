@@ -540,6 +540,30 @@ export function EditorPanel({
                           Remove Connection
                         </button>
                       )}
+                      {d.code === "empty-connection-target" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "empty-connection-target")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Empty Connection
+                        </button>
+                      )}
+                      {d.code === "duplicate-connection" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "duplicate-connection")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Remove Duplicate
+                        </button>
+                      )}
+                      {d.code === "invalid-id-format" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-id-format")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Fix ID Format
+                        </button>
+                      )}
                       {d.code === "duplicate-id" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "duplicate-id")}

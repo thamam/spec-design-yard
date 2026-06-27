@@ -77,6 +77,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       } else {
         ids.add(id)
+        // 2a. Invalid ID format
+        if (!/^[a-zA-Z0-9_\-]+$/.test(id)) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Component ID "${id}" contains invalid characters. ID must be alphanumeric, hyphen, or underscore.`,
+            path: `${pathPrefix}.id`,
+            code: "invalid-id-format",
+          })
+        }
       }
     }
 
@@ -121,18 +130,41 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       return
     }
 
+    const seenTargets = new Set<string>()
     comp.connections.forEach((conn: any, connIdx: number) => {
       const connPath = `${pathPrefix}[${connIdx}]`
-      if (!conn || typeof conn !== "object" || typeof conn.target !== "string" || conn.target.trim() === "") {
+      if (!conn || typeof conn !== "object") {
         diagnostics.push({
           severity: "error",
-          message: `Invalid connection entry at index ${connIdx} for component "${compId}". Target must be a non-empty string.`,
+          message: `Invalid connection entry at index ${connIdx} for component "${compId}".`,
           path: connPath,
         })
         return
       }
 
+      if (conn.target === undefined || typeof conn.target !== "string" || conn.target.trim() === "") {
+        diagnostics.push({
+          severity: "error",
+          message: `Connection at index ${connIdx} for component "${compId}" has an empty target.`,
+          path: connPath,
+          code: "empty-connection-target",
+        })
+        return
+      }
+
       const target = conn.target.trim()
+
+      // Duplicate connection check
+      if (seenTargets.has(target)) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${compId}" has duplicate connection targeting "${target}".`,
+          path: connPath,
+          code: "duplicate-connection",
+        })
+      } else {
+        seenTargets.add(target)
+      }
 
       // 5. Orphan Connection Target
       if (!ids.has(target)) {

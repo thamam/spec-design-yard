@@ -129,20 +129,75 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         const newType = extraData?.type || "Stage"
         doc.setIn(parts, newType)
         modified = true
-      } else if (fixType === "self-connection") {
-        const connIdx = parts[parts.length - 2] as number
-        const connArrayPath = parts.slice(0, parts.length - 2)
-        const connsNode = doc.getIn(connArrayPath) as any
+      } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection") {
+        const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
+        const connIdx = resolvedParts[resolvedParts.length - 1] as number
+        const connsArrayPath = resolvedParts.slice(0, -1)
+        const connsNode = doc.getIn(connsArrayPath) as any
         if (connsNode && typeof connsNode.delete === 'function') {
           connsNode.delete(connIdx)
           modified = true
           if (connsNode.items && connsNode.items.length === 0) {
-            const compPath = parts.slice(0, parts.length - 3)
+            const compPath = resolvedParts.slice(0, -2)
             const compNode = doc.getIn(compPath) as any
             if (compNode && typeof compNode.delete === 'function') {
               compNode.delete('connections')
             }
           }
+        }
+      } else if (fixType === "invalid-id-format") {
+        const currentId = String(doc.getIn(parts) || "").trim()
+        let fixedId = currentId.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/__+/g, "_")
+        if (fixedId.endsWith("_") && fixedId.length > 1) {
+          fixedId = fixedId.slice(0, -1)
+        }
+        if (fixedId.startsWith("_") && fixedId.length > 1) {
+          fixedId = fixedId.slice(1)
+        }
+        if (fixedId === "" || fixedId === "_") {
+          fixedId = "component"
+        }
+
+        const compsNode = doc.getIn(["system", "components"]) as any
+        const existingIds = new Set<string>()
+        if (compsNode && compsNode.items) {
+          compsNode.items.forEach((compNode: any) => {
+            if (compNode && typeof compNode.get === 'function') {
+              const id = compNode.get('id')
+              if (id) existingIds.add(String(id).trim())
+            }
+          })
+        }
+
+        if (existingIds.has(fixedId)) {
+          let suffix = 1
+          let uniqueId = `${fixedId}_${suffix}`
+          while (existingIds.has(uniqueId)) {
+            suffix++
+            uniqueId = `${fixedId}_${suffix}`
+          }
+          fixedId = uniqueId
+        }
+
+        doc.setIn(parts, fixedId)
+        modified = true
+
+        // Update references in connection targets
+        if (comps && comps.items) {
+          comps.items.forEach((compNode: any) => {
+            if (!compNode || typeof compNode.get !== 'function') return
+            const conns = compNode.get('connections')
+            if (conns && conns.items && Array.isArray(conns.items)) {
+              conns.items.forEach((connNode: any) => {
+                if (connNode && typeof connNode.get === 'function') {
+                  const target = connNode.get('target')
+                  if (target === currentId) {
+                    connNode.set('target', fixedId)
+                  }
+                }
+              })
+            }
+          })
         }
       } else if (fixType === "duplicate-id") {
         const currentId = String(doc.getIn(parts) || "")

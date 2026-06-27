@@ -205,4 +205,95 @@ describe('Advanced Linter Features', () => {
     expect(cycleWarn).toBeDefined()
     expect(cycleWarn?.path).toBe('system.components[0]') // path should point to the origin/starting node of the cycle
   })
+
+  test('flags duplicate connections as warnings', () => {
+    const specWithDuplicateConnections = {
+      system: {
+        name: 'Duplicate Connections System',
+        components: [
+          {
+            id: 'node_a',
+            type: 'Stage',
+            name: 'Node A',
+            connections: [{ target: 'node_b' }, { target: 'node_b' }]
+          },
+          {
+            id: 'node_b',
+            type: 'Stage',
+            name: 'Node B'
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithDuplicateConnections)
+    const dupConnWarn = diagnostics.find(d => d.message.includes('duplicate connection targeting'))
+    expect(dupConnWarn).toBeDefined()
+    expect(dupConnWarn?.severity).toBe('warning')
+    expect(dupConnWarn?.code).toBe('duplicate-connection')
+    expect(dupConnWarn?.path).toBe('system.components[0].connections[1]')
+  })
+
+  test('flags invalid component IDs as warnings', () => {
+    const specWithInvalidChars = {
+      system: {
+        name: 'Invalid ID System',
+        components: [
+          {
+            id: 'node$a',
+            type: 'Stage',
+            name: 'Node A'
+          },
+          {
+            id: 'node b',
+            type: 'Stage',
+            name: 'Node B'
+          },
+          {
+            id: 'node_c-1',
+            type: 'Stage',
+            name: 'Node C'
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithInvalidChars)
+    const invalidIdA = diagnostics.find(d => d.code === 'invalid-id-format' && d.message.includes('node$a'))
+    const invalidIdB = diagnostics.find(d => d.code === 'invalid-id-format' && d.message.includes('node b'))
+    const invalidIdC = diagnostics.find(d => d.code === 'invalid-id-format' && d.message.includes('node_c-1'))
+
+    expect(invalidIdA).toBeDefined()
+    expect(invalidIdA?.severity).toBe('warning')
+    expect(invalidIdA?.code).toBe('invalid-id-format')
+
+    expect(invalidIdB).toBeDefined()
+    expect(invalidIdB?.severity).toBe('warning')
+    expect(invalidIdB?.code).toBe('invalid-id-format')
+
+    // node_c-1 should be valid (alphanumeric, underscore, or hyphen)
+    expect(invalidIdC).toBeUndefined()
+  })
+
+  test('flags empty connection targets as errors', () => {
+    const specWithEmptyTarget = {
+      system: {
+        name: 'Empty Target System',
+        components: [
+          {
+            id: 'node_a',
+            type: 'Stage',
+            name: 'Node A',
+            connections: [{ target: '' }]
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithEmptyTarget)
+    const emptyTargetError = diagnostics.find(d => d.message.includes('empty target'))
+    expect(emptyTargetError).toBeDefined()
+    expect(emptyTargetError?.severity).toBe('error')
+    expect(emptyTargetError?.code).toBe('empty-connection-target')
+  })
 })
