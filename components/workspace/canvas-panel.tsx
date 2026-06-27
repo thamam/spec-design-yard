@@ -11,6 +11,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react"
 import { useState } from "react"
+import { CanvasChange } from "../../lib/reconciler"
 
 /* Client-only Excalidraw */
 const ExcalidrawCanvas = dynamic(
@@ -69,7 +70,7 @@ export function CanvasPanel({
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
-  onCanvasChange?: (updated: any[]) => void
+  onCanvasChange?: (change: any[] | CanvasChange) => void
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)

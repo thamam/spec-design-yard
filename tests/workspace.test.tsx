@@ -128,7 +128,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     // But reconcileSpec's deletion of "processor" also prunes the connection!
     const reconciled = reconcileSpec(faultySpec, {
       type: 'delete',
-      payload: { id: 'processor' }
+      payload: { ids: ['processor'] }
     })
 
     const parsed = yaml.parse(reconciled)

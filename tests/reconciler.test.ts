@@ -15,7 +15,16 @@ describe('AST Reconciliation Layer', () => {
       name: digest
 `
 
-  test('reconciles coordinates changes', () => {
+  test('reconciles coordinates changes only when coordinates differ', () => {
+    // If coordinates are unchanged, reconciled output should be equal to initial spec text
+    const unchanged = reconcileSpec(initialSpec, {
+      type: 'coords',
+      payload: [
+        { id: 'inbox', x: undefined as any, y: undefined as any }
+      ]
+    })
+    expect(unchanged).toBe(initialSpec)
+
     const updated = reconcileSpec(initialSpec, {
       type: 'coords',
       payload: [
@@ -30,10 +39,10 @@ describe('AST Reconciliation Layer', () => {
     expect(updated).toContain('y: 250')
   })
 
-  test('reconciles deleting a component and prunes incoming connections', () => {
+  test('reconciles deleting multiple components and prunes incoming connections', () => {
     const updated = reconcileSpec(initialSpec, {
       type: 'delete',
-      payload: { id: 'digest_stage' }
+      payload: { ids: ['digest_stage'] }
     })
 
     // digest_stage should be deleted from components
@@ -53,5 +62,23 @@ describe('AST Reconciliation Layer', () => {
     expect(updated).toContain('name: incoming_mailbox')
     expect(updated).toContain('type: Gateway')
     expect(updated).toContain('id: inbox') // ID remains the same to preserve references
+  })
+
+  test('gracefully handles null and invalid components in YAML parsed spec', () => {
+    const corruptedSpec = `system:
+  name: Corrupted
+  components:
+    - 
+    - id: stage1
+      type: Stage
+      name: stage1
+`
+    const updated = reconcileSpec(corruptedSpec, {
+      type: 'coords',
+      payload: [
+        { id: 'stage1', x: 100, y: 100 }
+      ]
+    })
+    expect(updated).toContain('x: 100')
   })
 })

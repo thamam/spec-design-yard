@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useMemo } from "react"
+import { CanvasChange } from "../../lib/reconciler"
 
 const getDeterministicSeed = (id: string) => {
   let hash = 0
@@ -199,7 +200,7 @@ export function ExcalidrawCanvas({
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
-  onCanvasChange?: (updated: any[]) => void
+  onCanvasChange?: (change: any[] | CanvasChange) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -309,16 +310,16 @@ export function ExcalidrawCanvas({
 
           // 2. Sync deletions back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const deletedRect = updatedElements.find(
+            const newlyDeletedRects = updatedElements.filter(
               (el: any) =>
                 el.type === "rectangle" &&
                 el.isDeleted &&
                 elements.some((old: any) => old.id === el.id && !old.isDeleted)
             )
-            if (deletedRect) {
+            if (newlyDeletedRects.length > 0) {
               onCanvasChange({
                 type: "delete",
-                payload: { id: deletedRect.id },
+                payload: { ids: newlyDeletedRects.map((r: any) => r.id) },
               })
               return
             }
@@ -326,37 +327,33 @@ export function ExcalidrawCanvas({
 
           // 3. Sync renames back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const textElement = updatedElements.find(
-              (el: any) =>
-                el.type === "text" &&
-                el.containerId &&
-                !el.isDeleted
-            )
-            if (textElement) {
-              const oldTextElement = elements.find((el: any) => el.id === textElement.id)
-              if (oldTextElement && oldTextElement.text !== textElement.text) {
-                const isEditingThisElement = appState?.editingElement && appState.editingElement.id === textElement.id
-                if (!isEditingThisElement) {
-                  const lines = textElement.text.split("\n")
-                  const firstLine = lines[0] ? lines[0].trim() : ""
-                  let newType: string | undefined = undefined
-                  
-                  if (lines[1]) {
-                    const match = lines[1].trim().match(/^\[(.*)\]$/)
-                    if (match && match[1]) {
-                      newType = match[1].trim()
-                    }
+            const changedTextElement = updatedElements.find((el: any) => {
+              if (el.type !== "text" || !el.containerId || el.isDeleted) return false
+              const oldEl = elements.find((old: any) => old.id === el.id)
+              return oldEl && oldEl.text !== el.text
+            })
+            if (changedTextElement) {
+              const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
+              if (!isEditingThisElement) {
+                const lines = changedTextElement.text.split("\n")
+                const firstLine = lines[0] ? lines[0].trim() : ""
+                let newType: string | undefined = undefined
+                
+                if (lines[1]) {
+                  const match = lines[1].trim().match(/^\[(.*)\]$/)
+                  if (match && match[1]) {
+                    newType = match[1].trim()
                   }
-                  
-                  onCanvasChange({
-                    type: "rename",
-                    payload: {
-                      id: textElement.containerId,
-                      newName: firstLine,
-                      newType,
-                    }
-                  })
                 }
+                
+                onCanvasChange({
+                  type: "rename",
+                  payload: {
+                    id: changedTextElement.containerId,
+                    newName: firstLine,
+                    newType,
+                  }
+                })
               }
             }
           }
