@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react"
 import { CanvasChange } from "../../lib/reconciler"
+import { lintSpec } from "../../lib/linter"
 
 const getDeterministicSeed = (id: string) => {
   let hash = 0
@@ -15,6 +16,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const components = parsedSpec.system.components
+  const diagnostics = lintSpec(parsedSpec)
 
   // Layout positions registry
   const positions: Record<string, { x: number; y: number }> = {}
@@ -51,16 +53,41 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     }
   })
 
+  // Find duplicate IDs to flag all instances as errors
+  const idCounts: Record<string, number> = {}
+  components.forEach((c: any) => {
+    if (c && typeof c === 'object' && c.id) {
+      idCounts[c.id] = (idCounts[c.id] || 0) + 1
+    }
+  })
+
   // 2. Generate Rectangle & Text elements for each component
-  components.forEach((comp: any) => {
+  components.forEach((comp: any, idx: number) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
     const pos = positions[comp.id] || { x: 100, y: 100 }
     const type = String(comp.type || "").toLowerCase()
+
+    // Find diagnostics for this component based on path prefix
+    const diagnosticsForComp = diagnostics.filter((d) => {
+      if (!d.path) return false
+      const prefix = `system.components[${idx}]`
+      return d.path === prefix || d.path.startsWith(prefix + ".")
+    })
+
+    const isDuplicate = comp.id && idCounts[comp.id] > 1
+    const hasError = isDuplicate || diagnosticsForComp.some((d) => d.severity === "error")
+    const hasWarning = diagnosticsForComp.some((d) => d.severity === "warning")
     
     // Determine colors matching our HUD and Excalidraw specs
     let strokeColor = '#6366f1' // Indigo
     let backgroundColor = 'rgba(99, 102, 241, 0.1)'
-    if (type === 'stage') {
+    if (hasError) {
+      strokeColor = '#ef4444' // Error Red
+      backgroundColor = 'rgba(239, 68, 68, 0.15)'
+    } else if (hasWarning) {
+      strokeColor = '#f59e0b' // Warning Amber
+      backgroundColor = 'rgba(245, 158, 11, 0.15)'
+    } else if (type === 'stage') {
       strokeColor = '#c084fc' // Purple
       backgroundColor = 'rgba(168, 85, 247, 0.1)'
     } else if (type === 'brick') {
@@ -72,7 +99,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     }
 
     const rectId = comp.id
-    const textId = `text-${comp.id}`
+    const textId = `text-${comp.id}-${idx}`
     const rectVersion = getDeterministicSeed(`${rectId}-${Math.round(pos.x)}-${Math.round(pos.y)}-${strokeColor}-${backgroundColor}`)
 
     // Create the container Rectangle
@@ -102,7 +129,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     })
 
     // Create the bound Label text element
-    const labelText = `${comp.name || comp.id}\n[${comp.type || 'Unit'}]`
+    let marker = ""
+    if (hasError) {
+      marker = " ❌"
+    } else if (hasWarning) {
+      marker = " ⚠️"
+    }
+    const labelText = `${comp.name || comp.id}${marker}\n[${comp.type || 'Unit'}]`
     const textVersion = getDeterministicSeed(`${textId}-${labelText}-${Math.round(pos.x)}-${Math.round(pos.y)}`)
     elements.push({
       type: 'text',
@@ -141,23 +174,89 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
     comp.connections.forEach((conn: any) => {
       if (!conn || typeof conn !== "object" || !conn.target) return
-      const posTarget = positions[conn.target]
-      if (!posTarget) return
+      
+      let posTarget = positions[conn.target]
+      let isOrphan = false
+      if (!posTarget) {
+        isOrphan = true
+        posTarget = {
+          x: posSource.x + 240,
+          y: posSource.y + 110,
+        }
+        
+        const dummyId = `orphan-${comp.id}-${conn.target}`
+        if (!elements.some((el) => el.id === dummyId)) {
+          const dummyVersion = getDeterministicSeed(dummyId)
+          elements.push({
+            type: 'ellipse',
+            id: dummyId,
+            x: posTarget.x,
+            y: posTarget.y,
+            width: 40,
+            height: 40,
+            strokeColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            fillStyle: 'solid',
+            strokeWidth: 2,
+            roughness: 1.5,
+            seed: getDeterministicSeed(dummyId),
+            version: dummyVersion,
+            versionNonce: dummyVersion,
+            isDeleted: false,
+            groupIds: [],
+            frameId: null,
+            boundElements: [],
+            updated: dummyVersion,
+            link: null,
+            locked: false,
+          })
+
+          const dummyTextId = `text-${dummyId}`
+          const dummyTextVersion = getDeterministicSeed(dummyTextId)
+          elements.push({
+            type: 'text',
+            id: dummyTextId,
+            containerId: dummyId,
+            x: posTarget.x - 30,
+            y: posTarget.y + 45,
+            width: 100,
+            height: 20,
+            text: `Missing: ${conn.target}`,
+            fontSize: 11,
+            fontFamily: 1,
+            strokeColor: '#ef4444',
+            textAlign: 'center',
+            verticalAlign: 'middle',
+            originalText: `Missing: ${conn.target}`,
+            autoResize: true,
+            seed: getDeterministicSeed(dummyTextId),
+            version: dummyTextVersion,
+            versionNonce: dummyTextVersion,
+            isDeleted: false,
+            groupIds: [],
+            frameId: null,
+            boundElements: [],
+            updated: dummyTextVersion,
+            link: null,
+            locked: false,
+          })
+        }
+      }
 
       const arrowId = `arrow-${comp.id}-${conn.target}`
       
       // Calculate delta offsets between center of shapes
       const sx = posSource.x + 95
       const sy = posSource.y + 40
-      const tx = posTarget.x + 95
-      const ty = posTarget.y + 40
+      const tx = isOrphan ? (posTarget.x + 20) : (posTarget.x + 95)
+      const ty = isOrphan ? (posTarget.y + 20) : (posTarget.y + 40)
 
       const dx = tx - sx
       const dy = ty - sy
 
-      // Brick arrows are emerald, core arrows are zinc
+      // Brick arrows are emerald, core arrows are zinc, orphan arrows are red
       const isBrickConn = String(comp.type || "").toLowerCase() === 'brick' || String(conn.target || "").toLowerCase() === 'brick'
-      const strokeColor = isBrickConn ? '#34d399' : '#52525b'
+      const strokeColor = isOrphan ? '#ef4444' : (isBrickConn ? '#34d399' : '#52525b')
 
       elements.push({
         type: 'arrow',
@@ -175,7 +274,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         roughness: 1.3,
         endArrowhead: 'arrow',
         startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
-        endBinding: { elementId: conn.target, fixedPoint: [0.5, 0.5] },
+        endBinding: { elementId: isOrphan ? `orphan-${comp.id}-${conn.target}` : conn.target, fixedPoint: [0.5, 0.5] },
         seed: getDeterministicSeed(arrowId),
         version: 1,
         versionNonce: getDeterministicSeed(`${arrowId}-arrow-nonce`),

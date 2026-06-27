@@ -138,4 +138,51 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     const orphanConn = diagnostics.find(d => d.message.includes('does not exist'))
     expect(orphanConn).toBeUndefined()
   })
+
+  test('compileSpecToExcalidrawElements applies error styling (red border/marker) to components with duplicate IDs', () => {
+    const duplicateIdSpec = {
+      system: {
+        name: 'Duplicate Test',
+        components: [
+          { id: 'inbox', type: 'Store', name: 'inbox/' },
+          { id: 'inbox', type: 'Store', name: 'inbox2' }
+        ]
+      }
+    }
+    const elements = compileSpecToExcalidrawElements(duplicateIdSpec)
+    const rectangles = elements.filter((el: any) => el.type === 'rectangle' && el.id === 'inbox')
+    expect(rectangles.length).toBe(2)
+    rectangles.forEach((rect) => {
+      expect(rect.strokeColor).toBe('#ef4444')
+    })
+
+    const textElements = elements.filter((el: any) => el.type === 'text' && el.id.startsWith('text-inbox'))
+    textElements.forEach((text) => {
+      expect(text.text).toContain('❌')
+    })
+  })
+
+  test('compileSpecToExcalidrawElements renders an orphan node circle and arrow for missing connection targets', () => {
+    const orphanSpec = {
+      system: {
+        name: 'Orphan Spec',
+        components: [
+          {
+            id: 'inbox',
+            type: 'Store',
+            name: 'inbox/',
+            connections: [{ target: 'missing_stage' }]
+          }
+        ]
+      }
+    }
+    const elements = compileSpecToExcalidrawElements(orphanSpec)
+    const orphanEllipse = elements.find((el: any) => el.type === 'ellipse' && el.id.includes('orphan-inbox-missing_stage'))
+    expect(orphanEllipse).toBeDefined()
+    expect(orphanEllipse.strokeColor).toBe('#ef4444')
+
+    const orphanText = elements.find((el: any) => el.type === 'text' && el.containerId === orphanEllipse.id)
+    expect(orphanText).toBeDefined()
+    expect(orphanText.text).toBe('Missing: missing_stage')
+  })
 })
