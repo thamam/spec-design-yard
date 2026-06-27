@@ -18,8 +18,8 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   const components = parsedSpec.system.components
   const diagnostics = lintSpec(parsedSpec)
 
-  // Layout positions registry
-  const positions: Record<string, { x: number; y: number }> = {}
+  // Layout positions registry using Object.create(null) to prevent prototype pollution
+  const positions: Record<string, { x: number; y: number }> = Object.create(null)
 
   // 1. Assign positions to nodes based on logical layout rules
   let coreIdx = 0
@@ -53,8 +53,8 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     }
   })
 
-  // Find duplicate IDs to flag all instances as errors
-  const idCounts: Record<string, number> = {}
+  // Find duplicate IDs to flag all instances as errors using Object.create(null) to prevent prototype pollution
+  const idCounts: Record<string, number> = Object.create(null)
   components.forEach((c: any) => {
     if (c && typeof c === 'object' && c.id) {
       idCounts[c.id] = (idCounts[c.id] || 0) + 1
@@ -168,7 +168,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
   // 3. Generate Arrows for connections
   components.forEach((comp: any) => {
-    if (!comp || typeof comp !== "object" || !comp.id || !comp.connections) return
+    if (!comp || typeof comp !== "object" || !comp.id || !Array.isArray(comp.connections)) return
     const posSource = positions[comp.id]
     if (!posSource) return
 
@@ -186,7 +186,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         
         const dummyId = `orphan-${comp.id}-${conn.target}`
         if (!elements.some((el) => el.id === dummyId)) {
-          const dummyVersion = getDeterministicSeed(dummyId)
+          const dummyVersion = getDeterministicSeed(`${dummyId}-${Math.round(posTarget.x)}-${Math.round(posTarget.y)}`)
           elements.push({
             type: 'ellipse',
             id: dummyId,
@@ -212,7 +212,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
           })
 
           const dummyTextId = `text-${dummyId}`
-          const dummyTextVersion = getDeterministicSeed(dummyTextId)
+          const dummyTextVersion = getDeterministicSeed(`${dummyTextId}-${Math.round(posTarget.x)}-${Math.round(posTarget.y)}`)
           elements.push({
             type: 'text',
             id: dummyTextId,
@@ -258,6 +258,8 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       const isBrickConn = String(comp.type || "").toLowerCase() === 'brick' || String(conn.target || "").toLowerCase() === 'brick'
       const strokeColor = isOrphan ? '#ef4444' : (isBrickConn ? '#34d399' : '#52525b')
 
+      const arrowVersion = getDeterministicSeed(`${arrowId}-${Math.round(sx)}-${Math.round(sy)}-${Math.round(dx)}-${Math.round(dy)}`)
+
       elements.push({
         type: 'arrow',
         id: arrowId,
@@ -276,13 +278,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
         endBinding: { elementId: isOrphan ? `orphan-${comp.id}-${conn.target}` : conn.target, fixedPoint: [0.5, 0.5] },
         seed: getDeterministicSeed(arrowId),
-        version: 1,
-        versionNonce: getDeterministicSeed(`${arrowId}-arrow-nonce`),
+        version: arrowVersion,
+        versionNonce: arrowVersion,
         isDeleted: false,
         groupIds: [],
         frameId: null,
         boundElements: [],
-        updated: Date.now(),
+        updated: arrowVersion,
         link: null,
         locked: false,
       })
@@ -464,7 +466,9 @@ export function ExcalidrawCanvas({
               const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
               if (!isEditingThisElement) {
                 const lines = changedTextElement.text.split("\n")
-                const firstLine = lines[0] ? lines[0].trim() : ""
+                const firstLineRaw = lines[0] ? lines[0].trim() : ""
+                // Strip the exact ❌ or ⚠️ suffixes including preceding space to prevent self-polluting UI-state serialization loops
+                const firstLine = firstLineRaw.replace(/ ❌$/, "").replace(/ ⚠️$/, "").trim()
                 let newType: string | undefined = undefined
                 
                 if (lines[1]) {
