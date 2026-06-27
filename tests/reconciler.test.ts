@@ -354,4 +354,16 @@ system:
     expect(updated).toContain('target: api_gateway_to_db_store')
     expect(updated).toContain('target: db_store')
   })
+
+  test('reconciles disconnecting a connection between components', () => {
+    const updated = reconcileSpec(initialSpec, {
+      type: 'disconnect',
+      payload: { source: 'inbox', target: 'digest_stage' }
+    })
+
+    expect(updated).toContain('id: digest_stage')
+    expect(updated).toContain('id: inbox')
+    expect(updated).not.toContain('target: digest_stage')
+    expect(updated).not.toContain('connections:')
+  })
 })

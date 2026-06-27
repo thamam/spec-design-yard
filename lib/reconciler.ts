@@ -7,6 +7,7 @@ export type CanvasChange =
   | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
   | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
   | { type: "connect"; payload: { source: string; target: string } }
+  | { type: "disconnect"; payload: { source: string; target: string } }
 
 export function parsePath(path: string): (string | number)[] {
   const parts: (string | number)[] = []
@@ -156,6 +157,34 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
               const newConn = doc.createNode({ target })
               if (conns && typeof conns.add === 'function') {
                 conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        })
+      }
+    } else if (change.type === "disconnect") {
+      const { source, target } = change.payload
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+
+          const id = compNode.get('id')
+          if (id === source) {
+            const conns = compNode.get('connections')
+            if (conns && conns.items && Array.isArray(conns.items)) {
+              for (let i = conns.items.length - 1; i >= 0; i--) {
+                const connNode = conns.items[i]
+                if (connNode && typeof connNode.get === 'function') {
+                  const targetId = connNode.get('target')
+                  if (targetId === target) {
+                    conns.delete(i)
+                    modified = true
+                  }
+                }
+              }
+              if (conns.items.length === 0) {
+                compNode.delete('connections')
                 modified = true
               }
             }

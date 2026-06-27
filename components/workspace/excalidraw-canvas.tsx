@@ -480,6 +480,41 @@ export function ExcalidrawCanvas({
               })
               return
             }
+
+            const newlyDeletedArrows = updatedElements.filter(
+              (el: any) =>
+                el.type === "arrow" &&
+                el.isDeleted &&
+                !deletedIdsRef.current.has(el.id) &&
+                elements.some((old: any) => old.id === el.id && !old.isDeleted)
+            )
+            if (newlyDeletedArrows.length > 0) {
+              const arrow = newlyDeletedArrows[0]
+              deletedIdsRef.current.add(arrow.id)
+              
+              let source = arrow.startBinding?.elementId
+              let target = arrow.endBinding?.elementId
+              
+              if ((!source || !target) && arrow.id.startsWith("arrow-")) {
+                const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
+                const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
+                for (const compId of sortedCompIds) {
+                  if (arrow.id.startsWith(`arrow-${compId}-`)) {
+                    source = compId
+                    target = arrow.id.substring(`arrow-${compId}-`.length)
+                    break
+                  }
+                }
+              }
+              
+              if (source && target) {
+                onCanvasChange({
+                  type: "disconnect",
+                  payload: { source, target },
+                })
+                return
+              }
+            }
           }
 
           // If the user is actively drawing/dragging/resizing, do not sync additions/connections mid-gesture
