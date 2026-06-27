@@ -61,4 +61,52 @@ describe('Autocomplete Utility', () => {
     expect(result.type).toBeNull()
     expect(result.suggestions).toEqual([])
   })
+
+  test('getAutocompleteSuggestions does not suggest on substring matches like prototype or on_target', () => {
+    const spec = `system:
+  prototype: S
+  on_target: i`
+    
+    // Test on prototype
+    const protoCursor = spec.indexOf('prototype: S') + 'prototype: S'.length
+    const protoRes = getAutocompleteSuggestions(spec, protoCursor)
+    expect(protoRes.type).toBeNull()
+
+    // Test on on_target
+    const targetCursor = spec.indexOf('on_target: i') + 'on_target: i'.length
+    const targetRes = getAutocompleteSuggestions(spec, targetCursor)
+    expect(targetRes.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions suppresses exact suggestions', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+    // "Store" is already typed exactly, so suggestion list should be empty to close HUD
+    expect(result.suggestions).toEqual([])
+  })
+
+  test('getAutocompleteSuggestions supports cursor-inside-word replaceRange', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: St`
+    // Let's say user had "type: Stage" and cursor was at "St|age"
+    const specWithStage = `system:
+  components:
+    - id: inbox
+      type: Stage`
+    const cursor = specWithStage.indexOf('type: St') + 'type: St'.length // Cursor between 't' and 'a'
+    const result = getAutocompleteSuggestions(specWithStage, cursor)
+
+    expect(result.type).toBe('type')
+    expect(result.query).toBe('St')
+    // Replace range should span from 'St' start to the end of 'Stage' (length 5)
+    const expectedStart = specWithStage.indexOf('Stage')
+    const expectedEnd = expectedStart + 'Stage'.length
+    expect(result.replaceRange).toEqual([expectedStart, expectedEnd])
+  })
 })

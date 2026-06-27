@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -34,6 +34,13 @@ interface CodeTabProps {
 
 function CodeTab({ value, onChange }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value
@@ -59,7 +66,8 @@ function CodeTab({ value, onChange }: CodeTabProps) {
     onChange(newValue)
 
     // Return focus to textarea and adjust cursor position
-    setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
       const textarea = document.getElementById("spec-textarea") as HTMLTextAreaElement
       if (textarea) {
         textarea.focus()
@@ -78,7 +86,6 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         value={value}
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
-        onKeyUp={handleTextareaSelect}
         className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto"
         spellCheck="false"
       />
@@ -304,8 +311,11 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const lastParsedTextRef = useRef<string>("")
 
   useEffect(() => {
+    if (specText === lastParsedTextRef.current) return
+    lastParsedTextRef.current = specText
     try {
       const parsed = yaml.parse(specText)
       setYamlSyntaxError(null)
