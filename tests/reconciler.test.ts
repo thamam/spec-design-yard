@@ -113,7 +113,7 @@ system:
       name: Node 1
 `
     const updated = reconcileSpec(invalidSpec, {
-      type: 'quick-fix' as any,
+      type: 'quick-fix',
       payload: {
         path: 'system.components[0].type',
         fixType: 'unrecognized-type',
@@ -135,7 +135,7 @@ system:
         - target: missing_node
 `
     const updated = reconcileSpec(specWithOrphan, {
-      type: 'quick-fix' as any,
+      type: 'quick-fix',
       payload: {
         path: 'system.components[0].connections[0].target',
         fixType: 'orphan-connection'
@@ -157,7 +157,7 @@ system:
         - target: node2
 `
     const updated = reconcileSpec(specWithSelfConn, {
-      type: 'quick-fix' as any,
+      type: 'quick-fix',
       payload: {
         path: 'system.components[0].connections[0].target',
         fixType: 'self-connection'
@@ -178,7 +178,7 @@ system:
       type: Stage
 `
     const updated = reconcileSpec(duplicateSpec, {
-      type: 'quick-fix' as any,
+      type: 'quick-fix',
       payload: {
         path: 'system.components[1].id',
         fixType: 'duplicate-id'

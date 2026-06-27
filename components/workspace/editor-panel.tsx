@@ -511,7 +511,7 @@ export function EditorPanel({
                   </div>
                   {d.path && (
                     <div className="mt-1 flex flex-wrap gap-1.5 pl-6">
-                      {d.message.includes("Unrecognized component type") && (
+                      {d.code === "unrecognized-type" && (
                         <>
                           {["Store", "Stage", "Brick", "Gateway"].map((type) => (
                             <button
@@ -524,7 +524,7 @@ export function EditorPanel({
                           ))}
                         </>
                       )}
-                      {d.message.includes("does not exist") && (
+                      {d.code === "orphan-connection" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "orphan-connection")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
@@ -532,7 +532,7 @@ export function EditorPanel({
                           Create Component
                         </button>
                       )}
-                      {d.message.includes("self-connection") && (
+                      {d.code === "self-connection" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "self-connection")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
@@ -540,7 +540,7 @@ export function EditorPanel({
                           Remove Connection
                         </button>
                       )}
-                      {d.message.includes("Duplicate component ID") && (
+                      {d.code === "duplicate-id" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "duplicate-id")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
