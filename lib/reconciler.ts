@@ -142,9 +142,13 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             let connExists = false
             if (conns && conns.items) {
               connExists = conns.items.some((connNode: any) => {
-                if (!connNode || typeof connNode.get !== 'function') return false
-                const targetId = connNode.get('target')
-                return targetId === target
+                if (!connNode) return false
+                if (typeof connNode.get === 'function') {
+                  const targetId = connNode.get('target')
+                  return targetId === target
+                }
+                const val = typeof connNode.toJSON === 'function' ? connNode.toJSON() : connNode
+                return val === target
               })
             }
 

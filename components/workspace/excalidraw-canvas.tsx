@@ -330,12 +330,28 @@ export function ExcalidrawCanvas({
   const connectedArrowsRef = useRef<Set<string>>(new Set())
   const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
 
-  // Synchronize deleted IDs ref with current elements
+  // Synchronize deleted, added, and connected IDs ref with current elements
   useEffect(() => {
     const currentIds = new Set(elements.map((el) => el.id))
+    
+    // Prune stale deleted ids
     deletedIdsRef.current.forEach((id) => {
       if (!currentIds.has(id)) {
         deletedIdsRef.current.delete(id)
+      }
+    })
+
+    // Prune stale added ids
+    addedIdsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        addedIdsRef.current.delete(id)
+      }
+    })
+
+    // Prune stale connected arrow ids
+    connectedArrowsRef.current.forEach((id) => {
+      if (!currentIds.has(id)) {
+        connectedArrowsRef.current.delete(id)
       }
     })
   }, [elements])
@@ -437,6 +453,15 @@ export function ExcalidrawCanvas({
             }
           }
 
+          // Optimization: single-pass element set lookup
+          const currentElementIds = new Set(elements.map((el) => el.id))
+
+          // Avoid interrupting active drawing/resizing/editing gestures
+          const isUserInteracting =
+            !!appState?.draggingElement ||
+            !!appState?.resizingElement ||
+            !!appState?.editingElement
+
           // 2. Sync deletions back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const newlyDeletedRects = updatedElements.filter(
@@ -457,6 +482,9 @@ export function ExcalidrawCanvas({
             }
           }
 
+          // If the user is actively drawing/dragging/resizing, do not sync additions/connections mid-gesture
+          if (isUserInteracting) return
+
           // 2b. Sync node additions back to editor spec
           if (onCanvasChange && updatedElements && updatedElements.length > 0) {
             const newlyCreatedRects = updatedElements.filter(
@@ -464,7 +492,7 @@ export function ExcalidrawCanvas({
                 el.type === "rectangle" &&
                 !el.isDeleted &&
                 !addedIdsRef.current.has(el.id) &&
-                !elements.some((old: any) => old.id === el.id)
+                !currentElementIds.has(el.id)
             )
             if (newlyCreatedRects.length > 0) {
               const rect = newlyCreatedRects[0] // process one at a time for stability
@@ -492,7 +520,7 @@ export function ExcalidrawCanvas({
                 el.startBinding?.elementId &&
                 el.endBinding?.elementId &&
                 !connectedArrowsRef.current.has(el.id) &&
-                !elements.some((old: any) => old.id === el.id)
+                !currentElementIds.has(el.id)
             )
             if (newlyCreatedArrows.length > 0) {
               const arrow = newlyCreatedArrows[0]
