@@ -44,6 +44,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
   const ids = new Set<string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
+  const typeMap: Record<string, string> = Object.create(null)
 
   // First pass: collect component IDs and validate basic fields
   components.forEach((comp: any, idx: number) => {
@@ -98,6 +99,9 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       })
     } else {
       const type = comp.type.trim().toLowerCase()
+      if (comp.id && typeof comp.id === "string") {
+        typeMap[comp.id.trim()] = type
+      }
       // 4. Unrecognized Type
       if (!validTypes.has(type)) {
         diagnostics.push({
@@ -185,6 +189,28 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "self-connection",
         })
       }
+
+      // Architectural flow rules
+      const compType = typeMap[compId]
+      const targetType = typeMap[target]
+
+      if (compType === "gateway" && targetType === "store") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Gateway component "${compId}" connects directly to Store "${target}". Consider routing through a Stage or Brick first.`,
+          path: `${connPath}.target`,
+          code: "gateway-to-store",
+        })
+      }
+
+      if (targetType === "gateway") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${compId}" (${compType || 'unknown'}) connects directly to Gateway "${target}". Gateways are entry points and should not receive internal flow.`,
+          path: `${connPath}.target`,
+          code: "stage-brick-to-gateway",
+        })
+      }
     })
   })
 
@@ -215,6 +241,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   })
 
   if (components.length > 1) {
+    const hasGateway = Object.values(typeMap).includes("gateway")
     const pass3ReportSeen = new Set<string>()
     components.forEach((comp: any, compIdx: number) => {
       if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
@@ -222,11 +249,20 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (!ids.has(compId) || pass3ReportSeen.has(compId)) return
       pass3ReportSeen.add(compId)
 
+      const compType = typeMap[compId]
+
       if (outgoingCount[compId] === 0 && !incomingSet.has(compId)) {
         diagnostics.push({
           severity: "warning",
           message: `Component "${compId}" is disconnected (no inbound or outbound connections).`,
           path: `system.components[${compIdx}]`,
+        })
+      } else if (hasGateway && compType !== "gateway" && !incomingSet.has(compId)) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${compId}" is unreachable (no inbound connections and is not a Gateway entry point).`,
+          path: `system.components[${compIdx}]`,
+          code: "unreachable-component",
         })
       }
     })

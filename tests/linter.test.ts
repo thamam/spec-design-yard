@@ -296,4 +296,53 @@ describe('Advanced Linter Features', () => {
     expect(emptyTargetError?.severity).toBe('error')
     expect(emptyTargetError?.code).toBe('empty-connection-target')
   })
+
+  test('flags architectural flow pattern violations', () => {
+    const specWithViolations = {
+      system: {
+        name: 'Violations System',
+        components: [
+          {
+            id: 'gate_in',
+            type: 'Gateway',
+            connections: [{ target: 'db_store' }]
+          },
+          {
+            id: 'db_store',
+            type: 'Store'
+          },
+          {
+            id: 'stage_process',
+            type: 'Stage',
+            connections: [{ target: 'gate_in' }]
+          },
+          {
+            id: 'unreachable_stage',
+            type: 'Stage',
+            connections: [{ target: 'db_store' }]
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithViolations)
+
+    // 1. Gateway to Store
+    const gatewayToStore = diagnostics.find(d => d.code === 'gateway-to-store')
+    expect(gatewayToStore).toBeDefined()
+    expect(gatewayToStore?.severity).toBe('warning')
+    expect(gatewayToStore?.message).toContain('connects directly to Store')
+
+    // 2. Stage to Gateway
+    const stageToGateway = diagnostics.find(d => d.code === 'stage-brick-to-gateway')
+    expect(stageToGateway).toBeDefined()
+    expect(stageToGateway?.severity).toBe('warning')
+    expect(stageToGateway?.message).toContain('connects directly to Gateway')
+
+    // 3. Unreachable component
+    const unreachableComponent = diagnostics.find(d => d.code === 'unreachable-component')
+    expect(unreachableComponent).toBeDefined()
+    expect(unreachableComponent?.severity).toBe('warning')
+    expect(unreachableComponent?.message).toContain('is unreachable')
+  })
 })
