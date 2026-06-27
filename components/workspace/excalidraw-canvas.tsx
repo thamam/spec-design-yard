@@ -326,6 +326,8 @@ export function ExcalidrawCanvas({
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
 
   const deletedIdsRef = useRef<Set<string>>(new Set())
+  const addedIdsRef = useRef<Set<string>>(new Set())
+  const connectedArrowsRef = useRef<Set<string>>(new Set())
   const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
 
   // Synchronize deleted IDs ref with current elements
@@ -452,6 +454,61 @@ export function ExcalidrawCanvas({
                 payload: { ids: idsToDelete },
               })
               return
+            }
+          }
+
+          // 2b. Sync node additions back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const newlyCreatedRects = updatedElements.filter(
+              (el: any) =>
+                el.type === "rectangle" &&
+                !el.isDeleted &&
+                !addedIdsRef.current.has(el.id) &&
+                !elements.some((old: any) => old.id === el.id)
+            )
+            if (newlyCreatedRects.length > 0) {
+              const rect = newlyCreatedRects[0] // process one at a time for stability
+              addedIdsRef.current.add(rect.id)
+              onCanvasChange({
+                type: "add",
+                payload: {
+                  id: rect.id,
+                  x: rect.x,
+                  y: rect.y,
+                  type: "Stage",
+                  name: `New Component ${rect.id.slice(0, 4)}`,
+                },
+              })
+              return
+            }
+          }
+
+          // 2c. Sync connection/arrow creations back to editor spec
+          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
+            const newlyCreatedArrows = updatedElements.filter(
+              (el: any) =>
+                el.type === "arrow" &&
+                !el.isDeleted &&
+                el.startBinding?.elementId &&
+                el.endBinding?.elementId &&
+                !connectedArrowsRef.current.has(el.id) &&
+                !elements.some((old: any) => old.id === el.id)
+            )
+            if (newlyCreatedArrows.length > 0) {
+              const arrow = newlyCreatedArrows[0]
+              const source = arrow.startBinding.elementId
+              const target = arrow.endBinding.elementId
+              const sourceExists = parsedSpec?.system?.components?.some((c: any) => c.id === source)
+              const targetExists = parsedSpec?.system?.components?.some((c: any) => c.id === target)
+
+              if (sourceExists && targetExists) {
+                connectedArrowsRef.current.add(arrow.id)
+                onCanvasChange({
+                  type: "connect",
+                  payload: { source, target },
+                })
+                return
+              }
             }
           }
 

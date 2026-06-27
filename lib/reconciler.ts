@@ -5,6 +5,8 @@ export type CanvasChange =
   | { type: "delete"; payload: { ids: string[] } }
   | { type: "rename"; payload: { id: string; newName: string; newType?: string } }
   | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
+  | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
+  | { type: "connect"; payload: { source: string; target: string } }
 
 export function parsePath(path: string): (string | number)[] {
   const parts: (string | number)[] = []
@@ -99,6 +101,62 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           })
         }
+      }
+    } else if (change.type === "add") {
+      const { id, x, y, type, name } = change.payload
+      let idExists = false
+      if (comps && comps.items) {
+        idExists = comps.items.some((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return false
+          const compId = compNode.get('id')
+          return compId === id
+        })
+      }
+      if (!idExists) {
+        const newNode = doc.createNode({
+          id,
+          type: type || "Stage",
+          name: name || id,
+          x: Math.round(x),
+          y: Math.round(y),
+        })
+        if (comps && typeof comps.add === 'function') {
+          comps.add(newNode)
+          modified = true
+        }
+      }
+    } else if (change.type === "connect") {
+      const { source, target } = change.payload
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+
+          const id = compNode.get('id')
+          if (id === source) {
+            let conns = compNode.get('connections')
+            if (!conns || typeof conns.get !== 'function') {
+              compNode.set('connections', doc.createNode([]))
+              conns = compNode.get('connections')
+            }
+
+            let connExists = false
+            if (conns && conns.items) {
+              connExists = conns.items.some((connNode: any) => {
+                if (!connNode || typeof connNode.get !== 'function') return false
+                const targetId = connNode.get('target')
+                return targetId === target
+              })
+            }
+
+            if (!connExists) {
+              const newConn = doc.createNode({ target })
+              if (conns && typeof conns.add === 'function') {
+                conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        })
       }
     } else if (change.type === "rename") {
       const { id, newName, newType } = change.payload
