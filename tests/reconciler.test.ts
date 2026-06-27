@@ -81,4 +81,26 @@ describe('AST Reconciliation Layer', () => {
     })
     expect(updated).toContain('x: 100')
   })
+
+  test('preserves user comments and custom formatting during reconciliation', () => {
+    const specWithComments = `# System Spec with Comments
+system:
+  name: Comments Test
+  # This section lists all nodes
+  components:
+    - id: inbox # Inbox store
+      type: Store
+      name: inbox/
+`
+    const updated = reconcileSpec(specWithComments, {
+      type: 'coords',
+      payload: [{ id: 'inbox', x: 120, y: 180 }]
+    })
+
+    expect(updated).toContain('# System Spec with Comments')
+    expect(updated).toContain('# This section lists all nodes')
+    expect(updated).toContain('# Inbox store')
+    expect(updated).toContain('x: 120')
+    expect(updated).toContain('y: 180')
+  })
 })

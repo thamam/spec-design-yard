@@ -7,93 +7,109 @@ export type CanvasChange =
 
 export function reconcileSpec(specText: string, change: CanvasChange): string {
   try {
-    const parsed = yaml.parse(specText)
-    if (!parsed || !parsed.system) return specText
+    const doc = yaml.parseDocument(specText)
+    if (!doc || !doc.get('system')) return specText
 
-    if (!parsed.system.components || !Array.isArray(parsed.system.components)) {
-      parsed.system.components = []
+    const system = doc.get('system') as any
+    if (!system || typeof system.get !== 'function') return specText
+
+    let comps = system.get('components')
+    if (!comps || typeof comps.get !== 'function') {
+      system.set('components', doc.createNode([]))
+      comps = system.get('components')
     }
 
     let modified = false
 
     if (change.type === "coords") {
       const coordsList = change.payload
-      parsed.system.components = parsed.system.components.map((comp: any) => {
-        if (!comp || typeof comp !== "object") return comp
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
 
-        const match = coordsList.find((c) => c && c.id === comp.id)
-        if (match && typeof match.x === "number" && typeof match.y === "number") {
-          const roundedX = Math.round(match.x)
-          const roundedY = Math.round(match.y)
-          if (comp.x !== roundedX || comp.y !== roundedY) {
-            modified = true
-            return {
-              ...comp,
-              x: roundedX,
-              y: roundedY,
+          const id = compNode.get('id')
+          if (!id) return
+
+          const match = coordsList.find((c) => c && c.id === id)
+          if (match && typeof match.x === "number" && typeof match.y === "number") {
+            const roundedX = Math.round(match.x)
+            const roundedY = Math.round(match.y)
+            const currentX = compNode.get('x')
+            const currentY = compNode.get('y')
+
+            if (currentX !== roundedX || currentY !== roundedY) {
+              modified = true
+              compNode.set('x', roundedX)
+              compNode.set('y', roundedY)
             }
           }
-        }
-        return comp
-      })
+        })
+      }
     } else if (change.type === "delete") {
       const { ids } = change.payload
-      if (Array.isArray(ids) && ids.length > 0) {
+      if (Array.isArray(ids) && ids.length > 0 && comps && comps.items) {
         // 1. Filter out all deleted components
-        const originalLength = parsed.system.components.length
-        parsed.system.components = parsed.system.components.filter((comp: any) => {
-          if (!comp || typeof comp !== "object") return false
-          return !ids.includes(comp.id)
-        })
-        if (parsed.system.components.length !== originalLength) {
-          modified = true
+        for (let i = comps.items.length - 1; i >= 0; i--) {
+          const compNode = comps.items[i]
+          if (compNode && typeof compNode.get === 'function') {
+            const id = compNode.get('id')
+            if (id && ids.includes(id)) {
+              comps.delete(i)
+              modified = true
+            }
+          }
         }
 
         // 2. Prune any connections referencing deleted components
-        parsed.system.components = parsed.system.components.map((comp: any) => {
-          if (!comp || typeof comp !== "object") return comp
+        if (comps && comps.items) {
+          comps.items.forEach((compNode: any) => {
+            if (!compNode || typeof compNode.get !== 'function') return
 
-          if (comp.connections && Array.isArray(comp.connections)) {
-            const originalConnLength = comp.connections.length
-            const filteredConnections = comp.connections.filter(
-              (conn: any) => conn && typeof conn === "object" && conn.target && !ids.includes(conn.target)
-            )
-            if (filteredConnections.length !== originalConnLength) {
-              modified = true
-              return {
-                ...comp,
-                connections: filteredConnections,
+            const conns = compNode.get('connections')
+            if (conns && conns.items && Array.isArray(conns.items)) {
+              for (let i = conns.items.length - 1; i >= 0; i--) {
+                const connNode = conns.items[i]
+                if (connNode && typeof connNode.get === 'function') {
+                  const target = connNode.get('target')
+                  if (target && ids.includes(target)) {
+                    conns.delete(i)
+                    modified = true
+                  }
+                }
+              }
+              if (conns.items.length === 0) {
+                compNode.delete('connections')
+                modified = true
               }
             }
-          }
-          return comp
-        })
+          })
+        }
       }
     } else if (change.type === "rename") {
       const { id, newName, newType } = change.payload
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
 
-      parsed.system.components = parsed.system.components.map((comp: any) => {
-        if (!comp || typeof comp !== "object") return comp
+          const compId = compNode.get('id')
+          if (compId === id) {
+            const currentName = compNode.get('name')
+            const currentType = compNode.get('type')
 
-        if (comp.id === id) {
-          if (comp.name !== newName || (newType && comp.type !== newType)) {
-            modified = true
-            const updated: any = {
-              ...comp,
-              name: newName,
+            if (currentName !== newName || (newType && currentType !== newType)) {
+              modified = true
+              compNode.set('name', newName)
+              if (newType) {
+                compNode.set('type', newType)
+              }
             }
-            if (newType) {
-              updated.type = newType
-            }
-            return updated
           }
-        }
-        return comp
-      })
+        })
+      }
     }
 
     if (modified) {
-      return yaml.stringify(parsed)
+      return doc.toString()
     }
   } catch (e) {
     console.error("Reconciliation error:", e)
