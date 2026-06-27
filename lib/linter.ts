@@ -98,7 +98,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
   })
 
-  // Second pass: validate connections (orphan targets)
+  // Second pass: validate connections (orphan targets, self-connections)
   components.forEach((comp: any, compIdx: number) => {
     if (!comp || !comp.id || !comp.connections) return
     const pathPrefix = `system.components[${compIdx}].connections`
@@ -124,6 +124,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       }
 
       const target = conn.target.trim()
+      const compId = comp.id.trim()
+
       // 5. Orphan Connection Target
       if (!ids.has(target)) {
         diagnostics.push({
@@ -132,8 +134,109 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           path: `${connPath}.target`,
         })
       }
+
+      // Self-connection check
+      if (target === compId) {
+        diagnostics.push({
+          severity: "error",
+          message: `Component "${compId}" has a self-connection.`,
+          path: `${connPath}.target`,
+        })
+      }
     })
   })
 
-  return diagnostics
+  // Third pass: find disconnected/isolated components
+  const outgoingCount: Record<string, number> = Object.create(null)
+  const incomingSet = new Set<string>()
+
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    const compId = comp.id.trim()
+    outgoingCount[compId] = 0
+
+    if (Array.isArray(comp.connections)) {
+      comp.connections.forEach((conn: any) => {
+        if (conn && typeof conn === "object" && typeof conn.target === "string") {
+          const target = conn.target.trim()
+          if (target !== compId && ids.has(target)) {
+            outgoingCount[compId]++
+            incomingSet.add(target)
+          }
+        }
+      })
+    }
+  })
+
+  if (components.length > 1) {
+    components.forEach((comp: any, compIdx: number) => {
+      if (!comp || !comp.id) return
+      const compId = comp.id.trim()
+      if (outgoingCount[compId] === 0 && !incomingSet.has(compId)) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${compId}" is disconnected (no inbound or outbound connections).`,
+          path: `system.components[${compIdx}]`,
+        })
+      }
+    })
+  }
+
+  // Fourth pass: Cycle detection using DFS
+  const adj: Record<string, string[]> = Object.create(null)
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    const compId = comp.id.trim()
+    adj[compId] = []
+    if (Array.isArray(comp.connections)) {
+      comp.connections.forEach((conn: any) => {
+        if (conn && typeof conn === "object" && typeof conn.target === "string") {
+          const target = conn.target.trim()
+          if (ids.has(target) && target !== compId) {
+            adj[compId].push(target)
+          }
+        }
+      })
+    }
+  })
+
+  const visited = new Set<string>()
+  const recStack: string[] = []
+  const detectedCycles = new Set<string>()
+
+  function dfs(node: string) {
+    visited.add(node)
+    recStack.push(node)
+
+    const neighbors = adj[node] || []
+    for (const neighbor of neighbors) {
+      const stackIdx = recStack.indexOf(neighbor)
+      if (stackIdx !== -1) {
+        // Cycle detected
+        const cyclePath = recStack.slice(stackIdx)
+        cyclePath.push(neighbor)
+        const cycleKey = cyclePath.join(" → ")
+        const sortedCycleNodes = [...cyclePath.slice(0, -1)].sort().join(",")
+        if (!detectedCycles.has(sortedCycleNodes)) {
+          detectedCycles.add(sortedCycleNodes)
+          diagnostics.push({
+            severity: "warning",
+            message: `Circular dependency loop detected: ${cycleKey}`,
+          })
+        }
+      } else if (!visited.has(neighbor)) {
+        dfs(neighbor)
+      }
+    }
+
+    recStack.pop()
+  }
+
+  Object.keys(adj).forEach((node) => {
+    if (!visited.has(node)) {
+      dfs(node)
+    }
+  })
+
+  return diagnostics;
 }
