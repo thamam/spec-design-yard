@@ -144,4 +144,35 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     })
     expect(updated).not.toContain('invalid-string')
   })
+
+  test('reconciles unrecognized-system-key by deleting the key from system block', () => {
+    const initial = `system:
+  name: Test System
+  components: []
+  unrecognized_key: value
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.unrecognized_key', fixType: 'unrecognized-system-key' }
+    })
+    expect(updated).not.toContain('unrecognized_key')
+  })
+
+  test('reconciles unreachable-component when hasGateway is false by connecting from first node', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: node_a
+      type: Stage
+    - id: node_b
+      type: Stage
+`
+    // node_b is unreachable. Since there is no gateway, the fallback is to connect from node_a.
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[1]', fixType: 'connect-from-gateway' }
+    })
+    expect(updated).toContain('connections:')
+    expect(updated).toContain('target: node_b')
+  })
 })

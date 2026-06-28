@@ -29,6 +29,20 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     })
   }
 
+  const allowedSystemKeys = new Set(["name", "components"])
+  if (system && typeof system === "object" && !Array.isArray(system)) {
+    Object.keys(system).forEach((k) => {
+      if (!allowedSystemKeys.has(k)) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Unrecognized key "${k}" in top-level system. Valid system keys are: name, components.`,
+          path: `system.${k}`,
+          code: "unrecognized-system-key",
+        })
+      }
+    })
+  }
+
   const components = system.components
   if (!components) {
     diagnostics.push({
@@ -432,13 +446,24 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           path: `system.components[${compIdx}]`,
           code: "disconnected-component",
         })
-      } else if (hasGateway && compType !== "gateway" && !reachable.has(compId)) {
-        diagnostics.push({
-          severity: "warning",
-          message: `Component "${compId}" is unreachable (no execution path exists from any Gateway entry point).`,
-          path: `system.components[${compIdx}]`,
-          code: "unreachable-component",
-        })
+      } else if (!reachable.has(compId)) {
+        if (hasGateway) {
+          if (compType !== "gateway") {
+            diagnostics.push({
+              severity: "warning",
+              message: `Component "${compId}" is unreachable (no execution path exists from any Gateway entry point).`,
+              path: `system.components[${compIdx}]`,
+              code: "unreachable-component",
+            })
+          }
+        } else {
+          diagnostics.push({
+            severity: "warning",
+            message: `Component "${compId}" is unreachable (no execution path exists from any entry point).`,
+            path: `system.components[${compIdx}]`,
+            code: "unreachable-component",
+          })
+        }
       }
     })
   }
