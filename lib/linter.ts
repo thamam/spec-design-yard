@@ -43,6 +43,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   }
 
   const ids = new Set<string>()
+  const lowercaseIds = new Map<string, string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
   const typeMap: Record<string, string> = Object.create(null)
 
@@ -78,6 +79,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       } else {
         ids.add(id)
+        lowercaseIds.set(id.toLowerCase(), id)
         // 2a. Invalid ID format
         if (!/^[a-zA-Z0-9_\-]+$/.test(id)) {
           diagnostics.push({
@@ -246,13 +248,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 5. Orphan Connection Target
       if (!ids.has(target)) {
-        let caseMismatchId: string | undefined
-        for (const id of ids) {
-          if (id.toLowerCase() === target.toLowerCase()) {
-            caseMismatchId = id
-            break
-          }
-        }
+        const caseMismatchId = lowercaseIds.get(target.toLowerCase())
 
         if (caseMismatchId) {
           diagnostics.push({
