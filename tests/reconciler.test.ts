@@ -547,4 +547,23 @@ system:
 
     expect(updated).toContain('version: v0.1.0')
   })
+
+  test('quick-fix unrecognized-component-key removes the key', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      typoKey: someValue
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].typoKey',
+        fixType: 'unrecognized-component-key'
+      }
+    })
+
+    expect(updated).not.toContain('typoKey:')
+    expect(updated).toContain('id: inbox')
+  })
 })

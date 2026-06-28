@@ -45,6 +45,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   const ids = new Set<string>()
   const lowercaseIds = new Map<string, string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
+  const allowedComponentKeys = new Set(["id", "type", "name", "x", "y", "connections", "metadata"])
   const typeMap: Record<string, string> = Object.create(null)
 
   // First pass: collect component IDs and validate basic fields
@@ -59,6 +60,17 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       })
       return
     }
+
+    Object.keys(comp).forEach((k) => {
+      if (!allowedComponentKeys.has(k)) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Unrecognized component key "${k}" in component "${comp.id || idx}". Valid component keys are: id, type, name, x, y, connections, metadata.`,
+          path: `${pathPrefix}.${k}`,
+          code: "unrecognized-component-key",
+        })
+      }
+    })
 
     // 1. Missing ID
     if (!comp.id || typeof comp.id !== "string" || comp.id.trim() === "") {
