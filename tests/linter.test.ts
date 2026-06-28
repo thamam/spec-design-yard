@@ -374,6 +374,45 @@ describe('Advanced Linter Features', () => {
     expect(unreachableComponent?.message).toContain('is unreachable')
   })
 
+  test('flags cyclic isolated subgraphs as unreachable from gateways', () => {
+    const specWithIsolatedCycle = {
+      system: {
+        name: 'Isolated Cycle System',
+        components: [
+          {
+            id: 'gate_in',
+            type: 'Gateway',
+            connections: [{ target: 'stage_a' }]
+          },
+          {
+            id: 'stage_a',
+            type: 'Stage'
+          },
+          {
+            id: 'isolated_cycle_1',
+            type: 'Stage',
+            connections: [{ target: 'isolated_cycle_2' }]
+          },
+          {
+            id: 'isolated_cycle_2',
+            type: 'Stage',
+            connections: [{ target: 'isolated_cycle_1' }]
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithIsolatedCycle)
+    // isolated_cycle_1 and isolated_cycle_2 should both be flagged as unreachable since they are not reachable from gate_in
+    const unreachable1 = diagnostics.find(d => d.code === 'unreachable-component' && d.message.includes('isolated_cycle_1'))
+    const unreachable2 = diagnostics.find(d => d.code === 'unreachable-component' && d.message.includes('isolated_cycle_2'))
+
+    expect(unreachable1).toBeDefined()
+    expect(unreachable1?.severity).toBe('warning')
+    expect(unreachable2).toBeDefined()
+    expect(unreachable2?.severity).toBe('warning')
+  })
+
   describe('Metadata Validation and Documentation Rules', () => {
     test('flags non-object metadata as an error', () => {
       const invalidSpec = {
