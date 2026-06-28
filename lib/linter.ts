@@ -339,8 +339,69 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
   })
 
+  // Perform full graph reachability traversal from all entry points
+  const reachable = new Set<string>()
+  const hasGateway = Object.values(typeMap).includes("gateway")
+
   if (components.length > 1) {
-    const hasGateway = Object.values(typeMap).includes("gateway")
+    const queue: string[] = []
+
+    // 1. Identify Entry Points
+    if (hasGateway) {
+      components.forEach((comp: any) => {
+        if (comp && typeof comp.id === "string") {
+          const compId = comp.id.trim()
+          if (ids.has(compId) && typeMap[compId] === "gateway") {
+            reachable.add(compId)
+            queue.push(compId)
+          }
+        }
+      })
+    } else {
+      // If no gateway, entry points are components with no inbound connections
+      components.forEach((comp: any) => {
+        if (comp && typeof comp.id === "string") {
+          const compId = comp.id.trim()
+          if (ids.has(compId) && !incomingSet.has(compId)) {
+            reachable.add(compId)
+            queue.push(compId)
+          }
+        }
+      })
+    }
+
+    // 2. BFS Traversal
+    const tempAdj: Record<string, string[]> = Object.create(null)
+    components.forEach((comp: any) => {
+      if (comp && typeof comp.id === "string" && ids.has(comp.id.trim())) {
+        const compId = comp.id.trim()
+        tempAdj[compId] = []
+        if (Array.isArray(comp.connections)) {
+          comp.connections.forEach((conn: any) => {
+            if (conn && typeof conn === "object" && typeof conn.target === "string") {
+              const target = conn.target.trim()
+              if (ids.has(target) && target !== compId) {
+                tempAdj[compId].push(target)
+              }
+            }
+          })
+        }
+      }
+    })
+
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      const neighbors = tempAdj[current] || []
+      for (const neighbor of neighbors) {
+        if (!reachable.has(neighbor)) {
+          reachable.add(neighbor)
+          queue.push(neighbor)
+        }
+      }
+    }
+  }
+
+  if (components.length > 1) {
     const pass3ReportSeen = new Set<string>()
     components.forEach((comp: any, compIdx: number) => {
       if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
@@ -357,10 +418,10 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           path: `system.components[${compIdx}]`,
           code: "disconnected-component",
         })
-      } else if (hasGateway && compType !== "gateway" && !incomingSet.has(compId)) {
+      } else if (hasGateway && compType !== "gateway" && !reachable.has(compId)) {
         diagnostics.push({
           severity: "warning",
-          message: `Component "${compId}" is unreachable (no inbound connections and is not a Gateway entry point).`,
+          message: `Component "${compId}" is unreachable (no execution path exists from any Gateway entry point).`,
           path: `system.components[${compIdx}]`,
           code: "unreachable-component",
         })
