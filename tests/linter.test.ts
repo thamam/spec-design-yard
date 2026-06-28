@@ -486,4 +486,23 @@ describe('Advanced Linter Features', () => {
       expect(emptyGateWarn?.message).toContain('no outgoing connections')
     })
   })
+
+  describe('Unrecognized Component Keys Rule', () => {
+    test('flags unrecognized component level keys as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Unrecognized Keys Test',
+          components: [
+            { id: 'inbox', type: 'Store', typoKey: 'should-flag', anotherTypo: 42 }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const unrecognizedWarn = diagnostics.filter(d => d.code === 'unrecognized-component-key')
+      expect(unrecognizedWarn.length).toBe(2)
+      expect(unrecognizedWarn[0].severity).toBe('warning')
+      expect(unrecognizedWarn[0].message).toContain('Unrecognized component key "typoKey"')
+      expect(unrecognizedWarn[1].message).toContain('Unrecognized component key "anotherTypo"')
+    })
+  })
 })

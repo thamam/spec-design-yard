@@ -216,12 +216,12 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       const { path, fixType, extraData } = change.payload
       const parts = parsePath(path)
       
-      if (fixType === "unrecognized-metadata-key") {
+      if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key") {
         const parentPath = parts.slice(0, -1)
         const keyToDelete = parts[parts.length - 1] as string
-        const metadataNode = doc.getIn(parentPath) as any
-        if (metadataNode && typeof metadataNode.delete === "function") {
-          metadataNode.delete(keyToDelete)
+        const parentNode = doc.getIn(parentPath) as any
+        if (parentNode && typeof parentNode.delete === "function") {
+          parentNode.delete(keyToDelete)
           modified = true
         }
       } else if (fixType === "connection-case-mismatch") {
