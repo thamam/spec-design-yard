@@ -472,11 +472,18 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
   // Pass 5: Coordinate overlaps checking
   const coordsMap = new Map<string, string[]>()
-  components.forEach((comp: any) => {
+  const compIdToIdx = new Map<string, number>()
+  components.forEach((comp: any, compIdx: number) => {
     if (comp && typeof comp === "object" && typeof comp.id === "string") {
       const compId = comp.id.trim()
       if (compId !== "" && ids.has(compId)) {
-        if (typeof comp.x === "number" && typeof comp.y === "number") {
+        compIdToIdx.set(compId, compIdx)
+        if (
+          typeof comp.x === "number" &&
+          Number.isFinite(comp.x) &&
+          typeof comp.y === "number" &&
+          Number.isFinite(comp.y)
+        ) {
           const x = Math.round(comp.x)
           const y = Math.round(comp.y)
           const key = `${x},${y}`
@@ -493,10 +500,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     if (idsList.length > 1) {
       const [x, y] = key.split(",").map(Number)
       idsList.forEach((id) => {
-        const compIdx = components.findIndex(
-          (c: any) => c && typeof c.id === "string" && c.id.trim() === id
-        )
-        if (compIdx !== -1) {
+        const compIdx = compIdToIdx.get(id)
+        if (compIdx !== undefined) {
           const others = idsList.filter((o) => o !== id)
           diagnostics.push({
             severity: "warning",

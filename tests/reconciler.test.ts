@@ -592,4 +592,23 @@ system:
     // node_a should still have its x coordinate as 100
     expect(updated).toContain('x: 100')
   })
+
+  test('quick-fix component-overlap does not shift if coordinate is NaN', () => {
+    const spec = `system:
+  components:
+    - id: node_a
+      type: Store
+      x: .nan
+      y: 150
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].x',
+        fixType: 'component-overlap'
+      }
+    })
+
+    expect(updated).toContain('x: .nan')
+  })
 })

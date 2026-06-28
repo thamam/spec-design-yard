@@ -526,5 +526,21 @@ describe('Advanced Linter Features', () => {
       expect(overlapWarns[0].path).toBe('system.components[0].x')
       expect(overlapWarns[1].path).toBe('system.components[1].x')
     })
+
+    test('ignores components with NaN or non-finite coordinates', () => {
+      const spec = {
+        system: {
+          name: 'NaN Overlap Test',
+          components: [
+            { id: 'node_a', type: 'Store', x: NaN, y: 150 },
+            { id: 'node_b', type: 'Stage', x: NaN, y: 150 },
+            { id: 'node_c', type: 'Brick', x: 200, y: Infinity }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const overlapWarns = diagnostics.filter(d => d.code === 'component-overlap')
+      expect(overlapWarns.length).toBe(0)
+    })
   })
 })

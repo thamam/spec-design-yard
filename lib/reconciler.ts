@@ -49,7 +49,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           if (!id) return
 
           const match = coordsList.find((c) => c && c.id === id)
-          if (match && typeof match.x === "number" && typeof match.y === "number") {
+          if (match && typeof match.x === "number" && Number.isFinite(match.x) && typeof match.y === "number" && Number.isFinite(match.y)) {
             const roundedX = Math.round(match.x)
             const roundedY = Math.round(match.y)
             const currentX = compNode.get('x')
@@ -250,7 +250,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         modified = true
       } else if (fixType === "component-overlap") {
         const currentX = doc.getIn(parts) as number
-        if (typeof currentX === "number") {
+        if (typeof currentX === "number" && Number.isFinite(currentX)) {
           doc.setIn(parts, currentX + 100)
           modified = true
         }
