@@ -221,7 +221,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         modified = true
       } else if (fixType === "missing-component-id") {
         const compNode = doc.getIn(parts) as any
-        if (compNode && typeof compNode.set === "function") {
+        if (compNode && typeof compNode.set === "function" && typeof compNode.get === "function") {
           const type = String(compNode.get("type") || "Stage").toLowerCase()
           const prefix = type === "store" ? "store" : type === "brick" ? "brick" : type === "gateway" ? "gateway" : "stage"
           const compsNode = doc.getIn(["system", "components"]) as any
