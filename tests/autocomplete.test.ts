@@ -109,4 +109,48 @@ describe('Autocomplete Utility', () => {
     const expectedEnd = expectedStart + 'Stage'.length
     expect(result.replaceRange).toEqual([expectedStart, expectedEnd])
   })
+
+  test('getAutocompleteSuggestions suggests component keys when typing at the start of a component property line', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      m`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('field')
+    expect(result.query).toBe('m')
+    expect(result.suggestions).toContain('metadata:')
+  })
+
+  test('getAutocompleteSuggestions suggests metadata keys when typing inside metadata block', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        o`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('metadata-key')
+    expect(result.query).toBe('o')
+    expect(result.suggestions).toContain('owner:')
+  })
+
+  test('getAutocompleteSuggestions suggests metadata status values when typing status: ', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        status: d`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('metadata-status')
+    expect(result.query).toBe('d')
+    expect(result.suggestions).toContain('draft')
+  })
 })

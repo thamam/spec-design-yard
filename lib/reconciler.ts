@@ -216,7 +216,40 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       const { path, fixType, extraData } = change.payload
       const parts = parsePath(path)
       
-      if (fixType === "unrecognized-type") {
+      if (fixType === "unrecognized-metadata-key") {
+        const parentPath = parts.slice(0, -1)
+        const keyToDelete = parts[parts.length - 1] as string
+        const metadataNode = doc.getIn(parentPath) as any
+        if (metadataNode && typeof metadataNode.delete === "function") {
+          metadataNode.delete(keyToDelete)
+          modified = true
+        }
+      } else if (fixType === "invalid-metadata-status") {
+        doc.setIn(parts, "draft")
+        modified = true
+      } else if (fixType === "missing-metadata-description") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          let metadataNode = compNode.get("metadata") as any
+          if (!metadataNode || typeof metadataNode.set !== "function") {
+            compNode.set("metadata", doc.createNode({}))
+            metadataNode = compNode.get("metadata")
+          }
+          metadataNode.set("description", "[Add Description]")
+          modified = true
+        }
+      } else if (fixType === "missing-metadata-owner") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          let metadataNode = compNode.get("metadata") as any
+          if (!metadataNode || typeof metadataNode.set !== "function") {
+            compNode.set("metadata", doc.createNode({}))
+            metadataNode = compNode.get("metadata")
+          }
+          metadataNode.set("owner", "[Add Owner]")
+          modified = true
+        }
+      } else if (fixType === "unrecognized-type") {
         const newType = extraData?.type || "Stage"
         doc.setIn(parts, newType)
         modified = true
