@@ -51,8 +51,8 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     expect(storeBtn).toBeInTheDocument()
     expect(stageBtn).toBeInTheDocument()
 
-    // Press ArrowRight to move selection to "Stage"
-    fireEvent.keyDown(textarea, { key: 'ArrowRight' })
+    // Press ArrowDown to move selection to "Stage"
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     
     // Press Tab/Enter to apply selection "Stage"
     fireEvent.keyDown(textarea, { key: 'Tab' })
@@ -89,5 +89,54 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     const parsed = yaml.parse(reconciled)
     expect(parsed.system.components.length).toBe(1)
     expect(parsed.system.components[0].id).toBe('node_c')
+  })
+
+  test('textarea in CodeTab does not apply autocomplete with Enter key unless navigated', () => {
+    render(<Workspace />)
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    // Case A: No navigation, press Enter. It should NOT apply autocomplete.
+    fireEvent.change(textarea, { target: { value: 'system:\n  components:\n    - id: node_x\n      type: S' } })
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    // Value remains unchanged (Enter was not hijacked to replace "S" with "Store" or "Stage")
+    expect(textarea.value).toContain('type: S')
+
+    // Case B: Navigated, press Enter. It SHOULD apply autocomplete.
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' }) // selects Stage
+    fireEvent.keyDown(textarea, { key: 'Enter' }) // applies Stage
+    expect(textarea.value).toContain('type: Stage')
+  })
+
+  test('reconcileSpec quick-fix-all skips modifications on a sub-path of an already deleted component', () => {
+    const initial = `system:
+  name: Shift and Skip Test
+  components:
+    - id: node_a
+      type: Stage
+      metadata:
+        invalid: array
+    - id: node_b
+      type: Stage
+`
+    // If we delete components[0] (node_a), then we shouldn't attempt to modify components[0].metadata
+    // because that component is deleted!
+    const reconciled = reconcileSpec(initial, {
+      type: 'quick-fix-all',
+      payload: {
+        fixes: [
+          { path: 'system.components[0]', fixType: 'delete-component' },
+          { path: 'system.components[0].metadata', fixType: 'invalid-metadata-object' }
+        ]
+      }
+    })
+
+    const parsed = yaml.parse(reconciled)
+    // node_a is deleted, so only node_b remains. Its metadata shouldn't be affected.
+    expect(parsed.system.components.length).toBe(1)
+    expect(parsed.system.components[0].id).toBe('node_b')
   })
 })

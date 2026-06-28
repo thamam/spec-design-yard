@@ -36,6 +36,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
+  const [hasNavigated, setHasNavigated] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -65,6 +66,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
   const suggestionsKey = autocomplete?.suggestions.join(',') || ""
   useEffect(() => {
     setActiveSuggestionIndex(0)
+    setHasNavigated(false)
   }, [suggestionsKey])
 
   const safeActiveIndex = autocomplete && activeSuggestionIndex < autocomplete.suggestions.length
@@ -92,17 +94,27 @@ function CodeTab({ value, onChange }: CodeTabProps) {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (autocomplete && autocomplete.suggestions.length > 0) {
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      if (e.key === "ArrowDown") {
         e.preventDefault()
         setActiveSuggestionIndex((prev) => (prev + 1) % autocomplete.suggestions.length)
-      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        setHasNavigated(true)
+      } else if (e.key === "ArrowUp") {
         e.preventDefault()
         setActiveSuggestionIndex((prev) => (prev - 1 + autocomplete.suggestions.length) % autocomplete.suggestions.length)
-      } else if (e.key === "Tab" || e.key === "Enter") {
+        setHasNavigated(true)
+      } else if (e.key === "Tab") {
         e.preventDefault()
         const selectedSug = autocomplete.suggestions[safeActiveIndex]
         if (selectedSug) {
           handleApplySuggestion(selectedSug)
+        }
+      } else if (e.key === "Enter") {
+        if (hasNavigated) {
+          e.preventDefault()
+          const selectedSug = autocomplete.suggestions[safeActiveIndex]
+          if (selectedSug) {
+            handleApplySuggestion(selectedSug)
+          }
         }
       } else if (e.key === "Escape") {
         e.preventDefault()
@@ -321,6 +333,36 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "focus", label: "Focus", icon: <FocusIcon size={12} /> },
 ]
 
+const FIXABLE_DIAGNOSTIC_CODES = new Set([
+  "missing-system-name",
+  "empty-system-name",
+  "missing-component-id",
+  "missing-component-type",
+  "invalid-metadata-object",
+  "invalid-connections-array",
+  "invalid-connection-object",
+  "unrecognized-metadata-key",
+  "unrecognized-component-key",
+  "connection-case-mismatch",
+  "invalid-metadata-status",
+  "component-overlap",
+  "missing-metadata-description",
+  "missing-metadata-owner",
+  "invalid-metadata-version",
+  "unrecognized-type",
+  "self-connection",
+  "empty-connection-target",
+  "duplicate-connection",
+  "invalid-id-format",
+  "duplicate-id",
+  "orphan-connection",
+  "disconnected-component",
+  "unreachable-component",
+  "gateway-to-store",
+  "sink-stage-brick",
+  "empty-gateway"
+])
+
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -386,37 +428,7 @@ export function EditorPanel({
 
   const fixableDiagnostics = useMemo(() => {
     return diagnostics.filter((d) => {
-      if (!d.code || !d.path) return false
-      const fixableCodes = new Set([
-        "missing-system-name",
-        "empty-system-name",
-        "missing-component-id",
-        "missing-component-type",
-        "invalid-metadata-object",
-        "invalid-connections-array",
-        "invalid-connection-object",
-        "unrecognized-metadata-key",
-        "unrecognized-component-key",
-        "connection-case-mismatch",
-        "invalid-metadata-status",
-        "component-overlap",
-        "missing-metadata-description",
-        "missing-metadata-owner",
-        "invalid-metadata-version",
-        "unrecognized-type",
-        "self-connection",
-        "empty-connection-target",
-        "duplicate-connection",
-        "invalid-id-format",
-        "duplicate-id",
-        "orphan-connection",
-        "disconnected-component",
-        "unreachable-component",
-        "gateway-to-store",
-        "sink-stage-brick",
-        "empty-gateway"
-      ])
-      return fixableCodes.has(d.code)
+      return d.code && d.path && FIXABLE_DIAGNOSTIC_CODES.has(d.code)
     })
   }, [diagnostics])
 

@@ -234,11 +234,34 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
               return idxB[i] - idxA[i]
             }
           }
-          return idxB.length - idxA.length
+          if (idxA.length !== idxB.length) {
+            return idxB.length - idxA.length
+          }
+          // Same indices and depth. Ensure "delete-component" happens LAST for the same index so modifications are processed first (or skipped if already deleted)
+          if (a.fixType === "delete-component" && b.fixType !== "delete-component") {
+            return 1
+          }
+          if (b.fixType === "delete-component" && a.fixType !== "delete-component") {
+            return -1
+          }
+          return 0
         })
+
+        const deletedPaths: string[] = []
 
         sortedFixes.forEach((fix) => {
           const { path, fixType, extraData } = fix
+
+          // Skip if this path is a sub-path of an already deleted component or connection
+          const isStale = deletedPaths.some((deletedPath) => {
+            return path === deletedPath || path.startsWith(deletedPath + ".") || path.startsWith(deletedPath + "[")
+          })
+          if (isStale) return
+
+          if (fixType === "delete-component" || fixType === "invalid-connection-object") {
+            deletedPaths.push(path)
+          }
+
           const parts = parsePath(path)
       
       if (fixType === "missing-system-name" || fixType === "empty-system-name") {
