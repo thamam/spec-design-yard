@@ -43,6 +43,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   }
 
   const ids = new Set<string>()
+  const lowercaseIds = new Map<string, string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
   const typeMap: Record<string, string> = Object.create(null)
 
@@ -78,6 +79,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       } else {
         ids.add(id)
+        lowercaseIds.set(id.toLowerCase(), id)
         // 2a. Invalid ID format
         if (!/^[a-zA-Z0-9_\-]+$/.test(id)) {
           diagnostics.push({
@@ -246,12 +248,23 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 5. Orphan Connection Target
       if (!ids.has(target)) {
-        diagnostics.push({
-          severity: "error",
-          message: `Connection target "${target}" does not exist in the components list.`,
-          path: `${connPath}.target`,
-          code: "orphan-connection",
-        })
+        const caseMismatchId = lowercaseIds.get(target.toLowerCase())
+
+        if (caseMismatchId) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Connection target "${target}" does not exist, but matches component "${caseMismatchId}" with different casing. Connection targets are case-sensitive.`,
+            path: `${connPath}.target`,
+            code: "connection-case-mismatch",
+          })
+        } else {
+          diagnostics.push({
+            severity: "error",
+            message: `Connection target "${target}" does not exist in the components list.`,
+            path: `${connPath}.target`,
+            code: "orphan-connection",
+          })
+        }
       }
 
       // Self-connection check

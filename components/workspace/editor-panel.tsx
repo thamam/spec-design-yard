@@ -629,6 +629,14 @@ export function EditorPanel({
                           Remove Duplicate
                         </button>
                       )}
+                      {d.code === "connection-case-mismatch" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "connection-case-mismatch")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Fix Casing
+                        </button>
+                      )}
                       {d.code === "invalid-id-format" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "invalid-id-format")}

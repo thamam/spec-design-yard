@@ -224,6 +224,27 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           metadataNode.delete(keyToDelete)
           modified = true
         }
+      } else if (fixType === "connection-case-mismatch") {
+        const currentTarget = String(doc.getIn(parts) || "").trim()
+        if (currentTarget) {
+          const compsNode = doc.getIn(["system", "components"]) as any
+          let correctId = ""
+          if (compsNode && compsNode.items) {
+            for (const c of compsNode.items) {
+              if (c && typeof c.get === "function") {
+                const id = c.get("id")
+                if (id && String(id).trim().toLowerCase() === currentTarget.toLowerCase()) {
+                  correctId = String(id).trim()
+                  break
+                }
+              }
+            }
+          }
+          if (correctId) {
+            doc.setIn(parts, correctId)
+            modified = true
+          }
+        }
       } else if (fixType === "invalid-metadata-status") {
         doc.setIn(parts, "draft")
         modified = true
