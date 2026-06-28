@@ -67,6 +67,10 @@ function CodeTab({ value, onChange }: CodeTabProps) {
     setActiveSuggestionIndex(0)
   }, [suggestionsKey])
 
+  const safeActiveIndex = autocomplete && activeSuggestionIndex < autocomplete.suggestions.length
+    ? activeSuggestionIndex
+    : 0
+
   const handleApplySuggestion = (sug: string) => {
     if (!autocomplete) return
     const [start, end] = autocomplete.replaceRange
@@ -96,7 +100,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         setActiveSuggestionIndex((prev) => (prev - 1 + autocomplete.suggestions.length) % autocomplete.suggestions.length)
       } else if (e.key === "Tab" || e.key === "Enter") {
         e.preventDefault()
-        const selectedSug = autocomplete.suggestions[activeSuggestionIndex]
+        const selectedSug = autocomplete.suggestions[safeActiveIndex]
         if (selectedSug) {
           handleApplySuggestion(selectedSug)
         }
@@ -132,7 +136,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
                 type="button"
                 onClick={() => handleApplySuggestion(sug)}
                 className={`px-2 py-0.5 text-xs font-mono rounded border active:scale-95 transition-all whitespace-nowrap ${
-                  idx === activeSuggestionIndex
+                  idx === safeActiveIndex
                     ? "bg-indigo-500 text-white border-indigo-400 shadow-md ring-1 ring-indigo-400"
                     : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/20"
                 }`}

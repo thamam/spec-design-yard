@@ -219,7 +219,25 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         : change.payload.fixes
 
       if (Array.isArray(fixes)) {
-        fixes.forEach((fix) => {
+        // Sort fixes descending by their array indices to prevent index shift issues during deletions
+        const getPathIndices = (p: string): number[] => {
+          const matches = p.match(/\d+/g)
+          return matches ? matches.map(Number) : []
+        }
+
+        const sortedFixes = [...fixes].sort((a, b) => {
+          const idxA = getPathIndices(a.path)
+          const idxB = getPathIndices(b.path)
+          const minLen = Math.min(idxA.length, idxB.length)
+          for (let i = 0; i < minLen; i++) {
+            if (idxA[i] !== idxB[i]) {
+              return idxB[i] - idxA[i]
+            }
+          }
+          return idxB.length - idxA.length
+        })
+
+        sortedFixes.forEach((fix) => {
           const { path, fixType, extraData } = fix
           const parts = parsePath(path)
       

@@ -60,4 +60,34 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     // Verify textarea has the auto-completed text "Stage"
     expect(textarea.value).toContain('type: Stage')
   })
+
+  test('reconcileSpec quick-fix-all processes index-based deletions in descending order to avoid index shift issues', () => {
+    const initial = `system:
+  name: Shift Test
+  components:
+    - id: node_a
+      type: Stage
+    - id: node_b
+      type: Stage
+    - id: node_c
+      type: Stage
+`
+    // If we want to delete node_a (index 0) and node_b (index 1),
+    // processing in original order would shift node_b to index 0,
+    // and attempt to delete index 1 which is now node_c!
+    // With descending sort, we delete node_b (index 1) first, and then node_a (index 0).
+    const reconciled = reconcileSpec(initial, {
+      type: 'quick-fix-all',
+      payload: {
+        fixes: [
+          { path: 'system.components[0]', fixType: 'delete-component' },
+          { path: 'system.components[1]', fixType: 'delete-component' }
+        ]
+      }
+    })
+
+    const parsed = yaml.parse(reconciled)
+    expect(parsed.system.components.length).toBe(1)
+    expect(parsed.system.components[0].id).toBe('node_c')
+  })
 })
