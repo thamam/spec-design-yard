@@ -34,6 +34,8 @@ interface CodeTabProps {
 
 function CodeTab({ value, onChange }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
+  const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -46,6 +48,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
     const nextVal = e.target.value
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
+    setSuppressAutocomplete(false)
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -53,11 +56,16 @@ function CodeTab({ value, onChange }: CodeTabProps) {
   }
 
   const autocomplete = useMemo(() => {
-    if (cursorPos === null) return null
+    if (cursorPos === null || suppressAutocomplete) return null
     const res = getAutocompleteSuggestions(value, cursorPos)
     if (res.suggestions.length > 0) return res
     return null
-  }, [value, cursorPos])
+  }, [value, cursorPos, suppressAutocomplete])
+
+  const suggestionsKey = autocomplete?.suggestions.join(',') || ""
+  useEffect(() => {
+    setActiveSuggestionIndex(0)
+  }, [suggestionsKey])
 
   const handleApplySuggestion = (sug: string) => {
     if (!autocomplete) return
@@ -78,6 +86,27 @@ function CodeTab({ value, onChange }: CodeTabProps) {
     }, 0)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (autocomplete && autocomplete.suggestions.length > 0) {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault()
+        setActiveSuggestionIndex((prev) => (prev + 1) % autocomplete.suggestions.length)
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault()
+        setActiveSuggestionIndex((prev) => (prev - 1 + autocomplete.suggestions.length) % autocomplete.suggestions.length)
+      } else if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault()
+        const selectedSug = autocomplete.suggestions[activeSuggestionIndex]
+        if (selectedSug) {
+          handleApplySuggestion(selectedSug)
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        setSuppressAutocomplete(true)
+      }
+    }
+  }
+
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
       <textarea
@@ -86,6 +115,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         value={value}
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
+        onKeyDown={handleKeyDown}
         className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto"
         spellCheck="false"
       />
@@ -96,19 +126,23 @@ function CodeTab({ value, onChange }: CodeTabProps) {
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-sans pr-1">
               Suggesting {autocomplete.type === "id" ? "IDs" : "Types"}:
             </span>
-            {autocomplete.suggestions.map((sug) => (
+            {autocomplete.suggestions.map((sug, idx) => (
               <button
                 key={sug}
                 type="button"
                 onClick={() => handleApplySuggestion(sug)}
-                className="px-2 py-0.5 text-xs font-mono bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 rounded border border-indigo-500/20 active:scale-95 transition-all whitespace-nowrap"
+                className={`px-2 py-0.5 text-xs font-mono rounded border active:scale-95 transition-all whitespace-nowrap ${
+                  idx === activeSuggestionIndex
+                    ? "bg-indigo-500 text-white border-indigo-400 shadow-md ring-1 ring-indigo-400"
+                    : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/20"
+                }`}
               >
                 {sug}
               </button>
             ))}
           </div>
           <span className="text-[9px] text-zinc-500 font-sans italic shrink-0 pr-1">
-            Click to auto-complete
+            Arrow keys to select, Tab/Enter to apply
           </span>
         </div>
       )}
@@ -346,6 +380,83 @@ export function EditorPanel({
     }
   }
 
+  const fixableDiagnostics = useMemo(() => {
+    return diagnostics.filter((d) => {
+      if (!d.code || !d.path) return false
+      const fixableCodes = new Set([
+        "missing-system-name",
+        "empty-system-name",
+        "missing-component-id",
+        "missing-component-type",
+        "invalid-metadata-object",
+        "invalid-connections-array",
+        "invalid-connection-object",
+        "unrecognized-metadata-key",
+        "unrecognized-component-key",
+        "connection-case-mismatch",
+        "invalid-metadata-status",
+        "component-overlap",
+        "missing-metadata-description",
+        "missing-metadata-owner",
+        "invalid-metadata-version",
+        "unrecognized-type",
+        "self-connection",
+        "empty-connection-target",
+        "duplicate-connection",
+        "invalid-id-format",
+        "duplicate-id",
+        "orphan-connection",
+        "disconnected-component",
+        "unreachable-component",
+        "gateway-to-store",
+        "sink-stage-brick",
+        "empty-gateway"
+      ])
+      return fixableCodes.has(d.code)
+    })
+  }, [diagnostics])
+
+  const handleFixAll = () => {
+    const fixes = fixableDiagnostics.map((d) => {
+      let fixType = d.code!
+      let extraData: any = undefined
+
+      if (d.code === "empty-system-name") {
+        fixType = "missing-system-name"
+      } else if (d.code === "invalid-metadata-version") {
+        fixType = "set-default-version"
+      } else if (d.code === "unrecognized-type") {
+        extraData = { type: "Stage" }
+      } else if (d.code === "disconnected-component") {
+        fixType = "delete-component"
+      } else if (d.code === "unreachable-component") {
+        fixType = "connect-from-gateway"
+      } else if (d.code === "gateway-to-store") {
+        fixType = "insert-stage"
+      } else if (d.code === "sink-stage-brick") {
+        fixType = "connect-to-store"
+      } else if (d.code === "empty-gateway") {
+        fixType = "connect-to-stage"
+      }
+
+      return {
+        path: d.path!,
+        fixType,
+        extraData
+      }
+    })
+
+    if (fixes.length > 0) {
+      const updated = reconcileSpec(specText, {
+        type: "quick-fix-all",
+        payload: { fixes }
+      })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
+    }
+  }
+
   const handleCopy = () => {
     navigator.clipboard.writeText(specText).catch(() => {})
     setCopied(true)
@@ -554,6 +665,21 @@ export function EditorPanel({
               <div className="text-emerald-400 flex items-center gap-1.5 py-0.5">
                 <span className="text-emerald-500">✓</span>
                 <span>No issues found. Your specification is syntactically sound and logically consistent!</span>
+              </div>
+            )}
+
+            {!yamlSyntaxError && fixableDiagnostics.length > 0 && (
+              <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/25 rounded-lg p-2.5 mb-3 font-sans select-none">
+                <div className="text-indigo-300 text-xs">
+                  Found <span className="font-bold">{fixableDiagnostics.length}</span> auto-fixable issue{fixableDiagnostics.length > 1 ? 's' : ''}!
+                </div>
+                <button
+                  type="button"
+                  onClick={handleFixAll}
+                  className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow transition-colors active:scale-95 shrink-0"
+                >
+                  Auto-Fix All
+                </button>
               </div>
             )}
 

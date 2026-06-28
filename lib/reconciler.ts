@@ -5,6 +5,7 @@ export type CanvasChange =
   | { type: "delete"; payload: { ids: string[] } }
   | { type: "rename"; payload: { id: string; newName: string; newType?: string } }
   | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
+  | { type: "quick-fix-all"; payload: { fixes: { path: string; fixType: string; extraData?: any }[] } }
   | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
   | { type: "connect"; payload: { source: string; target: string } }
   | { type: "disconnect"; payload: { source: string; target: string } }
@@ -212,9 +213,15 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           }
         })
       }
-    } else if (change.type === "quick-fix") {
-      const { path, fixType, extraData } = change.payload
-      const parts = parsePath(path)
+    } else if (change.type === "quick-fix" || change.type === "quick-fix-all") {
+      const fixes = change.type === "quick-fix"
+        ? [change.payload]
+        : change.payload.fixes
+
+      if (Array.isArray(fixes)) {
+        fixes.forEach((fix) => {
+          const { path, fixType, extraData } = fix
+          const parts = parsePath(path)
       
       if (fixType === "missing-system-name" || fixType === "empty-system-name") {
         doc.setIn(parts, "unnamed_system")
@@ -686,6 +693,8 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
+      }
+        })
       }
     }
 
