@@ -253,6 +253,99 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         const newType = extraData?.type || "Stage"
         doc.setIn(parts, newType)
         modified = true
+      } else if (fixType === "set-default-version") {
+        doc.setIn(parts, "v0.1.0")
+        modified = true
+      } else if (fixType === "convert-to-store") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.set === "function") {
+          compNode.set("type", "Store")
+          modified = true
+        }
+      } else if (fixType === "connect-to-store") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          const compId = compNode.get("id")
+          const compsNode = doc.getIn(["system", "components"]) as any
+          let targetStoreId = ""
+          if (compsNode && compsNode.items) {
+            for (const c of compsNode.items) {
+              if (c && typeof c.get === "function") {
+                const id = c.get("id")
+                const type = String(c.get("type") || "").toLowerCase()
+                if (type === "store" && id !== compId) {
+                  targetStoreId = id
+                  break
+                }
+              }
+            }
+          }
+          if (targetStoreId) {
+            let conns = compNode.get("connections") as any
+            if (!conns || typeof conns.get !== "function") {
+              compNode.set("connections", doc.createNode([]))
+              conns = compNode.get("connections")
+            }
+            let connExists = false
+            if (conns && conns.items) {
+              connExists = conns.items.some((connNode: any) => {
+                if (connNode && typeof connNode.get === "function") {
+                  return connNode.get("target") === targetStoreId
+                }
+                return false
+              })
+            }
+            if (!connExists) {
+              const newConn = doc.createNode({ target: targetStoreId })
+              if (conns && typeof conns.add === "function") {
+                conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        }
+      } else if (fixType === "connect-to-stage") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          const compId = compNode.get("id")
+          const compsNode = doc.getIn(["system", "components"]) as any
+          let targetStageId = ""
+          if (compsNode && compsNode.items) {
+            for (const c of compsNode.items) {
+              if (c && typeof c.get === "function") {
+                const id = c.get("id")
+                const type = String(c.get("type") || "").toLowerCase()
+                if (type === "stage" && id !== compId) {
+                  targetStageId = id
+                  break
+                }
+              }
+            }
+          }
+          if (targetStageId) {
+            let conns = compNode.get("connections") as any
+            if (!conns || typeof conns.get !== "function") {
+              compNode.set("connections", doc.createNode([]))
+              conns = compNode.get("connections")
+            }
+            let connExists = false
+            if (conns && conns.items) {
+              connExists = conns.items.some((connNode: any) => {
+                if (connNode && typeof connNode.get === "function") {
+                  return connNode.get("target") === targetStageId
+                }
+                return false
+              })
+            }
+            if (!connExists) {
+              const newConn = doc.createNode({ target: targetStageId })
+              if (conns && typeof conns.add === "function") {
+                conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        }
       } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection") {
         const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
         const connIdx = resolvedParts[resolvedParts.length - 1] as number

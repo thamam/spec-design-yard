@@ -709,6 +709,38 @@ export function EditorPanel({
                           Add Owner
                         </button>
                       )}
+                      {d.code === "invalid-metadata-version" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "set-default-version")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Set Default Version
+                        </button>
+                      )}
+                      {d.code === "sink-stage-brick" && (
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "convert-to-store")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                          >
+                            Convert to Store
+                          </button>
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "connect-to-store")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
+                          >
+                            Connect to Store
+                          </button>
+                        </div>
+                      )}
+                      {d.code === "empty-gateway" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "connect-to-stage")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
+                        >
+                          Connect to Stage
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

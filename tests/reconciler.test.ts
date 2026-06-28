@@ -442,4 +442,86 @@ system:
     expect(updated).toContain('metadata:')
     expect(updated).toContain('owner: "[Add Owner]"')
   })
+
+  test('quick-fix sink-stage-brick via convert-to-store', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: process_stage
+    - id: process_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1]',
+        fixType: 'convert-to-store'
+      }
+    })
+
+    expect(updated).toContain('type: Store')
+  })
+
+  test('quick-fix sink-stage-brick via connect-to-store', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: process_stage
+    - id: process_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1]',
+        fixType: 'connect-to-store'
+      }
+    })
+
+    expect(updated).toContain('connections:')
+    expect(updated).toContain('target: inbox')
+  })
+
+  test('quick-fix empty-gateway via connect-to-stage', () => {
+    const spec = `system:
+  components:
+    - id: gate_in
+      type: Gateway
+    - id: process_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0]',
+        fixType: 'connect-to-stage'
+      }
+    })
+
+    expect(updated).toContain('connections:')
+    expect(updated).toContain('target: process_stage')
+  })
+
+  test('quick-fix invalid-metadata-version via set-default-version', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        version: invalid-v
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].metadata.version',
+        fixType: 'set-default-version'
+      }
+    })
+
+    expect(updated).toContain('version: v0.1.0')
+  })
 })
