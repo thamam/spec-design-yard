@@ -366,4 +366,80 @@ system:
     expect(updated).not.toContain('target: digest_stage')
     expect(updated).not.toContain('connections:')
   })
+
+  test('quick-fix unrecognized metadata key removes it', () => {
+    const spec = `system:
+  components:
+    - id: node1
+      type: Stage
+      metadata:
+        owner: tom
+        invalidKey: val
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].metadata.invalidKey',
+        fixType: 'unrecognized-metadata-key'
+      }
+    })
+
+    expect(updated).toContain('owner: tom')
+    expect(updated).not.toContain('invalidKey:')
+  })
+
+  test('quick-fix invalid status in metadata sets status to draft', () => {
+    const spec = `system:
+  components:
+    - id: node1
+      type: Stage
+      metadata:
+        status: invalid-status
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].metadata.status',
+        fixType: 'invalid-metadata-status'
+      }
+    })
+
+    expect(updated).toContain('status: draft')
+  })
+
+  test('quick-fix missing metadata description inserts description', () => {
+    const spec = `system:
+  components:
+    - id: node1
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0]',
+        fixType: 'missing-metadata-description'
+      }
+    })
+
+    expect(updated).toContain('metadata:')
+    expect(updated).toContain('description: "[Add Description]"')
+  })
+
+  test('quick-fix missing metadata owner inserts owner', () => {
+    const spec = `system:
+  components:
+    - id: node1
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0]',
+        fixType: 'missing-metadata-owner'
+      }
+    })
+
+    expect(updated).toContain('metadata:')
+    expect(updated).toContain('owner: "[Add Owner]"')
+  })
 })

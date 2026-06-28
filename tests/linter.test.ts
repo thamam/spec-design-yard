@@ -345,4 +345,67 @@ describe('Advanced Linter Features', () => {
     expect(unreachableComponent?.severity).toBe('warning')
     expect(unreachableComponent?.message).toContain('is unreachable')
   })
+
+  describe('Metadata Validation and Documentation Rules', () => {
+    test('flags non-object metadata as an error', () => {
+      const invalidSpec = {
+        system: {
+          name: 'Invalid Metadata',
+          components: [
+            { id: 'inbox', type: 'Store', metadata: 'not-an-object' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(invalidSpec)
+      const err = diagnostics.find(d => d.message.includes('must be an object') && d.path === 'system.components[0].metadata')
+      expect(err).toBeDefined()
+      expect(err?.severity).toBe('error')
+    })
+
+    test('flags unrecognized metadata keys as info', () => {
+      const invalidSpec = {
+        system: {
+          name: 'Invalid Metadata Keys',
+          components: [
+            { id: 'inbox', type: 'Store', metadata: { owner: 'tom', invalidKey: 'val' } }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(invalidSpec)
+      const info = diagnostics.find(d => d.code === 'unrecognized-metadata-key')
+      expect(info).toBeDefined()
+      expect(info?.severity).toBe('info')
+      expect(info?.message).toContain('Unrecognized metadata key "invalidKey"')
+    })
+
+    test('flags invalid status in metadata as warning', () => {
+      const invalidSpec = {
+        system: {
+          name: 'Invalid Status',
+          components: [
+            { id: 'inbox', type: 'Store', metadata: { status: 'invalid-status' } }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(invalidSpec)
+      const warn = diagnostics.find(d => d.code === 'invalid-metadata-status')
+      expect(warn).toBeDefined()
+      expect(warn?.severity).toBe('warning')
+    })
+
+    test('suggests adding description or owner as info when missing', () => {
+      const invalidSpec = {
+        system: {
+          name: 'Missing Metadata',
+          components: [
+            { id: 'inbox', type: 'Store' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(invalidSpec)
+      const infoDesc = diagnostics.find(d => d.code === 'missing-metadata-description')
+      expect(infoDesc).toBeDefined()
+      expect(infoDesc?.severity).toBe('info')
+    })
+  })
 })

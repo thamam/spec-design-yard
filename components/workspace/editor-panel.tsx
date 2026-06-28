@@ -677,6 +677,38 @@ export function EditorPanel({
                           Insert Stage
                         </button>
                       )}
+                      {d.code === "unrecognized-metadata-key" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "unrecognized-metadata-key")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Key
+                        </button>
+                      )}
+                      {d.code === "invalid-metadata-status" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-metadata-status")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Set to Draft
+                        </button>
+                      )}
+                      {d.code === "missing-metadata-description" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-metadata-description")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Add Description
+                        </button>
+                      )}
+                      {d.code === "missing-metadata-owner" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-metadata-owner")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Add Owner
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

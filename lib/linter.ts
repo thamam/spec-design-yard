@@ -112,6 +112,67 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
     }
+
+    // Validate metadata
+    if ('metadata' in comp) {
+      const meta = comp.metadata
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+        diagnostics.push({
+          severity: "error",
+          message: `"metadata" must be an object.`,
+          path: `${pathPrefix}.metadata`,
+        })
+      } else {
+        const allowedMetaKeys = new Set(["owner", "description", "status", "version"])
+        Object.keys(meta).forEach((k) => {
+          if (!allowedMetaKeys.has(k)) {
+            diagnostics.push({
+              severity: "info",
+              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version.`,
+              path: `${pathPrefix}.metadata.${k}`,
+              code: "unrecognized-metadata-key",
+            })
+          }
+        })
+
+        if ('status' in meta) {
+          const statusVal = String(meta.status || "").trim().toLowerCase()
+          const validStatuses = new Set(["draft", "active", "deprecated"])
+          if (!validStatuses.has(statusVal)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Unrecognized status value "${meta.status}". Valid status values are: draft, active, deprecated.`,
+              path: `${pathPrefix}.metadata.status`,
+              code: "invalid-metadata-status",
+            })
+          }
+        }
+      }
+    }
+
+    // Missing documentation metadata checks
+    if (comp.id && typeof comp.id === "string") {
+      const compId = comp.id.trim()
+      if (compId !== "") {
+        const meta = comp.metadata || {}
+        if (!meta.description || String(meta.description).trim() === "") {
+          diagnostics.push({
+            severity: "info",
+            message: `Component "${compId}" lacks a description metadata field for architectural documentation.`,
+            path: `${pathPrefix}`,
+            code: "missing-metadata-description",
+          })
+        }
+        if (!meta.owner || String(meta.owner).trim() === "") {
+          diagnostics.push({
+            severity: "info",
+            message: `Component "${compId}" lacks an owner metadata field for architectural documentation.`,
+            path: `${pathPrefix}`,
+            code: "missing-metadata-owner",
+          })
+        }
+      }
+    }
   })
 
   // Second pass: validate connections (orphan targets, self-connections)

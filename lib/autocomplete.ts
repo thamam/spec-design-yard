@@ -16,7 +16,7 @@ export function extractComponentIds(specText: string): string[] {
 
 export interface AutocompleteResult {
   suggestions: string[]
-  type: "id" | "type" | null
+  type: "id" | "type" | "field" | "metadata-key" | "metadata-status" | "connection-key" | null
   query: string
   replaceRange: [number, number]
 }
@@ -43,6 +43,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   // Use word boundaries \b to avoid matching prototype: or on_target:
   const targetMatch = textBeforeCursor.match(/\btarget:\s*['"]?([a-zA-Z0-9_\-]*)$/)
   const typeMatch = textBeforeCursor.match(/\btype:\s*['"]?([a-zA-Z0-9_\-]*)$/)
+  const statusMatch = textBeforeCursor.match(/\bstatus:\s*([a-zA-Z0-9_\-]*)$/)
 
   // Support cursor-inside-word by extending replaceRange to the end of the current word token
   const textAfterCursor = currentLine.substring(cursorInLine)
@@ -83,6 +84,88 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
       type: "type",
       query,
       replaceRange: [queryStart, replaceEnd],
+    }
+  }
+
+  if (statusMatch) {
+    const query = statusMatch[1] || ""
+    const validStatuses = ["draft", "active", "deprecated"]
+    const suggestions = validStatuses
+      .filter((s) => s.toLowerCase().startsWith(query.toLowerCase()) && s !== query)
+      .slice(0, 10)
+
+    const queryStart = cursorPosition - query.length
+    return {
+      suggestions,
+      type: "metadata-status",
+      query,
+      replaceRange: [queryStart, replaceEnd],
+    }
+  }
+
+  // Detect indentation and parent block context
+  let indentLevel = currentLine.search(/\S/)
+  if (indentLevel === -1) indentLevel = 0
+
+  const linesBefore = specText.substring(0, lineStart).split("\n")
+  let parentBlock = ""
+  for (let i = linesBefore.length - 1; i >= 0; i--) {
+    const line = linesBefore[i]
+    const trimmed = line.trim()
+    if (trimmed === "") continue
+    const lineIndent = line.search(/\S/)
+    if (lineIndent < indentLevel) {
+      if (trimmed.startsWith("metadata:")) {
+        parentBlock = "metadata"
+        break
+      }
+      if (trimmed.startsWith("connections:")) {
+        parentBlock = "connections"
+        break
+      }
+      if (trimmed.startsWith("-") || trimmed.includes("id:")) {
+        parentBlock = "component"
+        break
+      }
+    }
+  }
+
+  const currentWordMatch = textBeforeCursor.match(/^\s*([a-zA-Z0-9_\-]*)$/)
+  if (currentWordMatch) {
+    const query = currentWordMatch[1] || ""
+    const queryStart = cursorPosition - query.length
+
+    if (parentBlock === "metadata") {
+      const keys = ["owner:", "description:", "status:", "version:"]
+      const suggestions = keys
+        .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
+      return {
+        suggestions,
+        type: "metadata-key",
+        query,
+        replaceRange: [queryStart, replaceEnd],
+      }
+    } else if (parentBlock === "connections") {
+      const keys = ["- target:"]
+      const suggestions = keys
+        .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
+      return {
+        suggestions,
+        type: "connection-key",
+        query,
+        replaceRange: [queryStart, replaceEnd],
+      }
+    } else if (indentLevel >= 4) {
+      // Default component property suggestions (requires at least component indentation level)
+      const keys = ["id:", "type:", "name:", "connections:", "metadata:"]
+      const suggestions = keys
+        .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
+      return {
+        suggestions,
+        type: "field",
+        query,
+        replaceRange: [queryStart, replaceEnd],
+      }
     }
   }
 
