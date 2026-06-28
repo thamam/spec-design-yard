@@ -566,4 +566,30 @@ system:
     expect(updated).not.toContain('typoKey:')
     expect(updated).toContain('id: inbox')
   })
+
+  test('quick-fix component-overlap shifts the coordinate x by +100', () => {
+    const spec = `system:
+  components:
+    - id: node_a
+      type: Store
+      x: 100
+      y: 150
+    - id: node_b
+      type: Stage
+      x: 100
+      y: 150
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[1].x',
+        fixType: 'component-overlap'
+      }
+    })
+
+    // node_b (at system.components[1]) should have its x coordinate shifted to 200
+    expect(updated).toContain('x: 200')
+    // node_a should still have its x coordinate as 100
+    expect(updated).toContain('x: 100')
+  })
 })

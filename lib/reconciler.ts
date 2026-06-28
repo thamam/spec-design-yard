@@ -248,6 +248,12 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       } else if (fixType === "invalid-metadata-status") {
         doc.setIn(parts, "draft")
         modified = true
+      } else if (fixType === "component-overlap") {
+        const currentX = doc.getIn(parts) as number
+        if (typeof currentX === "number") {
+          doc.setIn(parts, currentX + 100)
+          modified = true
+        }
       } else if (fixType === "missing-metadata-description") {
         const compNode = doc.getIn(parts) as any
         if (compNode && typeof compNode.get === "function") {

@@ -470,5 +470,46 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
   })
 
+  // Pass 5: Coordinate overlaps checking
+  const coordsMap = new Map<string, string[]>()
+  components.forEach((comp: any) => {
+    if (comp && typeof comp === "object" && typeof comp.id === "string") {
+      const compId = comp.id.trim()
+      if (compId !== "" && ids.has(compId)) {
+        if (typeof comp.x === "number" && typeof comp.y === "number") {
+          const x = Math.round(comp.x)
+          const y = Math.round(comp.y)
+          const key = `${x},${y}`
+          if (!coordsMap.has(key)) {
+            coordsMap.set(key, [])
+          }
+          coordsMap.get(key)!.push(compId)
+        }
+      }
+    }
+  })
+
+  coordsMap.forEach((idsList, key) => {
+    if (idsList.length > 1) {
+      const [x, y] = key.split(",").map(Number)
+      idsList.forEach((id) => {
+        const compIdx = components.findIndex(
+          (c: any) => c && typeof c.id === "string" && c.id.trim() === id
+        )
+        if (compIdx !== -1) {
+          const others = idsList.filter((o) => o !== id)
+          diagnostics.push({
+            severity: "warning",
+            message: `Component "${id}" overlaps with component(s) ${others
+              .map((o) => `"${o}"`)
+              .join(", ")} at coordinate (${x}, ${y}).`,
+            path: `system.components[${compIdx}].x`,
+            code: "component-overlap",
+          })
+        }
+      })
+    }
+  })
+
   return diagnostics;
 }

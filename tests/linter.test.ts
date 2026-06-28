@@ -505,4 +505,26 @@ describe('Advanced Linter Features', () => {
       expect(unrecognizedWarn[1].message).toContain('Unrecognized component key "anotherTypo"')
     })
   })
+
+  describe('Component Coordinate Overlap Rule', () => {
+    test('flags overlapping components at the exact same coordinate as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Overlap Test',
+          components: [
+            { id: 'node_a', type: 'Store', x: 100, y: 150 },
+            { id: 'node_b', type: 'Stage', x: 100, y: 150 },
+            { id: 'node_c', type: 'Brick', x: 200, y: 300 }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const overlapWarns = diagnostics.filter(d => d.code === 'component-overlap')
+      expect(overlapWarns.length).toBe(2) // Warning for both node_a and node_b
+      expect(overlapWarns[0].severity).toBe('warning')
+      expect(overlapWarns[0].message).toContain('overlaps with component')
+      expect(overlapWarns[0].path).toBe('system.components[0].x')
+      expect(overlapWarns[1].path).toBe('system.components[1].x')
+    })
+  })
 })

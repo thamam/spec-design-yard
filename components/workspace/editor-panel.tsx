@@ -597,6 +597,14 @@ export function EditorPanel({
                           ))}
                         </>
                       )}
+                      {d.code === "component-overlap" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "component-overlap")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Resolve Overlap (Shift x)
+                        </button>
+                      )}
                       {d.code === "orphan-connection" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "orphan-connection")}
