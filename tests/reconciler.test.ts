@@ -168,6 +168,29 @@ system:
     expect(updated).toContain('target: node2')
   })
 
+  test('quick-fix case-insensitive connection target mismatch', () => {
+    const specWithCaseMismatch = `system:
+  name: Case Mismatch Test
+  components:
+    - id: node_a
+      type: Stage
+      connections:
+        - target: Node_B
+    - id: node_b
+      type: Stage
+`
+    const updated = reconcileSpec(specWithCaseMismatch, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0].target',
+        fixType: 'connection-case-mismatch'
+      }
+    })
+
+    expect(updated).toContain('target: node_b')
+    expect(updated).not.toContain('target: Node_B')
+  })
+
   test('quick-fix duplicate component ID', () => {
     const duplicateSpec = `system:
   name: Duplicate Test

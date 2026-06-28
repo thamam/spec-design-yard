@@ -246,12 +246,29 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 5. Orphan Connection Target
       if (!ids.has(target)) {
-        diagnostics.push({
-          severity: "error",
-          message: `Connection target "${target}" does not exist in the components list.`,
-          path: `${connPath}.target`,
-          code: "orphan-connection",
-        })
+        let caseMismatchId: string | undefined
+        for (const id of ids) {
+          if (id.toLowerCase() === target.toLowerCase()) {
+            caseMismatchId = id
+            break
+          }
+        }
+
+        if (caseMismatchId) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Connection target "${target}" does not exist, but matches component "${caseMismatchId}" with different casing. Connection targets are case-sensitive.`,
+            path: `${connPath}.target`,
+            code: "connection-case-mismatch",
+          })
+        } else {
+          diagnostics.push({
+            severity: "error",
+            message: `Connection target "${target}" does not exist in the components list.`,
+            path: `${connPath}.target`,
+            code: "orphan-connection",
+          })
+        }
       }
 
       // Self-connection check

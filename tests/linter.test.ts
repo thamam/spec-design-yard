@@ -297,6 +297,34 @@ describe('Advanced Linter Features', () => {
     expect(emptyTargetError?.code).toBe('empty-connection-target')
   })
 
+  test('flags case-insensitive connection target mismatch as warning', () => {
+    const specWithCaseMismatch = {
+      system: {
+        name: 'Case Mismatch System',
+        components: [
+          {
+            id: 'node_a',
+            type: 'Stage',
+            name: 'Node A',
+            connections: [{ target: 'Node_B' }]
+          },
+          {
+            id: 'node_b',
+            type: 'Stage',
+            name: 'Node B'
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(specWithCaseMismatch)
+    const caseMismatchWarn = diagnostics.find(d => d.code === 'connection-case-mismatch')
+    expect(caseMismatchWarn).toBeDefined()
+    expect(caseMismatchWarn?.severity).toBe('warning')
+    expect(caseMismatchWarn?.message).toContain('matches component "node_b" with different casing')
+    expect(caseMismatchWarn?.path).toBe('system.components[0].connections[0].target')
+  })
+
   test('flags architectural flow pattern violations', () => {
     const specWithViolations = {
       system: {
