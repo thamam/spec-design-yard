@@ -147,6 +147,19 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             })
           }
         }
+
+        if ('version' in meta) {
+          const versionVal = String(meta.version || "").trim()
+          const semverRegex = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/
+          if (versionVal !== "" && !semverRegex.test(versionVal)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Metadata version "${meta.version}" does not follow semantic versioning format (e.g. 1.0.0 or v1.2.3).`,
+              path: `${pathPrefix}.metadata.version`,
+              code: "invalid-metadata-version",
+            })
+          }
+        }
       }
     }
 
@@ -329,6 +342,33 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       }
     })
   }
+
+  // Pass 3b: empty-gateway and sink-stage-brick checks
+  components.forEach((comp: any, compIdx: number) => {
+    if (!comp || typeof comp.id !== "string" || comp.id.trim() === "") return
+    const compId = comp.id.trim()
+    if (!ids.has(compId)) return
+
+    const compType = typeMap[compId]
+
+    if (compType === "gateway" && outgoingCount[compId] === 0) {
+      diagnostics.push({
+        severity: "warning",
+        message: `Gateway component "${compId}" has no outgoing connections. Gateways must route incoming external traffic to downstream stages/stores.`,
+        path: `system.components[${compIdx}]`,
+        code: "empty-gateway",
+      })
+    }
+
+    if (outgoingCount[compId] === 0 && incomingSet.has(compId) && (compType === "stage" || compType === "brick")) {
+      diagnostics.push({
+        severity: "warning",
+        message: `Component "${compId}" of type "${comp.type}" has incoming connections but no outgoing connections (sink). Intermediate processing units should route to a downstream node.`,
+        path: `system.components[${compIdx}]`,
+        code: "sink-stage-brick",
+      })
+    }
+  })
 
   // Fourth pass: Cycle detection using DFS
   const adj: Record<string, string[]> = Object.create(null)

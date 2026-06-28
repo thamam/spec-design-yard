@@ -234,4 +234,26 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     // Value should be updated to 'Store'
     expect(textarea.value).toContain('type: Store')
   })
+
+  test('renders quick fix button for invalid version and set default version on click', () => {
+    render(<Workspace />)
+    
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    
+    fireEvent.change(textarea, { target: { value: `system:
+  name: Invalid Version
+  components:
+    - id: node1
+      type: Store
+      metadata:
+        version: invalid-v
+` } })
+
+    const fixButton = screen.getByRole('button', { name: /SET DEFAULT VERSION/i })
+    expect(fixButton).toBeInTheDocument()
+
+    fireEvent.click(fixButton)
+
+    expect(textarea.value).toContain('version: v0.1.0')
+  })
 })

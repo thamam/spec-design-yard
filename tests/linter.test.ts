@@ -407,5 +407,55 @@ describe('Advanced Linter Features', () => {
       expect(infoDesc).toBeDefined()
       expect(infoDesc?.severity).toBe('info')
     })
+
+    test('flags invalid version in metadata as warning', () => {
+      const invalidSpec = {
+        system: {
+          name: 'Invalid Version',
+          components: [
+            { id: 'inbox', type: 'Store', metadata: { version: 'invalid-v' } }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(invalidSpec)
+      const warn = diagnostics.find(d => d.code === 'invalid-metadata-version')
+      expect(warn).toBeDefined()
+      expect(warn?.severity).toBe('warning')
+    })
+  })
+
+  describe('Sink Stage/Brick and Empty Gateway Rules', () => {
+    test('flags stage or brick as warning when it has inbound connections but 0 outbound connections (sink)', () => {
+      const spec = {
+        system: {
+          name: 'Sink Test',
+          components: [
+            { id: 'inbox', type: 'Store', connections: [{ target: 'process_stage' }] },
+            { id: 'process_stage', type: 'Stage' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const sinkWarn = diagnostics.find(d => d.code === 'sink-stage-brick')
+      expect(sinkWarn).toBeDefined()
+      expect(sinkWarn?.severity).toBe('warning')
+      expect(sinkWarn?.message).toContain('incoming connections but no outgoing connections')
+    })
+
+    test('flags gateway as warning when it has 0 outbound connections', () => {
+      const spec = {
+        system: {
+          name: 'Empty Gateway Test',
+          components: [
+            { id: 'gate_in', type: 'Gateway' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const emptyGateWarn = diagnostics.find(d => d.code === 'empty-gateway')
+      expect(emptyGateWarn).toBeDefined()
+      expect(emptyGateWarn?.severity).toBe('warning')
+      expect(emptyGateWarn?.message).toContain('no outgoing connections')
+    })
   })
 })
