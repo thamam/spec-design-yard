@@ -45,6 +45,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   const ids = new Set<string>()
   const lowercaseIds = new Map<string, string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
+  const allowedComponentKeys = new Set(["id", "type", "name", "x", "y", "connections", "metadata"])
   const typeMap: Record<string, string> = Object.create(null)
 
   // First pass: collect component IDs and validate basic fields
@@ -60,7 +61,6 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       return
     }
 
-    const allowedComponentKeys = new Set(["id", "type", "name", "x", "y", "connections", "metadata"])
     Object.keys(comp).forEach((k) => {
       if (!allowedComponentKeys.has(k)) {
         diagnostics.push({
