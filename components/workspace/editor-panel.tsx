@@ -765,6 +765,54 @@ export function EditorPanel({
                           Connect to Stage
                         </button>
                       )}
+                      {(d.code === "missing-system-name" || d.code === "empty-system-name") && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-system-name")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Set Default System Name
+                        </button>
+                      )}
+                      {d.code === "missing-component-id" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-component-id")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Generate Unique ID
+                        </button>
+                      )}
+                      {d.code === "missing-component-type" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-component-type")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Set to Stage
+                        </button>
+                      )}
+                      {d.code === "invalid-metadata-object" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-metadata-object")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Reset Metadata to &#123;&#125;
+                        </button>
+                      )}
+                      {d.code === "invalid-connections-array" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-connections-array")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Reset Connections to []
+                        </button>
+                      )}
+                      {d.code === "invalid-connection-object" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-connection-object")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Invalid Connection
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

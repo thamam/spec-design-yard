@@ -14,6 +14,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     diagnostics.push({
       severity: "error",
       message: 'Missing top-level "system" object.',
+      path: "system",
+      code: "missing-system",
     })
     return diagnostics
   }
@@ -22,6 +24,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     diagnostics.push({
       severity: "warning",
       message: "System name is missing or empty.",
+      path: "system.name",
+      code: "missing-system-name",
     })
   }
 
@@ -30,6 +34,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     diagnostics.push({
       severity: "info",
       message: "No components defined in system.",
+      path: "system.components",
+      code: "no-components",
     })
     return diagnostics
   }
@@ -38,6 +44,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     diagnostics.push({
       severity: "error",
       message: '"components" must be an array.',
+      path: "system.components",
+      code: "components-not-array",
     })
     return diagnostics
   }
@@ -57,6 +65,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         severity: "error",
         message: `Component at index ${idx} is not a valid object.`,
         path: pathPrefix,
+        code: "invalid-component-object",
       })
       return
     }
@@ -78,6 +87,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         severity: "error",
         message: `Missing required field "id" at component index ${idx}.`,
         path: pathPrefix,
+        code: "missing-component-id",
       })
     } else {
       const id = comp.id.trim()
@@ -110,6 +120,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         severity: "error",
         message: `Missing required field "type" for component "${comp.id || idx}".`,
         path: `${pathPrefix}.type`,
+        code: "missing-component-type",
       })
     } else {
       const type = comp.type.trim().toLowerCase()
@@ -135,6 +146,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "error",
           message: `"metadata" must be an object.`,
           path: `${pathPrefix}.metadata`,
+          code: "invalid-metadata-object",
         })
       } else {
         const allowedMetaKeys = new Set(["owner", "description", "status", "version"])
@@ -218,6 +230,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         severity: "error",
         message: `"connections" for component "${compId}" must be an array.`,
         path: pathPrefix,
+        code: "invalid-connections-array",
       })
       return
     }
@@ -230,6 +243,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           severity: "error",
           message: `Invalid connection entry at index ${connIdx} for component "${compId}".`,
           path: connPath,
+          code: "invalid-connection-object",
         })
         return
       }

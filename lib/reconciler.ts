@@ -216,7 +216,50 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       const { path, fixType, extraData } = change.payload
       const parts = parsePath(path)
       
-      if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key") {
+      if (fixType === "missing-system-name" || fixType === "empty-system-name") {
+        doc.setIn(parts, "unnamed_system")
+        modified = true
+      } else if (fixType === "missing-component-id") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.set === "function" && typeof compNode.get === "function") {
+          const type = String(compNode.get("type") || "Stage").toLowerCase()
+          const prefix = type === "store" ? "store" : type === "brick" ? "brick" : type === "gateway" ? "gateway" : "stage"
+          const compsNode = doc.getIn(["system", "components"]) as any
+          const existingIds = new Set<string>()
+          if (compsNode && compsNode.items) {
+            compsNode.items.forEach((c: any) => {
+              if (c && typeof c.get === "function") {
+                const id = c.get("id")
+                if (id) existingIds.add(String(id).trim())
+              }
+            })
+          }
+          let suffix = 1
+          let uniqueId = `${prefix}_${suffix}`
+          while (existingIds.has(uniqueId)) {
+            suffix++
+            uniqueId = `${prefix}_${suffix}`
+          }
+          compNode.set("id", uniqueId)
+          modified = true
+        }
+      } else if (fixType === "missing-component-type") {
+        doc.setIn(parts, "Stage")
+        modified = true
+      } else if (fixType === "invalid-metadata-object") {
+        doc.setIn(parts, doc.createNode({}))
+        modified = true
+      } else if (fixType === "invalid-connections-array") {
+        doc.setIn(parts, doc.createNode([]))
+        modified = true
+      } else if (fixType === "invalid-connection-object") {
+        const connIdx = parts[parts.length - 1] as number
+        const connsNode = doc.getIn(parts.slice(0, -1)) as any
+        if (connsNode && typeof connsNode.delete === "function") {
+          connsNode.delete(connIdx)
+          modified = true
+        }
+      } else if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key") {
         const parentPath = parts.slice(0, -1)
         const keyToDelete = parts[parts.length - 1] as string
         const parentNode = doc.getIn(parentPath) as any
