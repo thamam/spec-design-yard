@@ -343,6 +343,7 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "invalid-connection-object",
   "unrecognized-metadata-key",
   "unrecognized-component-key",
+  "unrecognized-system-key",
   "connection-case-mismatch",
   "invalid-metadata-status",
   "component-overlap",
@@ -846,6 +847,14 @@ export function EditorPanel({
                       {d.code === "unrecognized-component-key" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "unrecognized-component-key")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Key
+                        </button>
+                      )}
+                      {d.code === "unrecognized-system-key" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "unrecognized-system-key")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
                         >
                           Remove Key

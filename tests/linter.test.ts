@@ -582,4 +582,57 @@ describe('Advanced Linter Features', () => {
       expect(overlapWarns.length).toBe(0)
     })
   })
+
+  describe('Unrecognized System Keys Rule', () => {
+    test('flags unrecognized top-level keys under system as warnings', () => {
+      const spec = {
+        system: {
+          name: 'System Keys Test',
+          components: [],
+          unrecognized_top_key: 'value'
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const unrecognizedWarn = diagnostics.find(d => d.code === 'unrecognized-system-key')
+      expect(unrecognizedWarn).toBeDefined()
+      expect(unrecognizedWarn?.severity).toBe('warning')
+      expect(unrecognizedWarn?.path).toBe('system.unrecognized_top_key')
+    })
+  })
+
+  describe('Reachability Validation without Gateways Rule', () => {
+    test('flags unreachable components even if there are no gateways', () => {
+      const spec = {
+        system: {
+          name: 'No Gateway Reachability Test',
+          components: [
+            {
+              id: 'entry_node',
+              type: 'Stage',
+              connections: [{ target: 'reachable_node' }]
+            },
+            {
+              id: 'reachable_node',
+              type: 'Stage'
+            },
+            {
+              id: 'isolated_cycle_a',
+              type: 'Stage',
+              connections: [{ target: 'isolated_cycle_b' }]
+            },
+            {
+              id: 'isolated_cycle_b',
+              type: 'Stage',
+              connections: [{ target: 'isolated_cycle_a' }]
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      // isolated_cycle_a and isolated_cycle_b should be flagged as unreachable
+      const unreachableNodes = diagnostics.filter(d => d.code === 'unreachable-component')
+      expect(unreachableNodes.length).toBe(2)
+      expect(unreachableNodes[0].message).toContain('no execution path exists from any entry point')
+    })
+  })
 })
