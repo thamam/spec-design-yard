@@ -12,9 +12,10 @@ import {
   ChevronDownIcon,
   FileJsonIcon,
   FolderIcon,
+  BarChart2Icon,
 } from "lucide-react"
 import yaml from "yaml"
-import { lintSpec } from "../../lib/linter"
+import { lintSpec, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 
@@ -195,7 +196,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
     )
   }
 
-  const components = parsedSpec.system.components || []
+  const components = Array.isArray(parsedSpec.system.components) ? parsedSpec.system.components : []
 
   return (
     <div className="flex-1 overflow-auto py-3 px-4 text-sm select-none">
@@ -325,12 +326,249 @@ function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) 
   )
 }
 
-type TabId = "code" | "tree" | "focus"
+interface MetricsTabProps {
+  parsedSpec?: any
+  selectedUnit?: string | null
+  setSelectedUnit?: (val: string | null) => void
+  diagnostics?: Diagnostic[]
+}
+
+const EMPTY_DIAGNOSTICS: Diagnostic[] = []
+
+function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS }: MetricsTabProps) {
+  const metrics = useMemo(() => {
+    const components = Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
+    const systemName = parsedSpec?.system?.name || "Unnamed System"
+
+    // Compute metrics
+    const totalComponents = components.length
+    let gatewayCount = 0
+    let stageCount = 0
+    let brickCount = 0
+    let storeCount = 0
+
+    let totalConnections = 0
+
+    components.forEach((c: any) => {
+      if (!c) return
+      const type = String(c.type || '').toLowerCase()
+      if (type === 'gateway') gatewayCount++
+      else if (type === 'stage') stageCount++
+      else if (type === 'brick') brickCount++
+      else if (type === 'store') storeCount++
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (target) {
+            totalConnections++
+          }
+        })
+      }
+    })
+
+    // Compute diagnostics counts
+    const errorsCount = diagnostics.filter(d => d.severity === "error").length
+    const warningsCount = diagnostics.filter(d => d.severity === "warning").length
+    const infoCount = diagnostics.filter(d => d.severity === "info").length
+
+    // Health Score Calculation: starts at 100%, drops by 15% per error and 5% per warning
+    const healthPct = Math.max(0, 100 - (errorsCount * 15) - (warningsCount * 5))
+
+    return {
+      components,
+      systemName,
+      totalComponents,
+      gatewayCount,
+      stageCount,
+      brickCount,
+      storeCount,
+      totalConnections,
+      errorsCount,
+      warningsCount,
+      infoCount,
+      healthPct
+    }
+  }, [parsedSpec, diagnostics])
+
+  const {
+    components,
+    systemName,
+    totalComponents,
+    gatewayCount,
+    stageCount,
+    brickCount,
+    storeCount,
+    totalConnections,
+    errorsCount,
+    warningsCount,
+    infoCount,
+    healthPct
+  } = metrics
+
+  return (
+    <div className="flex-1 overflow-auto p-4 flex flex-col h-full font-sans select-none text-zinc-300 gap-4">
+      {/* Header card */}
+      <div className="border border-zinc-800 bg-zinc-950/80 p-4 rounded-xl flex flex-col gap-2 shrink-0">
+        <h3 className="text-sm font-bold text-zinc-100 flex items-center justify-between uppercase tracking-wide">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20" />
+            System Architecture Metrics
+          </span>
+          <span className="text-xs text-zinc-400 font-mono">
+            System Health: <span className={healthPct === 100 ? "text-emerald-400 font-bold" : healthPct >= 80 ? "text-amber-400 font-bold" : "text-rose-500 font-bold"}>{healthPct}%</span>
+          </span>
+        </h3>
+        <div className="text-[11px] text-zinc-500 leading-relaxed font-mono flex flex-wrap gap-2 justify-between items-center mt-1 border-t border-zinc-900 pt-2">
+          <span>System: <span className="text-zinc-300 font-bold">{systemName}</span></span>
+          <div className="flex items-center gap-2 text-[10px]">
+            {errorsCount > 0 && (
+              <span className="text-rose-400 bg-rose-950/40 border border-rose-900/50 px-1.5 py-0.5 rounded font-bold">
+                Errors: {errorsCount}
+              </span>
+            )}
+            {warningsCount > 0 && (
+              <span className="text-amber-400 bg-amber-950/40 border border-amber-900/50 px-1.5 py-0.5 rounded font-bold">
+                Warnings: {warningsCount}
+              </span>
+            )}
+            <span className="text-sky-400 bg-sky-950/40 border border-sky-900/50 px-1.5 py-0.5 rounded font-bold">
+              Info: {infoCount}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid of stats */}
+      <div className="grid grid-cols-2 gap-3 shrink-0">
+        <div className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Total Components:</span>
+          <span className="text-xl font-bold text-zinc-100">{totalComponents}</span>
+        </div>
+        <div className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Total Connections</span>
+          <span className="text-xl font-bold text-indigo-400">{totalConnections}</span>
+        </div>
+      </div>
+
+      {/* Breakdown by Type */}
+      <div className="flex flex-col gap-1.5 shrink-0">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Breakdown by Type</h4>
+        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+          <div className="flex items-center justify-between p-2 rounded bg-zinc-950/20 border border-zinc-900">
+            <span className="text-zinc-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Gateways
+            </span>
+            <span className="font-bold text-zinc-300">{gatewayCount} Gateways</span>
+          </div>
+          <div className="flex items-center justify-between p-2 rounded bg-zinc-950/20 border border-zinc-900">
+            <span className="text-zinc-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              Stages
+            </span>
+            <span className="font-bold text-zinc-300">{stageCount} Stages</span>
+          </div>
+          <div className="flex items-center justify-between p-2 rounded bg-zinc-950/20 border border-zinc-900">
+            <span className="text-zinc-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Bricks
+            </span>
+            <span className="font-bold text-zinc-300">{brickCount} Bricks</span>
+          </div>
+          <div className="flex items-center justify-between p-2 rounded bg-zinc-950/20 border border-zinc-900">
+            <span className="text-zinc-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              Stores
+            </span>
+            <span className="font-bold text-zinc-300">{storeCount} Stores</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Component Interactive List */}
+      <div className="flex flex-col flex-1 min-h-0 gap-1.5">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Component Directory</h4>
+        <div className="flex-1 overflow-y-auto border border-zinc-900 bg-zinc-950/10 rounded-lg p-2 font-mono text-xs divide-y divide-zinc-900/50">
+          {components.length === 0 ? (
+            <p className="text-zinc-600 text-center py-4 italic">No components defined.</p>
+          ) : (
+            components.map((comp: any, idx: number) => {
+              if (!comp || !comp.id) return null
+              const isSelected = selectedUnit === comp.id
+              const type = String(comp.type || '').toLowerCase()
+              
+              // Use neutral color for unknown component types to prevent Store color confusion
+              const bulletColor = 
+                type === 'gateway' ? 'bg-amber-500' : 
+                type === 'stage' ? 'bg-purple-500' : 
+                type === 'brick' ? 'bg-emerald-500' : 
+                type === 'store' ? 'bg-indigo-500' : 
+                'bg-zinc-500'
+
+              // Find associated diagnostics for this component with exact boundary checks (fix index collision)
+              const compDiagnostics = diagnostics.filter(d => {
+                const path = d.path;
+                if (!path) return false;
+                return path === `system.components[${idx}]` || path.startsWith(`system.components[${idx}].`);
+              })
+              const compErrors = compDiagnostics.filter(d => d.severity === "error")
+              const compWarnings = compDiagnostics.filter(d => d.severity === "warning")
+              const compInfos = compDiagnostics.filter(d => d.severity === "info")
+
+              let badge = null
+              if (compErrors.length > 0) {
+                badge = (
+                  <span className="text-[9px] text-rose-400 bg-rose-950/40 border border-rose-900/50 px-1 rounded font-bold font-sans ml-2 shrink-0">
+                    Error
+                  </span>
+                )
+              } else if (compWarnings.length > 0) {
+                badge = (
+                  <span className="text-[9px] text-amber-400 bg-amber-950/40 border border-amber-900/50 px-1 rounded font-bold font-sans ml-2 shrink-0">
+                    Warning
+                  </span>
+                )
+              } else if (compInfos.length > 0) {
+                badge = (
+                  <span className="text-[9px] text-sky-400 bg-sky-950/40 border border-sky-900/50 px-1 rounded font-bold font-sans ml-2 shrink-0">
+                    Info
+                  </span>
+                )
+              }
+
+              return (
+                <button
+                  key={comp.id + '-' + idx}
+                  onClick={() => setSelectedUnit && setSelectedUnit(comp.id)}
+                  className={`w-full flex items-center justify-between py-2 px-2 hover:bg-zinc-900/40 rounded transition-colors text-left ${isSelected ? 'bg-indigo-500/10 text-indigo-300 border-l-2 border-indigo-500' : 'text-zinc-400'}`}
+                >
+                  <span className="flex items-center gap-2 font-bold truncate min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full ${bulletColor} shrink-0`} />
+                    <span className="truncate">{comp.id}</span>
+                    {badge}
+                  </span>
+                  <span className="text-[10px] text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded uppercase shrink-0 font-sans">
+                    {comp.type || 'Unit'}
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type TabId = "code" | "tree" | "focus" | "metrics"
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "code",  label: "Code",  icon: <CodeIcon size={12} /> },
   { id: "tree",  label: "Tree",  icon: <NetworkIcon size={12} /> },
   { id: "focus", label: "Focus", icon: <FocusIcon size={12} /> },
+  { id: "metrics", label: "Metrics", icon: <BarChart2Icon size={12} /> },
 ]
 
 const FIXABLE_DIAGNOSTIC_CODES = new Set([
@@ -623,6 +861,17 @@ export function EditorPanel({
         style={{ background: "var(--background)" }}
       >
         <FocusTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
+      </div>
+
+      <div
+        id="tabpanel-metrics"
+        role="tabpanel"
+        aria-labelledby="tab-metrics"
+        hidden={activeTab !== "metrics"}
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        style={{ background: "var(--background)" }}
+      >
+        <MetricsTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} diagnostics={diagnostics} />
       </div>
 
       {/* Diagnostics Panel */}
