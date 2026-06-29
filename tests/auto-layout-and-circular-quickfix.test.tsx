@@ -87,4 +87,39 @@ describe('Auto-Layout and Circular Dependency Quick-Fix Features', () => {
     expect(gateway.x).toBeLessThan(stage.x)
     expect(stage.x).toBeLessThan(store.x)
   })
+
+  test('autoLayoutDiagram does not loop infinitely on cyclical specs', () => {
+    // Render workspace
+    render(<Workspace />)
+    const relayoutBtn = screen.getByRole('button', { name: /Re-layout Diagram/i })
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    // Create a circular spec
+    const circularSpec = `system:
+  name: Circular Layout Test
+  components:
+    - id: node_a
+      type: Gateway
+      connections:
+        - target: node_b
+    - id: node_b
+      type: Stage
+      connections:
+        - target: node_a
+`
+    fireEvent.change(textarea, { target: { value: circularSpec } })
+
+    // Clicking Re-layout Diagram should not hang/timeout, and should assign coordinates
+    fireEvent.click(relayoutBtn)
+
+    expect(textarea.value).toContain('x:')
+    expect(textarea.value).toContain('y:')
+
+    const parsed = yaml.parse(textarea.value)
+    const nodeA = parsed.system.components.find((c: any) => c.id === 'node_a')
+    const nodeB = parsed.system.components.find((c: any) => c.id === 'node_b')
+
+    expect(nodeA.x).toBeDefined()
+    expect(nodeB.x).toBeDefined()
+  })
 })

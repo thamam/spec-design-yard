@@ -802,6 +802,9 @@ export function autoLayoutDiagram(parsedSpec: any): { id: string; x: number; y: 
   while (queue.length > 0) {
     const current = queue.shift()!
     const currentDepth = depth[current]
+    if (currentDepth >= components.length) {
+      continue
+    }
     const neighbors = adj[current] || []
     neighbors.forEach((neighbor) => {
       // If the neighbor's depth is not updated, or can be pushed further right to avoid back-arrows crossing stages
