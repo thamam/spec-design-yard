@@ -191,11 +191,11 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         if ('color' in meta) {
           const colorVal = String(meta.color || "").trim().toLowerCase()
           const validColors = new Set(["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"])
-          const hexRegex = /^#[0-9a-fA-F]{6}$/
+          const hexRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/
           if (colorVal !== "" && !validColors.has(colorVal) && !hexRegex.test(colorVal)) {
             diagnostics.push({
               severity: "warning",
-              message: `Unrecognized metadata color "${meta.color}". Valid colors are standard names (indigo, purple, emerald, amber, rose, sky, zinc) or a 6-character hex code (e.g. #ff00ff).`,
+              message: `Unrecognized metadata color "${meta.color}". Valid colors are standard names (indigo, purple, emerald, amber, rose, sky, zinc) or a 3, 6, or 8-character hex code (e.g. #f00, #ff00ff, #ff0000ff).`,
               path: `${pathPrefix}.metadata.color`,
               code: "invalid-metadata-color",
             })

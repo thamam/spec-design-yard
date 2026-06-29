@@ -708,6 +708,33 @@ describe('Advanced Linter Features', () => {
       expect(nodeBColorError).toBeDefined()
     })
 
+    test('allows 3-digit and 8-digit hex codes for custom metadata colors', () => {
+      const spec = {
+        system: {
+          name: 'Color Spec',
+          components: [
+            {
+              id: 'node_3',
+              type: 'Stage',
+              metadata: {
+                color: '#f00'
+              }
+            },
+            {
+              id: 'node_8',
+              type: 'Stage',
+              metadata: {
+                color: '#ff0000ff'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const colorErrors = diagnostics.filter(d => d.code === 'invalid-metadata-color')
+      expect(colorErrors.length).toBe(0)
+    })
+
     test('validates connection labels', () => {
       const spec = {
         system: {

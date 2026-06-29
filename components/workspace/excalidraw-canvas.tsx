@@ -12,6 +12,44 @@ const getDeterministicSeed = (id: string) => {
   return (Math.abs(hash) % 100000) + 1
 }
 
+const COLOR_MAP: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
+  indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
+  purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
+  emerald: { stroke: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
+  amber: { stroke: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+  rose: { stroke: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)' },
+  sky: { stroke: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)' },
+  zinc: { stroke: '#71717a', bg: 'rgba(113, 113, 122, 0.1)' },
+})
+
+function getSourceAndTargetFromLabelId(labelId: string, parsedSpec: any): { source: string; target: string } {
+  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
+  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
+  for (const compId of sortedCompIds) {
+    if (labelId.startsWith(`arrow-label-${compId}-`)) {
+      return {
+        source: compId,
+        target: labelId.substring(`arrow-label-${compId}-`.length),
+      }
+    }
+  }
+  return { source: "", target: "" }
+}
+
+function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { source: string; target: string } {
+  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
+  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
+  for (const compId of sortedCompIds) {
+    if (arrowId.startsWith(`arrow-${compId}-`)) {
+      return {
+        source: compId,
+        target: arrowId.substring(`arrow-${compId}-`.length),
+      }
+    }
+  }
+  return { source: "", target: "" }
+}
+
 export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
@@ -91,24 +129,21 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       // Check for custom metadata color
       const customColor = comp.metadata?.color ? String(comp.metadata.color).trim().toLowerCase() : ""
       if (customColor) {
-        const colorMap: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
-          indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
-          purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
-          emerald: { stroke: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
-          amber: { stroke: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-          rose: { stroke: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)' },
-          sky: { stroke: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)' },
-          zinc: { stroke: '#71717a', bg: 'rgba(113, 113, 122, 0.1)' },
-        })
-        if (customColor && colorMap[customColor]) {
-          strokeColor = colorMap[customColor].stroke
-          backgroundColor = colorMap[customColor].bg
-        } else if (/^#[0-9a-fA-F]{6}$/.test(customColor)) {
+        if (COLOR_MAP[customColor]) {
+          strokeColor = COLOR_MAP[customColor].stroke
+          backgroundColor = COLOR_MAP[customColor].bg
+        } else if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(customColor)) {
           strokeColor = customColor
-          // Parse hex to rgba with low opacity for background
-          const r = parseInt(customColor.slice(1, 3), 16)
-          const g = parseInt(customColor.slice(3, 5), 16)
-          const b = parseInt(customColor.slice(5, 7), 16)
+          let r = 0, g = 0, b = 0
+          if (customColor.length === 4) {
+            r = parseInt(customColor[1] + customColor[1], 16)
+            g = parseInt(customColor[2] + customColor[2], 16)
+            b = parseInt(customColor[3] + customColor[3], 16)
+          } else {
+            r = parseInt(customColor.slice(1, 3), 16)
+            g = parseInt(customColor.slice(3, 5), 16)
+            b = parseInt(customColor.slice(5, 7), 16)
+          }
           backgroundColor = `rgba(${r}, ${g}, ${b}, 0.1)`
         }
       } else if (type === 'stage') {
@@ -555,25 +590,38 @@ export function ExcalidrawCanvas({
               const arrow = newlyDeletedArrows[0]
               deletedIdsRef.current.add(arrow.id)
               
-              let source = arrow.startBinding?.elementId
-              let target = arrow.endBinding?.elementId
-              
-              if ((!source || !target) && arrow.id.startsWith("arrow-")) {
-                const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
-                const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
-                for (const compId of sortedCompIds) {
-                  if (arrow.id.startsWith(`arrow-${compId}-`)) {
-                    source = compId
-                    target = arrow.id.substring(`arrow-${compId}-`.length)
-                    break
-                  }
-                }
+              let { source, target } = getSourceAndTargetFromArrowId(arrow.id, parsedSpec)
+              if (!source || !target) {
+                source = arrow.startBinding?.elementId
+                target = arrow.endBinding?.elementId
               }
               
               if (source && target) {
                 onCanvasChange({
                   type: "disconnect",
                   payload: { source, target },
+                })
+                return
+              }
+            }
+
+            const newlyDeletedLabels = updatedElements.filter(
+              (el: any) =>
+                el.type === "text" &&
+                el.id.startsWith("arrow-label-") &&
+                el.isDeleted &&
+                !deletedIdsRef.current.has(el.id) &&
+                elements.some((old: any) => old.id === el.id && !old.isDeleted)
+            )
+            if (newlyDeletedLabels.length > 0) {
+              const labelEl = newlyDeletedLabels[0]
+              deletedIdsRef.current.add(labelEl.id)
+              
+              const { source, target } = getSourceAndTargetFromLabelId(labelEl.id, parsedSpec)
+              if (source && target) {
+                onCanvasChange({
+                  type: "connection-label",
+                  payload: { source, target, label: "" }
                 })
                 return
               }
@@ -649,28 +697,24 @@ export function ExcalidrawCanvas({
               const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
               if (!isEditingThisElement) {
                 if (changedTextElement.id.startsWith("arrow-label-")) {
-                  const labelId = changedTextElement.id
-                  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
-                  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
-                  let source = ""
-                  let target = ""
-                  for (const compId of sortedCompIds) {
-                    if (labelId.startsWith(`arrow-label-${compId}-`)) {
-                      source = compId
-                      target = labelId.substring(`arrow-label-${compId}-`.length)
-                      break
-                    }
-                  }
+                  const { source, target } = getSourceAndTargetFromLabelId(changedTextElement.id, parsedSpec)
 
                   if (source && target) {
-                    onCanvasChange({
-                      type: "connection-label",
-                      payload: {
-                        source,
-                        target,
-                        label: changedTextElement.text.trim()
-                      }
+                    // Loop Guard: verify that label has actually changed compared to state in parsedSpec
+                    const comp = parsedSpec?.system?.components?.find((c: any) => c.id === source)
+                    const conn = comp?.connections?.find((conn: any) => {
+                      if (typeof conn === 'string') return conn === target
+                      return conn && typeof conn === 'object' && conn.target === target
                     })
+                    const currentLabel = typeof conn === 'string' ? "" : (conn?.label || "")
+                    const newLabel = changedTextElement.text.trim()
+
+                    if (String(currentLabel) !== newLabel) {
+                      onCanvasChange({
+                        type: "connection-label",
+                        payload: { source, target, label: newLabel }
+                      })
+                    }
                   }
                   return
                 }
