@@ -550,10 +550,24 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         const cycleKeyHash = JSON.stringify(sortedCycleNodes)
         if (!detectedCycles.has(cycleKeyHash)) {
           detectedCycles.add(cycleKeyHash)
+
+          let cycleConnectionPath = componentPaths[neighbor]
+          const nodeIdx = components.findIndex((c: any) => c && typeof c === 'object' && c.id === node)
+          if (nodeIdx !== -1) {
+            const comp = components[nodeIdx]
+            if (comp && Array.isArray(comp.connections)) {
+              const connIdx = comp.connections.findIndex((conn: any) => conn && typeof conn === 'object' && conn.target === neighbor)
+              if (connIdx !== -1) {
+                cycleConnectionPath = `system.components[${nodeIdx}].connections[${connIdx}].target`
+              }
+            }
+          }
+
           diagnostics.push({
             severity: "warning",
             message: `Circular dependency loop detected: ${cycleKey}`,
-            path: componentPaths[neighbor] || undefined,
+            path: cycleConnectionPath,
+            code: "circular-dependency",
           })
         }
       } else if (!visited.has(neighbor)) {

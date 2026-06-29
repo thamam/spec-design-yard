@@ -175,4 +175,50 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     expect(updated).toContain('connections:')
     expect(updated).toContain('target: node_b')
   })
+
+  test('flags and reconciles circular-dependency by breaking the cycle', () => {
+    const spec = {
+      system: {
+        name: 'Loop System',
+        components: [
+          {
+            id: 'node_x',
+            type: 'Stage',
+            connections: [{ target: 'node_y' }]
+          },
+          {
+            id: 'node_y',
+            type: 'Stage',
+            connections: [{ target: 'node_x' }]
+          }
+        ]
+      }
+    }
+
+    const diagnostics = lintSpec(spec)
+    const issue = diagnostics.find(d => d.code === 'circular-dependency')
+    expect(issue).toBeDefined()
+    expect(issue?.path).toContain('connections')
+    expect(issue?.path).toContain('target')
+
+    const initialYaml = `system:
+  name: Loop System
+  components:
+    - id: node_x
+      type: Stage
+      connections:
+        - target: node_y
+    - id: node_y
+      type: Stage
+      connections:
+        - target: node_x
+`
+    // The issue path will point to the connection that completes the loop (e.g. system.components[1].connections[0].target or components[0]...)
+    const targetPath = issue?.path || 'system.components[1].connections[0].target'
+    const updated = reconcileSpec(initialYaml, {
+      type: 'quick-fix',
+      payload: { path: targetPath, fixType: 'circular-dependency' }
+    })
+    expect(updated).not.toContain('target: node_x') // loop broken!
+  })
 })

@@ -361,7 +361,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "unreachable-component",
   "gateway-to-store",
   "sink-stage-brick",
-  "empty-gateway"
+  "empty-gateway",
+  "circular-dependency"
 ])
 
 export function EditorPanel({

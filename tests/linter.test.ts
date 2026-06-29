@@ -203,7 +203,7 @@ describe('Advanced Linter Features', () => {
     const diagnostics = lintSpec(specWithCycle)
     const cycleWarn = diagnostics.find(d => d.message.includes('Circular dependency loop detected'))
     expect(cycleWarn).toBeDefined()
-    expect(cycleWarn?.path).toBe('system.components[0]') // path should point to the origin/starting node of the cycle
+    expect(cycleWarn?.path).toBe('system.components[1].connections[0].target') // path should point to the exact connection target completing the cycle
   })
 
   test('flags duplicate connections as warnings', () => {

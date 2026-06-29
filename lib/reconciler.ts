@@ -464,7 +464,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
-      } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection") {
+      } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection" || fixType === "circular-dependency") {
         const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
         const connIdx = resolvedParts[resolvedParts.length - 1] as number
         const connsArrayPath = resolvedParts.slice(0, -1)
