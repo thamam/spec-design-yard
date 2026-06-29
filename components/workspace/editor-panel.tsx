@@ -196,7 +196,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
     )
   }
 
-  const components = parsedSpec.system.components || []
+  const components = Array.isArray(parsedSpec.system.components) ? parsedSpec.system.components : []
 
   return (
     <div className="flex-1 overflow-auto py-3 px-4 text-sm select-none">
@@ -333,9 +333,11 @@ interface MetricsTabProps {
   diagnostics?: Diagnostic[]
 }
 
-function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = [] }: MetricsTabProps) {
+const EMPTY_DIAGNOSTICS: Diagnostic[] = []
+
+function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS }: MetricsTabProps) {
   const metrics = useMemo(() => {
-    const components = parsedSpec?.system?.components || []
+    const components = Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
     const systemName = parsedSpec?.system?.name || "Unnamed System"
 
     // Compute metrics
