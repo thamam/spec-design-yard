@@ -15,7 +15,7 @@ import {
   BarChart2Icon,
 } from "lucide-react"
 import yaml from "yaml"
-import { lintSpec } from "../../lib/linter"
+import { lintSpec, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 
@@ -330,47 +330,80 @@ interface MetricsTabProps {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
-  diagnostics?: any[]
+  diagnostics?: Diagnostic[]
 }
 
 function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = [] }: MetricsTabProps) {
-  const components = parsedSpec?.system?.components || []
-  const systemName = parsedSpec?.system?.name || "Unnamed System"
+  const metrics = useMemo(() => {
+    const components = parsedSpec?.system?.components || []
+    const systemName = parsedSpec?.system?.name || "Unnamed System"
 
-  // Compute metrics
-  const totalComponents = components.length
-  const gatewayCount = components.filter((c: any) => String(c?.type).toLowerCase() === 'gateway').length
-  const stageCount = components.filter((c: any) => String(c?.type).toLowerCase() === 'stage').length
-  const brickCount = components.filter((c: any) => String(c?.type).toLowerCase() === 'brick').length
-  const storeCount = components.filter((c: any) => String(c?.type).toLowerCase() === 'store').length
+    // Compute metrics
+    const totalComponents = components.length
+    let gatewayCount = 0
+    let stageCount = 0
+    let brickCount = 0
+    let storeCount = 0
 
-  let totalConnections = 0
-  const incomingSet = new Set<string>()
-  const outgoingCount: Record<string, number> = Object.create(null)
+    let totalConnections = 0
 
-  components.forEach((c: any) => {
-    if (!c || !c.id) return
-    const conns = c.connections || []
-    outgoingCount[c.id] = 0
-    if (Array.isArray(conns)) {
-      conns.forEach((conn: any) => {
-        const target = typeof conn === 'string' ? conn : conn?.target
-        if (target) {
-          incomingSet.add(target)
-          outgoingCount[c.id]++
-          totalConnections++
-        }
-      })
+    components.forEach((c: any) => {
+      if (!c) return
+      const type = String(c.type || '').toLowerCase()
+      if (type === 'gateway') gatewayCount++
+      else if (type === 'stage') stageCount++
+      else if (type === 'brick') brickCount++
+      else if (type === 'store') storeCount++
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (target) {
+            totalConnections++
+          }
+        })
+      }
+    })
+
+    // Compute diagnostics counts
+    const errorsCount = diagnostics.filter(d => d.severity === "error").length
+    const warningsCount = diagnostics.filter(d => d.severity === "warning").length
+    const infoCount = diagnostics.filter(d => d.severity === "info").length
+
+    // Health Score Calculation: starts at 100%, drops by 15% per error and 5% per warning
+    const healthPct = Math.max(0, 100 - (errorsCount * 15) - (warningsCount * 5))
+
+    return {
+      components,
+      systemName,
+      totalComponents,
+      gatewayCount,
+      stageCount,
+      brickCount,
+      storeCount,
+      totalConnections,
+      errorsCount,
+      warningsCount,
+      infoCount,
+      healthPct
     }
-  })
+  }, [parsedSpec, diagnostics])
 
-  // Compute diagnostics counts
-  const errorsCount = diagnostics.filter(d => d.severity === "error").length
-  const warningsCount = diagnostics.filter(d => d.severity === "warning").length
-  const infoCount = diagnostics.filter(d => d.severity === "info").length
-
-  // Health Score Calculation: starts at 100%, drops by 15% per error and 5% per warning
-  const healthPct = Math.max(0, 100 - (errorsCount * 15) - (warningsCount * 5))
+  const {
+    components,
+    systemName,
+    totalComponents,
+    gatewayCount,
+    stageCount,
+    brickCount,
+    storeCount,
+    totalConnections,
+    errorsCount,
+    warningsCount,
+    infoCount,
+    healthPct
+  } = metrics
 
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col h-full font-sans select-none text-zinc-300 gap-4">
@@ -463,10 +496,21 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = [
               if (!comp || !comp.id) return null
               const isSelected = selectedUnit === comp.id
               const type = String(comp.type || '').toLowerCase()
-              const bulletColor = type === 'gateway' ? 'bg-amber-500' : type === 'stage' ? 'bg-purple-500' : type === 'brick' ? 'bg-emerald-500' : 'bg-indigo-500'
+              
+              // Use neutral color for unknown component types to prevent Store color confusion
+              const bulletColor = 
+                type === 'gateway' ? 'bg-amber-500' : 
+                type === 'stage' ? 'bg-purple-500' : 
+                type === 'brick' ? 'bg-emerald-500' : 
+                type === 'store' ? 'bg-indigo-500' : 
+                'bg-zinc-500'
 
-              // Find associated diagnostics for this component
-              const compDiagnostics = diagnostics.filter(d => d.path?.startsWith(`system.components[${idx}]`))
+              // Find associated diagnostics for this component with exact boundary checks (fix index collision)
+              const compDiagnostics = diagnostics.filter(d => {
+                const path = d.path;
+                if (!path) return false;
+                return path === `system.components[${idx}]` || path.startsWith(`system.components[${idx}].`);
+              })
               const compErrors = compDiagnostics.filter(d => d.severity === "error")
               const compWarnings = compDiagnostics.filter(d => d.severity === "warning")
               const compInfos = compDiagnostics.filter(d => d.severity === "info")
@@ -495,7 +539,6 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = [
               return (
                 <button
                   key={comp.id + '-' + idx}
-                  role="button"
                   onClick={() => setSelectedUnit && setSelectedUnit(comp.id)}
                   className={`w-full flex items-center justify-between py-2 px-2 hover:bg-zinc-900/40 rounded transition-colors text-left ${isSelected ? 'bg-indigo-500/10 text-indigo-300 border-l-2 border-indigo-500' : 'text-zinc-400'}`}
                 >
