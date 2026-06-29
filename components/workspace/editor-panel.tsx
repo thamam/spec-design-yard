@@ -140,7 +140,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         <div className="absolute bottom-4 left-4 right-4 bg-zinc-900 border border-indigo-500/30 rounded-lg p-2.5 flex items-center justify-between gap-3 shadow-lg z-20">
           <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-[80%] scrollbar-none">
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-sans pr-1">
-              Suggesting {autocomplete.type === "id" ? "IDs" : autocomplete.type === "field" || autocomplete.type === "metadata-key" ? "Keys" : "Values"}:
+              Suggesting {autocomplete.type === "id" ? "IDs" : autocomplete.type === "field" || autocomplete.type === "metadata-key" || autocomplete.type === "connection-key" ? "Keys" : "Values"}:
             </span>
             {autocomplete.suggestions.map((sug, idx) => (
               <button
@@ -886,6 +886,14 @@ export function EditorPanel({
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
                         >
                           Set to Draft
+                        </button>
+                      )}
+                      {d.code === "invalid-metadata-color" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-metadata-color")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Set to Zinc
                         </button>
                       )}
                       {d.code === "missing-metadata-description" && (
