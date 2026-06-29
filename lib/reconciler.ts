@@ -466,17 +466,19 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         }
       } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection" || fixType === "circular-dependency") {
         const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
-        const connIdx = resolvedParts[resolvedParts.length - 1] as number
-        const connsArrayPath = resolvedParts.slice(0, -1)
-        const connsNode = doc.getIn(connsArrayPath) as any
-        if (connsNode && typeof connsNode.delete === 'function') {
-          connsNode.delete(connIdx)
-          modified = true
-          if (connsNode.items && connsNode.items.length === 0) {
-            const compPath = resolvedParts.slice(0, -2)
-            const compNode = doc.getIn(compPath) as any
-            if (compNode && typeof compNode.delete === 'function') {
-              compNode.delete('connections')
+        if (resolvedParts.length >= 2 && resolvedParts[resolvedParts.length - 2] === "connections") {
+          const connIdx = resolvedParts[resolvedParts.length - 1] as number
+          const connsArrayPath = resolvedParts.slice(0, -1)
+          const connsNode = doc.getIn(connsArrayPath) as any
+          if (connsNode && typeof connsNode.delete === 'function') {
+            connsNode.delete(connIdx)
+            modified = true
+            if (connsNode.items && connsNode.items.length === 0) {
+              const compPath = resolvedParts.slice(0, -2)
+              const compNode = doc.getIn(compPath) as any
+              if (compNode && typeof compNode.delete === 'function') {
+                compNode.delete('connections')
+              }
             }
           }
         }

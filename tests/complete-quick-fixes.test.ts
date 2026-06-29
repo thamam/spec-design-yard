@@ -221,4 +221,26 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     })
     expect(updated).not.toContain('target: node_x') // loop broken!
   })
+
+  test('safely ignores circular-dependency quick-fix if path does not target connections array', () => {
+    const initialYaml = `system:
+  name: Loop System
+  components:
+    - id: node_x
+      type: Stage
+      connections:
+        - target: node_y
+    - id: node_y
+      type: Stage
+      connections:
+        - target: node_x
+`
+    const fallbackPath = 'system.components[1]'
+    const updated = reconcileSpec(initialYaml, {
+      type: 'quick-fix',
+      payload: { path: fallbackPath, fixType: 'circular-dependency' }
+    })
+    expect(updated).toContain('id: node_y') // node_y not deleted!
+    expect(updated).toBe(initialYaml) // completely unmodified!
+  })
 })

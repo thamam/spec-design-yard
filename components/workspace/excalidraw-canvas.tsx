@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useMemo } from "react"
+import { useEffect, useRef, useState, useMemo, useCallback } from "react"
 import { CanvasChange } from "../../lib/reconciler"
 import { lintSpec } from "../../lib/linter"
 
@@ -310,6 +310,13 @@ export function ExcalidrawCanvas({
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null)
   const [loadError, setLoadError] = useState(false)
 
+  const handleExcalidrawRef = useCallback((api: any) => {
+    setExcalidrawAPI(api)
+    if (typeof window !== "undefined") {
+      (window as any).excalidrawAPI = api
+    }
+  }, [])
+
   useEffect(() => {
     // Dynamically import Excalidraw only on the client
     import("@excalidraw/excalidraw")
@@ -414,12 +421,7 @@ export function ExcalidrawCanvas({
   return (
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
-        excalidrawRef={(api: any) => {
-          setExcalidrawAPI(api)
-          if (typeof window !== "undefined") {
-            (window as any).excalidrawAPI = api
-          }
-        }}
+        excalidrawRef={handleExcalidrawRef}
         theme="dark"
         UIOptions={{
           canvasActions: {
