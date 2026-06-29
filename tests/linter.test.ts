@@ -348,12 +348,27 @@ describe('Advanced Linter Features', () => {
             id: 'unreachable_stage',
             type: 'Stage',
             connections: [{ target: 'db_store' }]
+          },
+          {
+            id: 'store_a',
+            type: 'Store',
+            connections: [{ target: 'store_b' }]
+          },
+          {
+            id: 'store_b',
+            type: 'Store'
           }
         ]
       }
     }
 
     const diagnostics = lintSpec(specWithViolations)
+
+    // 0. Store to Store
+    const storeToStore = diagnostics.find(d => d.code === 'store-to-store')
+    expect(storeToStore).toBeDefined()
+    expect(storeToStore?.severity).toBe('warning')
+    expect(storeToStore?.message).toContain('connects directly to Store')
 
     // 1. Gateway to Store
     const gatewayToStore = diagnostics.find(d => d.code === 'gateway-to-store')

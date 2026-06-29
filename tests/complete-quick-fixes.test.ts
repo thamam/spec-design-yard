@@ -276,4 +276,25 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     })
     expect(updated).toContain('label: "12345"')
   })
+
+  test('reconciles store-to-store by inserting an intermediate Stage', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: store_a
+      type: Store
+      connections:
+        - target: store_b
+    - id: store_b
+      type: Store
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].connections[0].target', fixType: 'insert-stage' }
+    })
+    expect(updated).toContain('id: store_a_to_store_b')
+    expect(updated).toContain('type: Stage')
+    expect(updated).toContain('target: store_a_to_store_b')
+  })
 })
+

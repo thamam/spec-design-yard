@@ -304,6 +304,8 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       }
 
       const arrowId = `arrow-${comp.id}-${conn.target}`
+      const hasLabel = conn.label && typeof conn.label === "string" && conn.label.trim() !== ""
+      const labelId = `arrow-label-${comp.id}-${conn.target}`
       
       // Calculate delta offsets between center of shapes
       const sx = posSource.x + 95
@@ -343,14 +345,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         isDeleted: false,
         groupIds: [],
         frameId: null,
-        boundElements: [],
+        boundElements: hasLabel ? [{ id: labelId, type: 'text' }] : [],
         updated: arrowVersion,
         link: null,
         locked: false,
       })
 
-      if (conn.label && typeof conn.label === "string" && conn.label.trim() !== "") {
-        const labelId = `arrow-label-${comp.id}-${conn.target}`
+      if (hasLabel) {
         const lx = sx + dx / 2 - 40
         const ly = sy + dy / 2 - 10
         const labelText = conn.label.trim()
