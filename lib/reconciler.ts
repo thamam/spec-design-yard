@@ -380,6 +380,14 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       } else if (fixType === "invalid-metadata-status") {
         doc.setIn(parts, "draft")
         modified = true
+      } else if (fixType === "invalid-metadata-color") {
+        doc.setIn(parts, "zinc")
+        modified = true
+      } else if (fixType === "invalid-connection-label") {
+        const currentVal = doc.getIn(parts)
+        const fixedVal = currentVal !== undefined && currentVal !== null ? String(currentVal) : ""
+        doc.setIn(parts, fixedVal)
+        modified = true
       } else if (fixType === "component-overlap") {
         const currentX = doc.getIn(parts) as number
         if (typeof currentX === "number" && Number.isFinite(currentX)) {

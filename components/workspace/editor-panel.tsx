@@ -362,7 +362,9 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "gateway-to-store",
   "sink-stage-brick",
   "empty-gateway",
-  "circular-dependency"
+  "circular-dependency",
+  "invalid-metadata-color",
+  "invalid-connection-label"
 ])
 
 export function EditorPanel({

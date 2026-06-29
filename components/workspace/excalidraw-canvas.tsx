@@ -91,7 +91,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       // Check for custom metadata color
       const customColor = comp.metadata?.color ? String(comp.metadata.color).trim().toLowerCase() : ""
       if (customColor) {
-        const colorMap: Record<string, { stroke: string; bg: string }> = {
+        const colorMap: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
           indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
           purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
           emerald: { stroke: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
@@ -99,8 +99,8 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
           rose: { stroke: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)' },
           sky: { stroke: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)' },
           zinc: { stroke: '#71717a', bg: 'rgba(113, 113, 122, 0.1)' },
-        }
-        if (colorMap[customColor]) {
+        })
+        if (customColor && colorMap[customColor]) {
           strokeColor = colorMap[customColor].stroke
           backgroundColor = colorMap[customColor].bg
         } else if (/^#[0-9a-fA-F]{6}$/.test(customColor)) {

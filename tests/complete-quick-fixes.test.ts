@@ -243,4 +243,37 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     expect(updated).toContain('id: node_y') // node_y not deleted!
     expect(updated).toBe(initialYaml) // completely unmodified!
   })
+
+  test('reconciles invalid-metadata-color by setting color to zinc', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: node_a
+      type: Stage
+      metadata:
+        color: invalid_color_name
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].metadata.color', fixType: 'invalid-metadata-color' }
+    })
+    expect(updated).toContain('color: zinc')
+  })
+
+  test('reconciles invalid-connection-label by converting to string or empty string', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: node_a
+      type: Stage
+      connections:
+        - target: node_b
+          label: 12345
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].connections[0].label', fixType: 'invalid-connection-label' }
+    })
+    expect(updated).toContain('label: "12345"')
+  })
 })
