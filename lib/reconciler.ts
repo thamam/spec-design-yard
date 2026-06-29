@@ -750,3 +750,92 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
 
   return specText
 }
+
+export function autoLayoutDiagram(parsedSpec: any): { id: string; x: number; y: number }[] {
+  const components = parsedSpec?.system?.components || []
+  if (components.length === 0) return []
+
+  const ids = new Set(components.map((c: any) => c.id).filter(Boolean))
+  const adj: Record<string, string[]> = {}
+  const inDegree: Record<string, number> = {}
+
+  // Initialize graph structures
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    adj[comp.id] = []
+    inDegree[comp.id] = 0
+  })
+
+  // Build adjacency list and in-degrees
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    const conns = comp.connections || []
+    conns.forEach((conn: any) => {
+      if (conn && conn.target && ids.has(conn.target) && conn.target !== comp.id) {
+        adj[comp.id].push(conn.target)
+        inDegree[conn.target] = (inDegree[conn.target] || 0) + 1
+      }
+    })
+  })
+
+  // Compute depth layers using a BFS/Layered approach
+  const depth: Record<string, number> = {}
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    depth[comp.id] = 0
+  })
+
+  // Identify entry points:
+  // 1. Gateways
+  // 2. Nodes with inDegree == 0
+  const queue: string[] = []
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    const type = String(comp.type || "").toLowerCase()
+    if (type === "gateway" || inDegree[comp.id] === 0) {
+      queue.push(comp.id)
+      depth[comp.id] = 0
+    }
+  })
+
+  // BFS traversal to calculate layered depth
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    const currentDepth = depth[current]
+    const neighbors = adj[current] || []
+    neighbors.forEach((neighbor) => {
+      // If the neighbor's depth is not updated, or can be pushed further right to avoid back-arrows crossing stages
+      if (depth[neighbor] <= currentDepth) {
+        depth[neighbor] = currentDepth + 1
+        queue.push(neighbor)
+      }
+    })
+  }
+
+  // Group nodes by depth layer
+  const layers: Record<number, string[]> = {}
+  components.forEach((comp: any) => {
+    if (!comp || !comp.id) return
+    const layer = depth[comp.id] || 0
+    if (!layers[layer]) {
+      layers[layer] = []
+    }
+    layers[layer].push(comp.id)
+  })
+
+  const payload: { id: string; x: number; y: number }[] = []
+
+  // Assign clean geometric coords:
+  // x = 60 + layerIndex * 260
+  // y = distributed vertically around center (e.g. 140 + index * 150)
+  Object.keys(layers).map(Number).sort((a, b) => a - b).forEach((layer) => {
+    const nodes = layers[layer]
+    nodes.forEach((id, index) => {
+      const x = 60 + layer * 260
+      const y = 140 + index * 150
+      payload.push({ id, x, y })
+    })
+  })
+
+  return payload
+}
