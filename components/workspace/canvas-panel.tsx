@@ -9,9 +9,10 @@ import {
   MinimizeIcon,
   MousePointerIcon,
   RefreshCwIcon,
+  SparklesIcon,
 } from "lucide-react"
 import { useState } from "react"
-import { CanvasChange } from "../../lib/reconciler"
+import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
 
 /* Client-only Excalidraw */
 const ExcalidrawCanvas = dynamic(
@@ -75,6 +76,17 @@ export function CanvasPanel({
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
 
+  const handleAutoLayout = () => {
+    if (!onCanvasChange || !parsedSpec) return
+    const payload = autoLayoutDiagram(parsedSpec)
+    if (payload.length > 0) {
+      onCanvasChange({
+        type: "coords",
+        payload,
+      })
+    }
+  }
+
   const systemName = parsedSpec?.system?.name || "External Brain"
 
   return (
@@ -131,7 +143,22 @@ export function CanvasPanel({
           <CanvasToolButton
             icon={<RefreshCwIcon size={12} />}
             label="Reset view"
-            onClick={() => {}}
+            onClick={() => {
+              if (typeof window !== "undefined" && (window as any).excalidrawAPI) {
+                try {
+                  const api = (window as any).excalidrawAPI
+                  const els = api.getSceneElements()
+                  api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85 })
+                } catch (err) {
+                  console.error("Failed to reset view:", err)
+                }
+              }
+            }}
+          />
+          <CanvasToolButton
+            icon={<SparklesIcon size={12} />}
+            label="Re-layout Diagram"
+            onClick={handleAutoLayout}
           />
           <CanvasToolButton
             icon={fullscreen ? <MinimizeIcon size={12} /> : <MaximizeIcon size={12} />}

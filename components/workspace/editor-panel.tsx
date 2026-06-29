@@ -837,6 +837,14 @@ export function EditorPanel({
                           Insert Stage
                         </button>
                       )}
+                      {d.code === "circular-dependency" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "circular-dependency")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Connection
+                        </button>
+                      )}
                       {d.code === "unrecognized-metadata-key" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "unrecognized-metadata-key")}
