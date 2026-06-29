@@ -361,6 +361,7 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "disconnected-component",
   "unreachable-component",
   "gateway-to-store",
+  "store-to-store",
   "sink-stage-brick",
   "empty-gateway",
   "circular-dependency",
@@ -452,7 +453,7 @@ export function EditorPanel({
         fixType = "delete-component"
       } else if (d.code === "unreachable-component") {
         fixType = "connect-from-gateway"
-      } else if (d.code === "gateway-to-store") {
+      } else if (d.code === "gateway-to-store" || d.code === "store-to-store") {
         fixType = "insert-stage"
       } else if (d.code === "sink-stage-brick") {
         fixType = "connect-to-store"
@@ -832,7 +833,7 @@ export function EditorPanel({
                           </button>
                         </div>
                       )}
-                      {d.code === "gateway-to-store" && (
+                      {(d.code === "gateway-to-store" || d.code === "store-to-store") && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "insert-stage")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"

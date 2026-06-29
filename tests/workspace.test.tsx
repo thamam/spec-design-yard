@@ -96,6 +96,11 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     const labelText = elements.find((el: any) => el.id === 'arrow-label-node_a-node_b' && el.type === 'text')
     expect(labelText).toBeDefined()
     expect(labelText.text).toBe('post')
+
+    // Verify bidirectional graphic element binding is established (arrow registers bound text element label)
+    const arrow = elements.find((el: any) => el.id === 'arrow-node_a-node_b' && el.type === 'arrow')
+    expect(arrow).toBeDefined()
+    expect(arrow.boundElements).toEqual([{ id: 'arrow-label-node_a-node_b', type: 'text' }])
   })
 
   test('lintSpec flags duplicate component IDs, missing fields, unrecognized types, and orphan connections', () => {

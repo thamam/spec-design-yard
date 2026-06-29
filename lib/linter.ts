@@ -366,6 +366,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
 
+      if (compType === "store" && targetType === "store") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Store component "${compId}" connects directly to Store "${target}". Data should not flow directly between Stores; consider routing through a Stage or Brick first.`,
+          path: `${connPath}.target`,
+          code: "store-to-store",
+        })
+      }
+
       if (targetType === "gateway") {
         diagnostics.push({
           severity: "warning",
