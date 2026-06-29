@@ -163,12 +163,12 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "invalid-metadata-object",
         })
       } else {
-        const allowedMetaKeys = new Set(["owner", "description", "status", "version"])
+        const allowedMetaKeys = new Set(["owner", "description", "status", "version", "color"])
         Object.keys(meta).forEach((k) => {
           if (!allowedMetaKeys.has(k)) {
             diagnostics.push({
               severity: "info",
-              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version.`,
+              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version, color.`,
               path: `${pathPrefix}.metadata.${k}`,
               code: "unrecognized-metadata-key",
             })
@@ -184,6 +184,20 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
               message: `Unrecognized status value "${meta.status}". Valid status values are: draft, active, deprecated.`,
               path: `${pathPrefix}.metadata.status`,
               code: "invalid-metadata-status",
+            })
+          }
+        }
+
+        if ('color' in meta) {
+          const colorVal = String(meta.color || "").trim().toLowerCase()
+          const validColors = new Set(["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"])
+          const hexRegex = /^#[0-9a-fA-F]{6}$/
+          if (colorVal !== "" && !validColors.has(colorVal) && !hexRegex.test(colorVal)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Unrecognized metadata color "${meta.color}". Valid colors are standard names (indigo, purple, emerald, amber, rose, sky, zinc) or a 6-character hex code (e.g. #ff00ff).`,
+              path: `${pathPrefix}.metadata.color`,
+              code: "invalid-metadata-color",
             })
           }
         }
@@ -273,6 +287,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       }
 
       const target = conn.target.trim()
+
+      if ('label' in conn && typeof conn.label !== "string") {
+        diagnostics.push({
+          severity: "error",
+          message: `Connection label must be a string.`,
+          path: `${connPath}.label`,
+          code: "invalid-connection-label",
+        })
+      }
 
       // Duplicate connection check
       if (seenTargets.has(target)) {

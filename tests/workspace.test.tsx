@@ -66,6 +66,38 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(rectangle.y).toBe(250)
   })
 
+  test('compileSpecToExcalidrawElements supports custom metadata colors and connection labels', () => {
+    const mockSpec = {
+      system: {
+        name: 'Color and Connection Label spec',
+        components: [
+          {
+            id: 'node_a',
+            type: 'Stage',
+            metadata: { color: 'purple' },
+            connections: [{ target: 'node_b', label: 'post' }]
+          },
+          {
+            id: 'node_b',
+            type: 'Stage'
+          }
+        ]
+      }
+    }
+
+    const elements = compileSpecToExcalidrawElements(mockSpec)
+
+    // Verify metadata color was compiled (purple strokeColor)
+    const rectA = elements.find((el: any) => el.id === 'node_a' && el.type === 'rectangle')
+    expect(rectA).toBeDefined()
+    expect(rectA.strokeColor).toBe('#c084fc') // Purple
+
+    // Verify connection label was compiled to a text element
+    const labelText = elements.find((el: any) => el.id === 'arrow-label-node_a-node_b' && el.type === 'text')
+    expect(labelText).toBeDefined()
+    expect(labelText.text).toBe('post')
+  })
+
   test('lintSpec flags duplicate component IDs, missing fields, unrecognized types, and orphan connections', () => {
     const invalidSpec = {
       system: {

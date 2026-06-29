@@ -9,6 +9,7 @@ export type CanvasChange =
   | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
   | { type: "connect"; payload: { source: string; target: string } }
   | { type: "disconnect"; payload: { source: string; target: string } }
+  | { type: "connection-label"; payload: { source: string; target: string; label: string } }
 
 export function parsePath(path: string): (string | number)[] {
   const parts: (string | number)[] = []
@@ -209,6 +210,46 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
               if (newType) {
                 compNode.set('type', newType)
               }
+            }
+          }
+        })
+      }
+    } else if (change.type === "connection-label") {
+      const { source, target, label } = change.payload
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+          const id = compNode.get('id')
+          if (id === source) {
+            let conns = compNode.get('connections')
+            if (!conns || typeof conns.get !== 'function') {
+              compNode.set('connections', doc.createNode([]))
+              conns = compNode.get('connections')
+            }
+            if (conns && conns.items) {
+              conns.items.forEach((connNode: any) => {
+                if (connNode && typeof connNode.get === 'function') {
+                  const targetId = connNode.get('target')
+                  if (targetId === target) {
+                    const currentLabel = connNode.get('label')
+                    if (currentLabel !== label) {
+                      connNode.set('label', label)
+                      modified = true
+                    }
+                  }
+                } else if (connNode) {
+                  // If it's a string node e.g. - target (though typically it's an object)
+                  const val = typeof connNode.toJSON === 'function' ? connNode.toJSON() : connNode
+                  if (val === target) {
+                    // Convert to object so we can set label
+                    const idx = conns.items.indexOf(connNode)
+                    if (idx !== -1) {
+                      conns.set(idx, doc.createNode({ target, label }))
+                      modified = true
+                    }
+                  }
+                }
+              })
             }
           }
         })

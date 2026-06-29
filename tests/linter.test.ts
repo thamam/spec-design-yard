@@ -635,4 +635,105 @@ describe('Advanced Linter Features', () => {
       expect(unreachableNodes[0].message).toContain('no execution path exists from any entry point')
     })
   })
+
+  describe('Custom Color Metadata & Connection Label Validation', () => {
+    test('allows color in allowed metadata keys', () => {
+      const spec = {
+        system: {
+          name: 'Color Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                color: 'emerald'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const unrecMetaKey = diagnostics.find(d => d.code === 'unrecognized-metadata-key')
+      expect(unrecMetaKey).toBeUndefined()
+    })
+
+    test('flags unrecognized metadata color values', () => {
+      const spec = {
+        system: {
+          name: 'Color Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                color: 'not-a-real-color'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const invalidColor = diagnostics.find(d => d.code === 'invalid-metadata-color')
+      expect(invalidColor).toBeDefined()
+      expect(invalidColor?.severity).toBe('warning')
+    })
+
+    test('validates hex codes for custom metadata colors', () => {
+      const spec = {
+        system: {
+          name: 'Color Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                color: '#ff00ff'
+              }
+            },
+            {
+              id: 'node_b',
+              type: 'Stage',
+              metadata: {
+                color: '#wronghex'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const nodeAColorError = diagnostics.find(d => d.path?.includes('components[0]') && d.code === 'invalid-metadata-color')
+      expect(nodeAColorError).toBeUndefined()
+
+      const nodeBColorError = diagnostics.find(d => d.path?.includes('components[1]') && d.code === 'invalid-metadata-color')
+      expect(nodeBColorError).toBeDefined()
+    })
+
+    test('validates connection labels', () => {
+      const spec = {
+        system: {
+          name: 'Conn Label Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              connections: [
+                { target: 'node_b', label: 'HTTP POST' }
+              ]
+            },
+            {
+              id: 'node_b',
+              type: 'Stage',
+              connections: [
+                { target: 'node_a', label: 123 } // non-string label
+              ]
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const invalidLabel = diagnostics.find(d => d.code === 'invalid-connection-label')
+      expect(invalidLabel).toBeDefined()
+      expect(invalidLabel?.severity).toBe('error')
+    })
+  })
 })

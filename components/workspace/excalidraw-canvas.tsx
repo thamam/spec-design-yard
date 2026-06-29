@@ -87,15 +87,40 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     } else if (hasWarning) {
       strokeColor = '#f59e0b' // Warning Amber
       backgroundColor = 'rgba(245, 158, 11, 0.15)'
-    } else if (type === 'stage') {
-      strokeColor = '#c084fc' // Purple
-      backgroundColor = 'rgba(168, 85, 247, 0.1)'
-    } else if (type === 'brick') {
-      strokeColor = '#34d399' // Emerald
-      backgroundColor = 'rgba(52, 211, 153, 0.1)'
-    } else if (type === 'gateway') {
-      strokeColor = '#f59e0b' // Amber
-      backgroundColor = 'rgba(245, 158, 11, 0.1)'
+    } else {
+      // Check for custom metadata color
+      const customColor = comp.metadata?.color ? String(comp.metadata.color).trim().toLowerCase() : ""
+      if (customColor) {
+        const colorMap: Record<string, { stroke: string; bg: string }> = {
+          indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
+          purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
+          emerald: { stroke: '#34d399', bg: 'rgba(52, 211, 153, 0.1)' },
+          amber: { stroke: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+          rose: { stroke: '#f43f5e', bg: 'rgba(244, 63, 94, 0.1)' },
+          sky: { stroke: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)' },
+          zinc: { stroke: '#71717a', bg: 'rgba(113, 113, 122, 0.1)' },
+        }
+        if (colorMap[customColor]) {
+          strokeColor = colorMap[customColor].stroke
+          backgroundColor = colorMap[customColor].bg
+        } else if (/^#[0-9a-fA-F]{6}$/.test(customColor)) {
+          strokeColor = customColor
+          // Parse hex to rgba with low opacity for background
+          const r = parseInt(customColor.slice(1, 3), 16)
+          const g = parseInt(customColor.slice(3, 5), 16)
+          const b = parseInt(customColor.slice(5, 7), 16)
+          backgroundColor = `rgba(${r}, ${g}, ${b}, 0.1)`
+        }
+      } else if (type === 'stage') {
+        strokeColor = '#c084fc' // Purple
+        backgroundColor = 'rgba(168, 85, 247, 0.1)'
+      } else if (type === 'brick') {
+        strokeColor = '#34d399' // Emerald
+        backgroundColor = 'rgba(52, 211, 153, 0.1)'
+      } else if (type === 'gateway') {
+        strokeColor = '#f59e0b' // Amber
+        backgroundColor = 'rgba(245, 158, 11, 0.1)'
+      }
     }
 
     const rectId = comp.id
@@ -288,6 +313,42 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
         link: null,
         locked: false,
       })
+
+      if (conn.label && typeof conn.label === "string" && conn.label.trim() !== "") {
+        const labelId = `arrow-label-${comp.id}-${conn.target}`
+        const lx = sx + dx / 2 - 40
+        const ly = sy + dy / 2 - 10
+        const labelText = conn.label.trim()
+        const labelVersion = getDeterministicSeed(`${labelId}-${labelText}-${Math.round(lx)}-${Math.round(ly)}`)
+
+        elements.push({
+          type: 'text',
+          id: labelId,
+          containerId: arrowId,
+          x: lx,
+          y: ly,
+          width: 80,
+          height: 20,
+          text: labelText,
+          fontSize: 12,
+          fontFamily: 1, // Virgil
+          strokeColor: '#38bdf8', // Light sky blue
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          originalText: labelText,
+          autoResize: true,
+          seed: getDeterministicSeed(labelId),
+          version: labelVersion,
+          versionNonce: labelVersion,
+          isDeleted: false,
+          groupIds: [],
+          frameId: null,
+          boundElements: [],
+          updated: labelVersion,
+          link: null,
+          locked: false,
+        })
+      }
     })
   })
 
@@ -587,6 +648,33 @@ export function ExcalidrawCanvas({
             if (changedTextElement) {
               const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
               if (!isEditingThisElement) {
+                if (changedTextElement.id.startsWith("arrow-label-")) {
+                  const labelId = changedTextElement.id
+                  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
+                  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
+                  let source = ""
+                  let target = ""
+                  for (const compId of sortedCompIds) {
+                    if (labelId.startsWith(`arrow-label-${compId}-`)) {
+                      source = compId
+                      target = labelId.substring(`arrow-label-${compId}-`.length)
+                      break
+                    }
+                  }
+
+                  if (source && target) {
+                    onCanvasChange({
+                      type: "connection-label",
+                      payload: {
+                        source,
+                        target,
+                        label: changedTextElement.text.trim()
+                      }
+                    })
+                  }
+                  return
+                }
+
                 const lines = changedTextElement.text.split("\n")
                 const firstLineRaw = lines[0] ? lines[0].trim() : ""
                 // Strip the exact ❌ or ⚠️ suffixes including preceding space to prevent self-polluting UI-state serialization loops

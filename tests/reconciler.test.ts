@@ -611,4 +611,25 @@ system:
 
     expect(updated).toContain('x: .nan')
   })
+
+  test('reconciles connection-label updates or sets the connection label', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: digest_stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'connection-label' as any,
+      payload: {
+        source: 'inbox',
+        target: 'digest_stage',
+        label: 'JSON Payload'
+      }
+    })
+
+    expect(updated).toContain('label: JSON Payload')
+    expect(updated).toContain('target: digest_stage')
+  })
 })
