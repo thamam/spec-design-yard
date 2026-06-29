@@ -632,4 +632,26 @@ system:
     expect(updated).toContain('label: JSON Payload')
     expect(updated).toContain('target: digest_stage')
   })
+
+  test('quick-fix unrecognized-connection-key removes the key', () => {
+    const spec = `system:
+  components:
+    - id: node_a
+      type: Stage
+      connections:
+        - target: node_b
+          label: HTTP POST
+          invalidKey: oops
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0].invalidKey',
+        fixType: 'unrecognized-connection-key'
+      }
+    })
+
+    expect(updated).not.toContain('invalidKey:')
+    expect(updated).toContain('label: HTTP POST')
+  })
 })

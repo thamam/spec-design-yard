@@ -153,4 +153,50 @@ describe('Autocomplete Utility', () => {
     expect(result.query).toBe('d')
     expect(result.suggestions).toContain('draft')
   })
+
+  test('getAutocompleteSuggestions suggests color: as a metadata key', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        c`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('metadata-key')
+    expect(result.query).toBe('c')
+    expect(result.suggestions).toContain('color:')
+  })
+
+  test('getAutocompleteSuggestions suggests metadata color values when typing color: ', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        color: i`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('metadata-color')
+    expect(result.query).toBe('i')
+    expect(result.suggestions).toContain('indigo')
+  })
+
+  test('getAutocompleteSuggestions suggests target: and label: when typing under connections block', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: digest_stage
+          l`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+
+    expect(result.type).toBe('connection-key')
+    expect(result.query).toBe('l')
+    expect(result.suggestions).toContain('label:')
+  })
 })

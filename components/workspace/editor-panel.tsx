@@ -140,7 +140,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         <div className="absolute bottom-4 left-4 right-4 bg-zinc-900 border border-indigo-500/30 rounded-lg p-2.5 flex items-center justify-between gap-3 shadow-lg z-20">
           <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-[80%] scrollbar-none">
             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-sans pr-1">
-              Suggesting {autocomplete.type === "id" ? "IDs" : "Types"}:
+              Suggesting {autocomplete.type === "id" ? "IDs" : autocomplete.type === "field" || autocomplete.type === "metadata-key" ? "Keys" : "Values"}:
             </span>
             {autocomplete.suggestions.map((sug, idx) => (
               <button
@@ -344,6 +344,7 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "unrecognized-metadata-key",
   "unrecognized-component-key",
   "unrecognized-system-key",
+  "unrecognized-connection-key",
   "connection-case-mismatch",
   "invalid-metadata-status",
   "component-overlap",
@@ -866,6 +867,14 @@ export function EditorPanel({
                       {d.code === "unrecognized-system-key" && (
                         <button
                           onClick={() => handleQuickFix(d.path!, "unrecognized-system-key")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                        >
+                          Remove Key
+                        </button>
+                      )}
+                      {d.code === "unrecognized-connection-key" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "unrecognized-connection-key")}
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
                         >
                           Remove Key

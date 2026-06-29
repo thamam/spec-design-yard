@@ -16,7 +16,7 @@ export function extractComponentIds(specText: string): string[] {
 
 export interface AutocompleteResult {
   suggestions: string[]
-  type: "id" | "type" | "field" | "metadata-key" | "metadata-status" | "connection-key" | null
+  type: "id" | "type" | "field" | "metadata-key" | "metadata-status" | "metadata-color" | "connection-key" | null
   query: string
   replaceRange: [number, number]
 }
@@ -44,6 +44,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   const targetMatch = textBeforeCursor.match(/\btarget:\s*['"]?([a-zA-Z0-9_\-]*)$/)
   const typeMatch = textBeforeCursor.match(/\btype:\s*['"]?([a-zA-Z0-9_\-]*)$/)
   const statusMatch = textBeforeCursor.match(/\bstatus:\s*([a-zA-Z0-9_\-]*)$/)
+  const colorMatch = textBeforeCursor.match(/\bcolor:\s*([a-zA-Z0-9_\-]*)$/)
 
   // Support cursor-inside-word by extending replaceRange to the end of the current word token
   const textAfterCursor = currentLine.substring(cursorInLine)
@@ -103,6 +104,22 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
     }
   }
 
+  if (colorMatch) {
+    const query = colorMatch[1] || ""
+    const validColors = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
+    const suggestions = validColors
+      .filter((c) => c.toLowerCase().startsWith(query.toLowerCase()) && c !== query)
+      .slice(0, 10)
+
+    const queryStart = cursorPosition - query.length
+    return {
+      suggestions,
+      type: "metadata-color",
+      query,
+      replaceRange: [queryStart, replaceEnd],
+    }
+  }
+
   // Detect indentation and parent block context
   let indentLevel = currentLine.search(/\S/)
   if (indentLevel === -1) indentLevel = 0
@@ -124,7 +141,11 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         break
       }
       if (trimmed.startsWith("-") || trimmed.includes("id:")) {
-        parentBlock = "component"
+        if (trimmed.startsWith("-") && !trimmed.includes("id:") && lineIndent >= 6) {
+          parentBlock = "connections"
+        } else {
+          parentBlock = "component"
+        }
         break
       }
     }
@@ -136,7 +157,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
     const queryStart = cursorPosition - query.length
 
     if (parentBlock === "metadata") {
-      const keys = ["owner:", "description:", "status:", "version:"]
+      const keys = ["owner:", "description:", "status:", "version:", "color:"]
       const suggestions = keys
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
@@ -146,7 +167,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         replaceRange: [queryStart, replaceEnd],
       }
     } else if (parentBlock === "connections") {
-      const keys = ["- target:"]
+      const keys = ["- target:", "target:", "label:"]
       const suggestions = keys
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {

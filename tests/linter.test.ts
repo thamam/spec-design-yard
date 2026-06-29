@@ -762,5 +762,32 @@ describe('Advanced Linter Features', () => {
       expect(invalidLabel).toBeDefined()
       expect(invalidLabel?.severity).toBe('error')
     })
+
+    test('flags unrecognized keys in connection objects as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Unrecognized Connection Keys Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              connections: [
+                { target: 'node_b', label: 'HTTP POST', unrecognized_key: 'oops' }
+              ]
+            },
+            {
+              id: 'node_b',
+              type: 'Stage'
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const unrecognizedKeyWarn = diagnostics.find(d => d.code === 'unrecognized-connection-key')
+      expect(unrecognizedKeyWarn).toBeDefined()
+      expect(unrecognizedKeyWarn?.severity).toBe('warning')
+      expect(unrecognizedKeyWarn?.message).toContain('Unrecognized connection key "unrecognized_key"')
+      expect(unrecognizedKeyWarn?.path).toBe('system.components[0].connections[0].unrecognized_key')
+    })
   })
 })

@@ -348,7 +348,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           connsNode.delete(connIdx)
           modified = true
         }
-      } else if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key" || fixType === "unrecognized-system-key") {
+      } else if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key" || fixType === "unrecognized-system-key" || fixType === "unrecognized-connection-key") {
         const parentPath = parts.slice(0, -1)
         const keyToDelete = parts[parts.length - 1] as string
         const parentNode = doc.getIn(parentPath) as any

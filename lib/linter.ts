@@ -297,6 +297,19 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
 
+      // Check unrecognized connection keys
+      const allowedConnectionKeys = new Set(["target", "label"])
+      Object.keys(conn).forEach((key) => {
+        if (!allowedConnectionKeys.has(key)) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Unrecognized connection key "${key}" for connection to "${target}" on component "${compId}". Valid keys are: target, label.`,
+            path: `${connPath}.${key}`,
+            code: "unrecognized-connection-key",
+          })
+        }
+      })
+
       // Duplicate connection check
       if (seenTargets.has(target)) {
         diagnostics.push({
