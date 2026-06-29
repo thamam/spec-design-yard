@@ -13,6 +13,9 @@ import {
   FileJsonIcon,
   FolderIcon,
   BarChart2Icon,
+  Trash as TrashIcon,
+  Plus as PlusIcon,
+  Settings as SettingsIcon,
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
@@ -275,43 +278,411 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 
 /* ── Focus Tab ── */
 interface FocusTabProps {
+  specText: string
+  setSpecText: (val: string) => void
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
 }
 
-function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
-  const getSelectedUnitSpec = () => {
-    if (!selectedUnit || !parsedSpec) return "Select a component on the diagram to inspect its isolated spec."
-    try {
-      const component = parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
-      if (component) {
-        return yaml.stringify({ component })
+function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
+  const component = useMemo(() => {
+    if (!selectedUnit || !parsedSpec) return null
+    return parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
+  }, [selectedUnit, parsedSpec])
+
+  const [tempId, setTempId] = useState("")
+  const [tempName, setTempName] = useState("")
+  const [tempType, setTempType] = useState("Stage")
+  const [tempColor, setTempColor] = useState("zinc")
+  const [tempStatus, setTempStatus] = useState("draft")
+  const [tempOwner, setTempOwner] = useState("")
+  const [tempDescription, setTempDescription] = useState("")
+
+  const [newConnTarget, setNewConnTarget] = useState("")
+  const [newConnLabel, setNewConnLabel] = useState("")
+
+  const [showRawYaml, setShowRawYaml] = useState(false)
+
+  useEffect(() => {
+    if (component) {
+      setTempId(component.id || "")
+      setTempName(component.name || "")
+      setTempType(component.type || "Stage")
+      
+      const meta = component.metadata || {}
+      setTempColor(meta.color || "zinc")
+      setTempStatus(meta.status || "draft")
+      setTempOwner(meta.owner || "")
+      setTempDescription(meta.description || "")
+    } else {
+      setTempId("")
+      setTempName("")
+      setTempType("Stage")
+      setTempColor("zinc")
+      setTempStatus("draft")
+      setTempOwner("")
+      setTempDescription("")
+    }
+    setNewConnTarget("")
+    setNewConnLabel("")
+  }, [selectedUnit, component])
+
+  const handleUpdate = (updates: any) => {
+    if (!selectedUnit || !specText) return
+    const updated = reconcileSpec(specText, {
+      type: "update-component" as any,
+      payload: {
+        id: selectedUnit,
+        updates
       }
-      return `No component found with ID: ${selectedUnit}`
-    } catch (e) {
-      return "Error extracting focused spec."
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+      if (updates.id && updates.id !== selectedUnit) {
+        setSelectedUnit(updates.id.trim())
+      }
     }
   }
 
+  const handleIdBlur = () => {
+    const nextId = tempId.trim()
+    if (nextId && nextId !== selectedUnit) {
+      handleUpdate({ id: nextId })
+    }
+  }
+
+  const handleNameBlur = () => {
+    if (tempName !== (component?.name || "")) {
+      handleUpdate({ name: tempName })
+    }
+  }
+
+  const handleTypeChange = (newType: string) => {
+    setTempType(newType)
+    handleUpdate({ type: newType })
+  }
+
+  const handleMetaBlur = (metaField: string, val: string) => {
+    const currentMeta = component?.metadata || {}
+    if (val !== (currentMeta[metaField] || "")) {
+      const updatedMeta = { ...currentMeta, [metaField]: val || undefined }
+      handleUpdate({ metadata: updatedMeta })
+    }
+  }
+
+  const handleMetaSelectChange = (metaField: string, val: string) => {
+    const currentMeta = component?.metadata || {}
+    if (val !== (currentMeta[metaField] || "")) {
+      const updatedMeta = { ...currentMeta, [metaField]: val }
+      handleUpdate({ metadata: updatedMeta })
+    }
+  }
+
+  const handleAddConnection = () => {
+    if (!newConnTarget || !selectedUnit) return
+    
+    // 1. Establish the connection
+    let nextSpec = reconcileSpec(specText, {
+      type: "connect",
+      payload: { source: selectedUnit, target: newConnTarget }
+    })
+
+    // 2. Set the connection label if provided
+    if (newConnLabel.trim() !== "") {
+      nextSpec = reconcileSpec(nextSpec, {
+        type: "connection-label" as any,
+        payload: { source: selectedUnit, target: newConnTarget, label: newConnLabel.trim() }
+      })
+    }
+
+    if (nextSpec !== specText) {
+      setSpecText(nextSpec)
+    }
+
+    setNewConnTarget("")
+    setNewConnLabel("")
+  }
+
+  const handleRemoveConnection = (targetId: string) => {
+    if (!selectedUnit) return
+    const nextSpec = reconcileSpec(specText, {
+      type: "disconnect",
+      payload: { source: selectedUnit, target: targetId }
+    })
+    if (nextSpec !== specText) {
+      setSpecText(nextSpec)
+    }
+  }
+
+  const otherComponentIds = useMemo(() => {
+    if (!parsedSpec?.system?.components) return []
+    return parsedSpec.system.components
+      .map((c: any) => c?.id)
+      .filter((id: any) => typeof id === "string" && id !== selectedUnit)
+  }, [parsedSpec, selectedUnit])
+
+  const getSelectedUnitSpec = () => {
+    if (!component) return ""
+    try {
+      return yaml.stringify({ component })
+    } catch (e) {
+      return "Error serializing yaml preview"
+    }
+  }
+
+  const currentConnections = component?.connections || []
+
   return (
-    <div className="flex-1 overflow-auto p-4 flex flex-col h-full">
-      {selectedUnit ? (
-        <div className="flex-1 flex flex-col overflow-hidden h-full">
-          <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-t-lg flex items-center justify-between shrink-0">
-            <span className="font-mono text-indigo-300 text-[11px]">
-              Selected: <span className="font-bold">{selectedUnit}</span>
-            </span>
+    <div className="flex-1 overflow-auto p-4 flex flex-col h-full bg-zinc-950/20 text-zinc-300">
+      {selectedUnit && component ? (
+        <div className="flex-1 flex flex-col gap-4 overflow-auto pb-6">
+          {/* Header */}
+          <div className="h-10 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-lg flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <SettingsIcon size={14} className="text-indigo-400" />
+              <span className="font-mono text-indigo-300 text-[12px] font-semibold">
+                Selected: <span className="text-white font-bold">{selectedUnit}</span>
+              </span>
+            </div>
             <button
               onClick={() => setSelectedUnit(null)}
-              className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold font-sans"
+              className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold font-sans px-2 py-1 rounded bg-zinc-900 border border-zinc-800 transition"
             >
-              Clear Selection
+              Close Inspector
             </button>
           </div>
-          <pre className="flex-1 border-x border-b border-zinc-800 bg-zinc-950 p-4 rounded-b-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs">
-            {getSelectedUnitSpec()}
-          </pre>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Core Settings Card */}
+            <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-3 shadow-md">
+              <h3 className="text-xs font-bold text-zinc-100 border-b border-zinc-800 pb-2 mb-1 flex items-center gap-1.5 uppercase tracking-wider font-sans">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full" />
+                Core Settings
+              </h3>
+
+              {/* ID Input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-id">Component ID</label>
+                <input
+                  id="focus-comp-id"
+                  type="text"
+                  value={tempId}
+                  onChange={(e) => setTempId(e.target.value)}
+                  onBlur={handleIdBlur}
+                  onKeyDown={(e) => e.key === "Enter" && handleIdBlur()}
+                  placeholder="e.g. database"
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-xs text-white focus:border-indigo-500/60 focus:outline-none transition"
+                />
+              </div>
+
+              {/* Name Input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-name">Display Name</label>
+                <input
+                  id="focus-comp-name"
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onBlur={handleNameBlur}
+                  onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
+                  placeholder="e.g. PostgreSQL Database"
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-indigo-500/60 focus:outline-none transition"
+                />
+              </div>
+
+              {/* Type Select */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-type">Component Type</label>
+                <select
+                  id="focus-comp-type"
+                  value={tempType}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-indigo-500/60 focus:outline-none cursor-pointer transition"
+                >
+                  <option value="Store">Store</option>
+                  <option value="Stage">Stage</option>
+                  <option value="Brick">Brick</option>
+                  <option value="Gateway">Gateway</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Metadata Card */}
+            <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-3 shadow-md">
+              <h3 className="text-xs font-bold text-zinc-100 border-b border-zinc-800 pb-2 mb-1 flex items-center gap-1.5 uppercase tracking-wider font-sans">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                Metadata (Blueprint Keys)
+              </h3>
+
+              {/* Color Select */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-color">Color Palette</label>
+                <select
+                  id="focus-comp-color"
+                  value={tempColor}
+                  onChange={(e) => handleMetaSelectChange("color", e.target.value)}
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-emerald-500/60 focus:outline-none cursor-pointer transition"
+                >
+                  <option value="zinc">Zinc (Default)</option>
+                  <option value="indigo">Indigo</option>
+                  <option value="purple">Purple</option>
+                  <option value="emerald">Emerald</option>
+                  <option value="green">Green</option>
+                  <option value="blue">Blue</option>
+                  <option value="rose">Rose</option>
+                  <option value="amber">Amber</option>
+                </select>
+              </div>
+
+              {/* Status Select */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-status">Release Status</label>
+                <select
+                  id="focus-comp-status"
+                  value={tempStatus}
+                  onChange={(e) => handleMetaSelectChange("status", e.target.value)}
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-emerald-500/60 focus:outline-none cursor-pointer transition"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="wip">WIP</option>
+                  <option value="active">Active</option>
+                  <option value="stable">Stable</option>
+                  <option value="deprecated">Deprecated</option>
+                </select>
+              </div>
+
+              {/* Owner Input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-owner">Lead Owner</label>
+                <input
+                  id="focus-comp-owner"
+                  type="text"
+                  value={tempOwner}
+                  onChange={(e) => setTempOwner(e.target.value)}
+                  onBlur={() => handleMetaBlur("owner", tempOwner)}
+                  onKeyDown={(e) => e.key === "Enter" && handleMetaBlur("owner", tempOwner)}
+                  placeholder="e.g. Tomer / Sentinel"
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-emerald-500/60 focus:outline-none transition"
+                />
+              </div>
+
+              {/* Description Input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-400" htmlFor="focus-comp-description">Description</label>
+                <input
+                  id="focus-comp-description"
+                  type="text"
+                  value={tempDescription}
+                  onChange={(e) => setTempDescription(e.target.value)}
+                  onBlur={() => handleMetaBlur("description", tempDescription)}
+                  onKeyDown={(e) => e.key === "Enter" && handleMetaBlur("description", tempDescription)}
+                  placeholder="e.g. Ingestion pipeline focal store"
+                  className="px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:border-emerald-500/60 focus:outline-none transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Connections Card */}
+          <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-3 shadow-md">
+            <h3 className="text-xs font-bold text-zinc-100 border-b border-zinc-800 pb-2 mb-1 flex items-center gap-1.5 uppercase tracking-wider font-sans">
+              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+              Connections & Flows
+            </h3>
+
+            {/* List Current Connections */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1">Active Outgoing Connections</label>
+              {currentConnections.length > 0 ? (
+                <div className="flex flex-col gap-1 max-h-[150px] overflow-auto">
+                  {currentConnections.map((conn: any, idx: number) => {
+                    const targetId = typeof conn === "string" ? conn : conn?.target
+                    const label = typeof conn === "object" ? conn?.label : ""
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between px-3 py-1.5 rounded bg-zinc-950 border border-zinc-800/80 font-mono text-xs"
+                      >
+                        <div className="flex items-center gap-2 text-zinc-100">
+                          <span className="text-zinc-500">→</span>
+                          <span className="font-bold">{targetId}</span>
+                          {label && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-950/40 text-purple-300 border border-purple-900/30 font-sans">
+                              {label}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleRemoveConnection(targetId)}
+                          title="Remove Connection"
+                          aria-label={`Remove connection to ${targetId}`}
+                          className="p-1 hover:bg-red-950/20 text-zinc-500 hover:text-red-400 rounded transition"
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-500 italic py-1">No active connections. This component is currently a sink.</p>
+              )}
+            </div>
+
+            {/* Add Connection Tool */}
+            {otherComponentIds.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-zinc-800/60 flex flex-col gap-2">
+                <span className="text-[10px] uppercase font-bold text-zinc-400">Establish New Link</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select
+                    value={newConnTarget}
+                    onChange={(e) => setNewConnTarget(e.target.value)}
+                    className="sm:col-span-1 px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Select Target...</option>
+                    {otherComponentIds.map((id: string) => (
+                      <option key={id} value={id}>{id}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={newConnLabel}
+                    onChange={(e) => setNewConnLabel(e.target.value)}
+                    placeholder="Link Label (optional)"
+                    className="sm:col-span-1 px-2.5 py-1.5 rounded bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAddConnection}
+                    disabled={!newConnTarget}
+                    className="sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed transition"
+                  >
+                    <PlusIcon size={12} />
+                    Add Connection
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sync Live YAML Preview Card */}
+          <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 flex flex-col gap-2 shadow-md">
+            <button
+              onClick={() => setShowRawYaml(!showRawYaml)}
+              className="flex items-center justify-between text-xs font-bold text-zinc-400 hover:text-zinc-200 uppercase tracking-wider font-sans focus:outline-none"
+            >
+              <span className="flex items-center gap-1.5">
+                <CodeIcon size={12} className="text-zinc-500" />
+                Live Sync YAML Block
+              </span>
+              <span>{showRawYaml ? "Hide" : "Show"}</span>
+            </button>
+            {showRawYaml && (
+              <pre className="mt-2 border border-zinc-800 bg-zinc-950 p-3 rounded-md overflow-auto leading-5 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-[11px]">
+                {getSelectedUnitSpec()}
+              </pre>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex-1 border border-dashed border-zinc-850 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
@@ -861,7 +1232,7 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <FocusTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
+        <FocusTab specText={specText} setSpecText={setSpecText} parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
       </div>
 
       <div

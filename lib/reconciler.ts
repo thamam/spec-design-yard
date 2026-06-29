@@ -10,6 +10,7 @@ export type CanvasChange =
   | { type: "connect"; payload: { source: string; target: string } }
   | { type: "disconnect"; payload: { source: string; target: string } }
   | { type: "connection-label"; payload: { source: string; target: string; label: string } }
+  | { type: "update-component"; payload: { id: string; updates: { id?: string; name?: string; type?: string; metadata?: Record<string, any> } } }
 
 export function parsePath(path: string): (string | number)[] {
   const parts: (string | number)[] = []
@@ -209,6 +210,93 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
               compNode.set('name', newName)
               if (newType) {
                 compNode.set('type', newType)
+              }
+            }
+          }
+        })
+      }
+    } else if (change.type === "update-component") {
+      const { id, updates } = change.payload
+      if (comps && comps.items) {
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+
+          const compId = compNode.get('id')
+          if (compId === id) {
+            // 1. Rename ID if requested, and update references in other components
+            if (updates.id !== undefined && updates.id !== id) {
+              const newId = updates.id.trim()
+              
+              // Validate ID uniqueness (ensure no other component already has this ID)
+              let idExists = false
+              comps.items.forEach((otherCompNode: any) => {
+                if (otherCompNode && typeof otherCompNode.get === 'function') {
+                  const otherId = otherCompNode.get('id')
+                  if (otherId === newId) idExists = true
+                }
+              })
+
+              if (!idExists && newId !== "") {
+                modified = true
+                compNode.set('id', newId)
+                
+                // Update connections pointing to old ID
+                comps.items.forEach((otherCompNode: any) => {
+                  if (otherCompNode && typeof otherCompNode.get === 'function') {
+                    const conns = otherCompNode.get('connections')
+                    if (conns && conns.items && Array.isArray(conns.items)) {
+                      conns.items.forEach((connNode: any) => {
+                        if (connNode && typeof connNode.get === 'function') {
+                          const targetId = connNode.get('target')
+                          if (targetId === id) {
+                            connNode.set('target', newId)
+                          }
+                        }
+                      })
+                    }
+                  }
+                })
+              }
+            }
+
+            // 2. Update name
+            if (updates.name !== undefined) {
+              const currentName = compNode.get('name')
+              if (currentName !== updates.name) {
+                modified = true
+                compNode.set('name', updates.name)
+              }
+            }
+
+            // 3. Update type
+            if (updates.type !== undefined) {
+              const currentType = compNode.get('type')
+              if (currentType !== updates.type) {
+                modified = true
+                compNode.set('type', updates.type)
+              }
+            }
+
+            // 4. Update metadata
+            if (updates.metadata !== undefined) {
+              let metadataNode = compNode.get('metadata')
+              if (!metadataNode || typeof metadataNode.get !== 'function') {
+                compNode.set('metadata', doc.createNode({}))
+                metadataNode = compNode.get('metadata')
+              }
+              
+              if (metadataNode && typeof metadataNode.set === 'function') {
+                Object.entries(updates.metadata).forEach(([mKey, mVal]) => {
+                  const currentMVal = metadataNode.get(mKey)
+                  if (currentMVal !== mVal) {
+                    modified = true
+                    if (mVal === undefined || mVal === null) {
+                      metadataNode.delete(mKey)
+                    } else {
+                      metadataNode.set(mKey, mVal)
+                    }
+                  }
+                })
               }
             }
           }

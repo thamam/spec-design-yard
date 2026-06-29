@@ -293,4 +293,57 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
 
     expect(textarea.value).toContain('version: v0.1.0')
   })
+
+  test('interactive FocusTab component allows editing fields, metadata, and managing connections', () => {
+    render(<Workspace />)
+    
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    
+    // Switch to Focus tab (empty selection initially)
+    const focusTabButton = screen.getByRole('tab', { name: /Focus/i })
+    fireEvent.click(focusTabButton)
+    expect(screen.getByText(/Diagram Selection Sync Active/i)).toBeInTheDocument()
+
+    // Select 'inbox' via the tree or by selecting it (we can do it by switching to Metrics first, clicking inbox, and returning to Focus, or using select options)
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+    
+    const inboxItem = screen.getByRole('button', { name: /inbox/i })
+    fireEvent.click(inboxItem)
+    
+    fireEvent.click(focusTabButton)
+
+    // Now 'inbox' is selected. Let's verify our beautiful Core Settings card shows ID input with 'inbox' value
+    const idInput = screen.getByLabelText(/Component ID/i) as HTMLInputElement
+    expect(idInput.value).toBe('inbox')
+
+    // Change display name and trigger blur to save
+    const nameInput = screen.getByLabelText(/Display Name/i) as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: 'Primary Inbox' } })
+    fireEvent.blur(nameInput)
+
+    // Expect the spec in textarea to update with the new display name!
+    expect(textarea.value).toContain('name: Primary Inbox')
+
+    // Change color metadata
+    const colorSelect = screen.getByLabelText(/Color Palette/i) as HTMLSelectElement
+    fireEvent.change(colorSelect, { target: { value: 'indigo' } })
+
+    // Expect the spec in textarea to update with the color metadata!
+    expect(textarea.value).toContain('color: indigo')
+
+    // Check if current connections list is shown
+    expect(screen.getAllByText(/digest_stage/i).length).toBeGreaterThan(0)
+
+    // Let's add a connection to kb_store
+    const selectTarget = screen.getByRole('combobox', { name: '' }) as HTMLSelectElement // selector for target
+    fireEvent.change(selectTarget, { target: { value: 'kb_store' } })
+
+    const addConnButton = screen.getByRole('button', { name: /Add Connection/i })
+    fireEvent.click(addConnButton)
+
+    // Expect 'kb_store' to be added as a target under 'inbox' connections in the yaml
+    // (Initial connections had target digest_stage, now it should also have target kb_store)
+    expect(textarea.value).toContain('target: kb_store')
+  })
 })

@@ -654,4 +654,65 @@ system:
     expect(updated).not.toContain('invalidKey:')
     expect(updated).toContain('label: HTTP POST')
   })
+
+  test('reconciles update-component modifications correctly', () => {
+    const spec = `system:
+  name: Test System
+  components:
+    - id: node_a
+      type: Store
+      name: node_a_name
+      connections:
+        - target: node_b
+    - id: node_b
+      type: Stage
+      name: node_b_name
+`
+    // 1. Test updating name and type
+    let updated = reconcileSpec(spec, {
+      type: 'update-component' as any,
+      payload: {
+        id: 'node_a',
+        updates: {
+          name: 'New Node A',
+          type: 'Gateway'
+        }
+      }
+    })
+    expect(updated).toContain('name: New Node A')
+    expect(updated).toContain('type: Gateway')
+
+    // 2. Test updating metadata
+    updated = reconcileSpec(spec, {
+      type: 'update-component' as any,
+      payload: {
+        id: 'node_a',
+        updates: {
+          metadata: {
+            color: 'indigo',
+            status: 'completed',
+            owner: 'Sentinel'
+          }
+        }
+      }
+    })
+    expect(updated).toContain('color: indigo')
+    expect(updated).toContain('status: completed')
+    expect(updated).toContain('owner: Sentinel')
+
+    // 3. Test ID rename with inbound connection redirecting
+    updated = reconcileSpec(spec, {
+      type: 'update-component' as any,
+      payload: {
+        id: 'node_b',
+        updates: {
+          id: 'node_b_new'
+        }
+      }
+    })
+    expect(updated).toContain('id: node_b_new')
+    expect(updated).not.toContain('id: node_b\n')
+    // Connection target in node_a should have updated to node_b_new!
+    expect(updated).toContain('target: node_b_new')
+  })
 })
