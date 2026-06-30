@@ -11,6 +11,7 @@ export type CanvasChange =
   | { type: "disconnect"; payload: { source: string; target: string } }
   | { type: "connection-label"; payload: { source: string; target: string; label: string } }
   | { type: "update-property"; payload: { id: string; path: string; value: any } }
+  | { type: "duplicate"; payload: { id: string; newId: string } }
 
 export function parsePath(path: string): (string | number)[] {
   const parts: (string | number)[] = []
@@ -278,6 +279,35 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         })
+      }
+    } else if (change.type === "duplicate") {
+      const { id, newId } = change.payload
+      if (comps && comps.items) {
+        let sourceNode: any = null
+        comps.items.forEach((compNode: any) => {
+          if (compNode && typeof compNode.get === 'function' && compNode.get('id') === id) {
+            sourceNode = compNode
+          }
+        })
+
+        if (sourceNode && typeof sourceNode.toJSON === 'function') {
+          const raw = sourceNode.toJSON()
+          const currentX = typeof raw.x === 'number' ? Math.round(raw.x) : 100
+          const currentY = typeof raw.y === 'number' ? Math.round(raw.y) : 100
+          const currentName = raw.name ? String(raw.name) : String(raw.id)
+
+          const duplicatedObj = {
+            ...raw,
+            id: newId,
+            name: `${currentName} Copy`,
+            x: currentX + 100,
+            y: currentY + 100,
+          }
+
+          const newNode = doc.createNode(duplicatedObj)
+          comps.add(newNode)
+          modified = true
+        }
       }
     } else if (change.type === "quick-fix" || change.type === "quick-fix-all") {
       const fixes = change.type === "quick-fix"

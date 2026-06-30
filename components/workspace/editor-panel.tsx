@@ -492,6 +492,27 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
     }, 200)
   }
 
+  const handleDuplicate = () => {
+    if (!selectedUnit || !parsedSpec) return
+    const components = parsedSpec?.system?.components || []
+    const existingIds = new Set<string>(components.map((c: any) => c?.id).filter(Boolean))
+    let suffix = 1
+    let newId = `${selectedUnit}_copy_${suffix}`
+    while (existingIds.has(newId)) {
+      suffix++
+      newId = `${selectedUnit}_copy_${suffix}`
+    }
+
+    const updated = reconcileSpec(specText, {
+      type: "duplicate",
+      payload: { id: selectedUnit, newId }
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+      setSelectedUnit(newId)
+    }
+  }
+
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col h-full gap-4 text-zinc-300 font-sans">
       {selectedUnit && comp ? (
@@ -500,12 +521,24 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
             <span className="text-indigo-300 text-[11px]">
               Selected: <span className="font-bold">{selectedUnit}</span>
             </span>
-            <button
-              onClick={() => setSelectedUnit(null)}
-              className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold font-sans"
-            >
-              Clear Selection
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="focus-duplicate-btn"
+                onClick={handleDuplicate}
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold font-sans uppercase tracking-wider"
+              >
+                Duplicate
+              </button>
+              <span className="text-zinc-800">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedUnit(null)}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 font-semibold font-sans uppercase tracking-wider"
+              >
+                Clear Selection
+              </button>
+            </div>
           </div>
 
           {/* Form Editor Panel */}

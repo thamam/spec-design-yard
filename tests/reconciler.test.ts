@@ -654,4 +654,34 @@ system:
     expect(updated).not.toContain('invalidKey:')
     expect(updated).toContain('label: HTTP POST')
   })
+
+  test('reconciles duplicating a component with a new ID and offsetting its coordinates', () => {
+    const spec = `system:
+  name: Test System
+  components:
+    - id: inbox
+      type: Store
+      name: inbox/
+      x: 100
+      y: 150
+      metadata:
+        owner: tom
+        status: active
+`
+    const updated = reconcileSpec(spec, {
+      type: 'duplicate' as any,
+      payload: {
+        id: 'inbox',
+        newId: 'inbox_copy'
+      }
+    })
+
+    expect(updated).toContain('id: inbox')
+    expect(updated).toContain('id: inbox_copy')
+    expect(updated).toContain('name: inbox/ Copy')
+    expect(updated).toContain('x: 200') // 100 + 100 offset
+    expect(updated).toContain('y: 250') // 150 + 100 offset
+    expect(updated).toContain('owner: tom') // preserves metadata
+    expect(updated).toContain('status: active')
+  })
 })
