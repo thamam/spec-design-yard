@@ -211,7 +211,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
         </div>
 
         {expandedNodes.system && (
-          <div className="pl-4 space-y-2 border-l border-zinc-850 ml-1.5">
+          <div className="pl-4 space-y-2 border-l border-zinc-900 ml-1.5">
             <div className="flex items-center gap-1.5 text-zinc-300 cursor-pointer" onClick={() => toggleNode("components")}>
               {expandedNodes.components ? <ChevronDownIcon size={14} className="text-zinc-500" /> : <ChevronRightIcon size={14} className="text-zinc-500" />}
               <span className="text-emerald-400">❖</span>
@@ -219,7 +219,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
             </div>
 
             {expandedNodes.components && (
-              <div className="pl-4 space-y-2 border-l border-zinc-850 ml-1.5">
+              <div className="pl-4 space-y-2 border-l border-zinc-900 ml-1.5">
                 {components.map((comp: any) => {
                   const isExpanded = !!expandedNodes[comp.id]
                   return (
@@ -232,7 +232,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
                         className={`flex items-center justify-between py-1 px-2.5 rounded border transition-all cursor-pointer ${
                           selectedUnit === comp.id
                             ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
-                            : "bg-zinc-900/50 border-zinc-850 hover:border-zinc-800 text-zinc-300"
+                            : "bg-zinc-900/50 border-zinc-900 hover:border-zinc-800 text-zinc-300"
                         }`}
                       >
                         <span className="flex items-center gap-2">
@@ -245,7 +245,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
                       </div>
 
                       {isExpanded && (
-                        <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-850">
+                        <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-900">
                           <div>
                             <span className="text-zinc-500">name:</span> {comp.name || comp.id}
                           </div>
@@ -307,6 +307,9 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
   const [newConnLabel, setNewConnLabel] = useState("")
   const [localConnectionLabels, setLocalConnectionLabels] = useState<Record<string, string>>({})
 
+  // Separate connection label debounce ref
+  const connectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   // 2. Reset form state on selection change
   if (selectedUnit !== prevUnit) {
     setPrevUnit(selectedUnit)
@@ -363,12 +366,17 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
           newLabels[c] = ""
         }
       })
+
+      // Query DOM properties outside state setter to maintain pure callback behavior
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null
+      const activeTestId = activeEl?.getAttribute("data-testid") || ""
+
       setLocalConnectionLabels(prev => {
-        const next = { ...prev }
+        const next: Record<string, string> = {}
         Object.keys(newLabels).forEach(target => {
-          const activeEl = typeof document !== "undefined" ? document.activeElement : null
-          const activeTestId = activeEl?.getAttribute("data-testid")
-          if (activeTestId !== `focus-conn-label-input-${target}`) {
+          if (activeTestId === `focus-conn-label-input-${target}`) {
+            next[target] = prev[target] ?? newLabels[target]
+          } else {
             next[target] = newLabels[target]
           }
         })
@@ -384,6 +392,9 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+      }
+      if (connectionDebounceTimerRef.current) {
+        clearTimeout(connectionDebounceTimerRef.current)
       }
     }
   }, [selectedUnit])
@@ -463,12 +474,13 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
   }
 
   const handleConnectionLabelChange = (target: string, value: string) => {
+    if (target === "__proto__" || target === "constructor" || target === "prototype") return
     setLocalConnectionLabels(prev => ({ ...prev, [target]: value }))
 
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
+    if (connectionDebounceTimerRef.current) {
+      clearTimeout(connectionDebounceTimerRef.current)
     }
-    debounceTimerRef.current = setTimeout(() => {
+    connectionDebounceTimerRef.current = setTimeout(() => {
       if (!selectedUnit) return
       const updated = reconcileSpec(specText, {
         type: "connection-label",
@@ -512,7 +524,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-name-input"
                   value={formState.name || ""}
                   onChange={(e) => handleFieldChange("name", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. My Processing Stage"
                 />
               </div>
@@ -524,7 +536,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-type-select"
                   value={formState.type || "Stage"}
                   onChange={(e) => handleFieldChange("type", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="Gateway">Gateway (Entry)</option>
                   <option value="Stage">Stage (Worker)</option>
@@ -541,7 +553,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-owner-input"
                   value={formState.owner || ""}
                   onChange={(e) => handleFieldChange("metadata.owner", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. tom"
                 />
               </div>
@@ -553,7 +565,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-status-select"
                   value={formState.status || "draft"}
                   onChange={(e) => handleFieldChange("metadata.status", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="draft">Draft (Planning)</option>
                   <option value="active">Active (Production)</option>
@@ -568,7 +580,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-color-select"
                   value={formState.color || "zinc"}
                   onChange={(e) => handleFieldChange("metadata.color", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="zinc">zinc (neutral)</option>
                   <option value="indigo">indigo (store)</option>
@@ -588,7 +600,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="focus-version-input"
                   value={formState.version || ""}
                   onChange={(e) => handleFieldChange("metadata.version", e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. 1.0.0"
                 />
               </div>
@@ -602,7 +614,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 value={formState.description || ""}
                 onChange={(e) => handleFieldChange("metadata.description", e.target.value)}
                 rows={2}
-                className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md focus:outline-none transition-all resize-none font-mono"
+                className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md focus:outline-none transition-all resize-none font-mono"
                 placeholder="Briefly describe what this component does..."
               />
             </div>
@@ -633,7 +645,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                       value={localConnectionLabels[conn.target] || ""}
                       onChange={(e) => handleConnectionLabelChange(conn.target, e.target.value)}
                       placeholder="Add connection label..."
-                      className="flex-1 bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
+                      className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
                     />
                     <button
                       onClick={() => handleDisconnect(conn.target)}
@@ -656,11 +668,13 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   data-testid="add-connection-select"
                   value={newConnTarget}
                   onChange={(e) => setNewConnTarget(e.target.value)}
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all cursor-pointer flex-1"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all cursor-pointer flex-1"
                 >
                   <option value="">Select target...</option>
-                  {(parsedSpec?.system?.components || [])
+                  {(Array.from(new Set((parsedSpec?.system?.components || [])
                     .map((c: any) => c.id)
+                    .filter((id: any): id is string => typeof id === "string")
+                  )) as string[])
                     .filter((id: string) => id !== selectedUnit && !connectionsList.some((nc) => nc.target === id))
                     .map((id: string) => (
                       <option key={id} value={id}>
@@ -674,13 +688,13 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                   value={newConnLabel}
                   onChange={(e) => setNewConnLabel(e.target.value)}
                   placeholder="Label (optional)"
-                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all font-mono flex-1"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all font-mono flex-1"
                 />
                 <button
                   type="button"
                   onClick={handleAddConnection}
                   disabled={!newConnTarget}
-                  className="px-3 py-1.5 rounded text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-850 disabled:text-zinc-600 disabled:border-zinc-900 disabled:cursor-not-allowed text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0"
+                  className="px-3 py-1.5 rounded text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-900 disabled:text-zinc-600 disabled:border-zinc-900 disabled:cursor-not-allowed text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0"
                 >
                   Add Connection
                 </button>
@@ -697,7 +711,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
           </div>
         </div>
       ) : (
-        <div className="flex-1 border border-dashed border-zinc-850 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
+        <div className="flex-1 border border-dashed border-zinc-900 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
           <FocusIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
           <p className="text-xs font-semibold">Diagram Selection Sync Active</p>
           <p className="text-[11px] text-zinc-600 mt-1 max-w-xs leading-relaxed">

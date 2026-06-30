@@ -112,7 +112,7 @@ export function AuthPanel({
               </div>
             </form>
 
-            <div className="mt-4 pt-4 border-t border-zinc-850 flex items-start gap-2">
+            <div className="mt-4 pt-4 border-t border-zinc-900 flex items-start gap-2">
               <ShieldAlertIcon size={14} className="text-emerald-400 shrink-0 mt-0.5" />
               <p className="text-[10px] text-zinc-500 leading-normal">
                 <span className="text-emerald-400 font-semibold">Postgres Integration Active:</span> Login triggers user-scoped spec persistence inside the `Spec` and `User` database tables.
