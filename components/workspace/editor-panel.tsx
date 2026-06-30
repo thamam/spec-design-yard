@@ -732,10 +732,41 @@ interface MetricsTabProps {
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
 
+interface ComponentWithIndex {
+  comp: {
+    id: string
+    name?: string
+    type?: string
+    [key: string]: any
+  }
+  originalIdx: number
+}
+
 function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS }: MetricsTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
+
+  // 1. Pre-group diagnostics by component index in O(D) time
+  const diagnosticsByComponent = useMemo(() => {
+    const map = new Map<number, Diagnostic[]>()
+    
+    diagnostics.forEach((d) => {
+      const path = d.path
+      if (!path) return
+      
+      const match = path.match(/^system\.components\[(\d+)\](?:\.|$)/)
+      if (match) {
+        const idx = parseInt(match[1], 10)
+        if (!map.has(idx)) {
+          map.set(idx, [])
+        }
+        map.get(idx)!.push(d)
+      }
+    })
+    
+    return map
+  }, [diagnostics])
 
   const metrics = useMemo(() => {
     const components = Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
@@ -808,18 +839,18 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     healthPct
   } = metrics
 
-  // Filter the components list with original index preserved
+  // Filter the components list in O(N) using O(1) map lookups
   const filteredComponents = useMemo(() => {
-    return components
-      .map((comp: any, idx: number) => ({ comp, originalIdx: idx }))
-      .filter(({ comp, originalIdx }: any) => {
+    return (components as any[])
+      .map((comp, idx): ComponentWithIndex => ({ comp, originalIdx: idx }))
+      .filter(({ comp, originalIdx }) => {
         if (!comp || !comp.id) return false
 
         // 1. Search term filter
         if (searchTerm.trim() !== "") {
           const term = searchTerm.toLowerCase()
-          const idMatch = String(comp.id).toLowerCase().includes(term)
-          const nameMatch = comp.name ? String(comp.name).toLowerCase().includes(term) : false
+          const idMatch = typeof comp.id === 'string' && comp.id.toLowerCase().includes(term)
+          const nameMatch = typeof comp.name === 'string' && comp.name.toLowerCase().includes(term)
           if (!idMatch && !nameMatch) return false
         }
 
@@ -829,25 +860,21 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
           if (type !== typeFilter) return false
         }
 
-        // 3. Severity filter
+        // 3. Severity filter with O(1) diagnostics lookup
         if (severityFilter !== "all") {
-          const compDiagnostics = diagnostics.filter((d: any) => {
-            const path = d.path
-            if (!path) return false
-            return path === `system.components[${originalIdx}]` || path.startsWith(`system.components[${originalIdx}].`)
-          })
+          const compDiagnostics = diagnosticsByComponent.get(originalIdx) || []
           
           if (severityFilter === "has-issues") {
             if (compDiagnostics.length === 0) return false
           } else {
-            const hasSeverity = compDiagnostics.some((d: any) => d.severity === severityFilter)
+            const hasSeverity = compDiagnostics.some((d) => d.severity === severityFilter)
             if (!hasSeverity) return false
           }
         }
 
         return true
       })
-  }, [components, searchTerm, typeFilter, severityFilter, diagnostics])
+  }, [components, searchTerm, typeFilter, severityFilter, diagnosticsByComponent])
 
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col h-full font-sans select-none text-zinc-300 gap-4">
@@ -950,6 +977,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             <input
               type="text"
               placeholder="Search components..."
+              aria-label="Search components by ID or name"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 pl-7 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
@@ -1023,12 +1051,8 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
                 type === 'store' ? 'bg-indigo-500' : 
                 'bg-zinc-500'
 
-              // Find associated diagnostics for this component with exact boundary checks (fix index collision)
-              const compDiagnostics = diagnostics.filter(d => {
-                const path = d.path;
-                if (!path) return false;
-                return path === `system.components[${originalIdx}]` || path.startsWith(`system.components[${originalIdx}].`);
-              })
+              // Constant-time diagnosis lookup - replaces nested filter scan
+              const compDiagnostics = diagnosticsByComponent.get(originalIdx) || []
               const compErrors = compDiagnostics.filter(d => d.severity === "error")
               const compWarnings = compDiagnostics.filter(d => d.severity === "warning")
               const compInfos = compDiagnostics.filter(d => d.severity === "info")
