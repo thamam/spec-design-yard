@@ -275,12 +275,14 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 
 /* ── Focus Tab ── */
 interface FocusTabProps {
+  specText: string
+  setSpecText: (val: string) => void
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
 }
 
-function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
+function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
   const getSelectedUnitSpec = () => {
     if (!selectedUnit || !parsedSpec) return "Select a component on the diagram to inspect its isolated spec."
     try {
@@ -294,12 +296,98 @@ function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) 
     }
   }
 
+  const comp = parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
+
+  // 1. Local state for form fields to guarantee zero-lag typing
+  const [formState, setFormState] = useState<Record<string, string>>({})
+  const [prevUnit, setPrevUnit] = useState<string | null>(null)
+
+  // 2. Reset form state on selection change
+  if (selectedUnit !== prevUnit) {
+    setPrevUnit(selectedUnit)
+    if (selectedUnit && comp) {
+      setFormState({
+        name: comp.name || "",
+        type: comp.type || "Stage",
+        owner: comp.metadata?.owner || "",
+        status: comp.metadata?.status || "draft",
+        color: comp.metadata?.color || "zinc",
+        version: comp.metadata?.version || "",
+        description: comp.metadata?.description || "",
+      })
+    } else {
+      setFormState({})
+    }
+  }
+
+  // 3. Keep form state synchronized with external YAML updates, but only for un-focused elements to prevent cursor jumps
+  useEffect(() => {
+    if (selectedUnit && comp) {
+      setFormState(prev => {
+        const activeEl = typeof document !== "undefined" ? document.activeElement : null
+        const activeTestId = activeEl?.getAttribute("data-testid")
+        
+        const nextState = { ...prev }
+        if (activeTestId !== "focus-name-input") nextState.name = comp.name || ""
+        if (activeTestId !== "focus-type-select") nextState.type = comp.type || "Stage"
+        if (activeTestId !== "focus-owner-input") nextState.owner = comp.metadata?.owner || ""
+        if (activeTestId !== "focus-status-select") nextState.status = comp.metadata?.status || "draft"
+        if (activeTestId !== "focus-color-select") nextState.color = comp.metadata?.color || "zinc"
+        if (activeTestId !== "focus-version-input") nextState.version = comp.metadata?.version || ""
+        if (activeTestId !== "focus-description-textarea") nextState.description = comp.metadata?.description || ""
+        return nextState
+      })
+    }
+  }, [comp, selectedUnit])
+
+  // 4. Debounce AST reconciliation / parent state updates
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [selectedUnit])
+
+  const handleFieldChange = (path: string, value: any) => {
+    // Instantly update local state so character insertion is buttery-smooth (60fps)
+    setFormState(prev => {
+      const next = { ...prev }
+      if (path === "name") next.name = value
+      else if (path === "type") next.type = value
+      else if (path === "metadata.owner") next.owner = value
+      else if (path === "metadata.status") next.status = value
+      else if (path === "metadata.color") next.color = value
+      else if (path === "metadata.version") next.version = value
+      else if (path === "metadata.description") next.description = value
+      return next
+    })
+
+    // Debounce the heavier parent AST/Excalidraw updates (200ms)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      if (!selectedUnit) return
+      const updated = reconcileSpec(specText, {
+        type: "update-property",
+        payload: { id: selectedUnit, path, value }
+      })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
+    }, 200)
+  }
+
   return (
-    <div className="flex-1 overflow-auto p-4 flex flex-col h-full">
-      {selectedUnit ? (
-        <div className="flex-1 flex flex-col overflow-hidden h-full">
-          <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-t-lg flex items-center justify-between shrink-0">
-            <span className="font-mono text-indigo-300 text-[11px]">
+    <div className="flex-1 overflow-auto p-4 flex flex-col h-full gap-4 text-zinc-300 font-sans">
+      {selectedUnit && comp ? (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto gap-4">
+          <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-lg flex items-center justify-between shrink-0 font-mono">
+            <span className="text-indigo-300 text-[11px]">
               Selected: <span className="font-bold">{selectedUnit}</span>
             </span>
             <button
@@ -309,9 +397,126 @@ function FocusTab({ parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) 
               Clear Selection
             </button>
           </div>
-          <pre className="flex-1 border-x border-b border-zinc-800 bg-zinc-950 p-4 rounded-b-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs">
-            {getSelectedUnitSpec()}
-          </pre>
+
+          {/* Form Editor Panel */}
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
+              Interactive Property Editor
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Name field */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Display Name</label>
+                <input
+                  type="text"
+                  data-testid="focus-name-input"
+                  value={formState.name || ""}
+                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  placeholder="e.g. My Processing Stage"
+                />
+              </div>
+
+              {/* Type select */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component Type</label>
+                <select
+                  data-testid="focus-type-select"
+                  value={formState.type || "Stage"}
+                  onChange={(e) => handleFieldChange("type", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="Gateway">Gateway (Entry)</option>
+                  <option value="Stage">Stage (Worker)</option>
+                  <option value="Brick">Brick (Service)</option>
+                  <option value="Store">Store (Database)</option>
+                </select>
+              </div>
+
+              {/* Metadata Owner */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Owner / Contact</label>
+                <input
+                  type="text"
+                  data-testid="focus-owner-input"
+                  value={formState.owner || ""}
+                  onChange={(e) => handleFieldChange("metadata.owner", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  placeholder="e.g. tom"
+                />
+              </div>
+
+              {/* Metadata Status */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Deployment Status</label>
+                <select
+                  data-testid="focus-status-select"
+                  value={formState.status || "draft"}
+                  onChange={(e) => handleFieldChange("metadata.status", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="draft">Draft (Planning)</option>
+                  <option value="active">Active (Production)</option>
+                  <option value="deprecated">Deprecated</option>
+                </select>
+              </div>
+
+              {/* Metadata Color */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Theme / Color</label>
+                <select
+                  data-testid="focus-color-select"
+                  value={formState.color || "zinc"}
+                  onChange={(e) => handleFieldChange("metadata.color", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="zinc">zinc (neutral)</option>
+                  <option value="indigo">indigo (store)</option>
+                  <option value="purple">purple (stage)</option>
+                  <option value="emerald">emerald (brick)</option>
+                  <option value="amber">amber (gateway)</option>
+                  <option value="rose">rose (danger)</option>
+                  <option value="sky">sky (info)</option>
+                </select>
+              </div>
+
+              {/* Metadata Version */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Semantic Version</label>
+                <input
+                  type="text"
+                  data-testid="focus-version-input"
+                  value={formState.version || ""}
+                  onChange={(e) => handleFieldChange("metadata.version", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  placeholder="e.g. 1.0.0"
+                />
+              </div>
+            </div>
+
+            {/* Metadata Description */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Architectural Description</label>
+              <textarea
+                data-testid="focus-description-textarea"
+                value={formState.description || ""}
+                onChange={(e) => handleFieldChange("metadata.description", e.target.value)}
+                rows={2}
+                className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md focus:outline-none transition-all resize-none font-mono"
+                placeholder="Briefly describe what this component does..."
+              />
+            </div>
+          </div>
+
+          {/* Live Compiled YAML Spec Viewer */}
+          <div className="flex-1 flex flex-col min-h-[150px] overflow-hidden">
+            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 shrink-0 font-mono">Live AST-Reconciled Spec</h4>
+            <pre className="flex-1 border border-zinc-900 bg-zinc-950 p-4 rounded-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs">
+              {getSelectedUnitSpec()}
+            </pre>
+          </div>
         </div>
       ) : (
         <div className="flex-1 border border-dashed border-zinc-850 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
@@ -861,7 +1066,7 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <FocusTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
+        <FocusTab specText={specText} setSpecText={setSpecText} parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
       </div>
 
       <div
