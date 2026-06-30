@@ -733,6 +733,10 @@ interface MetricsTabProps {
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
 
 function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS }: MetricsTabProps) {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [severityFilter, setSeverityFilter] = useState("all")
+
   const metrics = useMemo(() => {
     const components = Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
     const systemName = parsedSpec?.system?.name || "Unnamed System"
@@ -803,6 +807,47 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     infoCount,
     healthPct
   } = metrics
+
+  // Filter the components list with original index preserved
+  const filteredComponents = useMemo(() => {
+    return components
+      .map((comp: any, idx: number) => ({ comp, originalIdx: idx }))
+      .filter(({ comp, originalIdx }: any) => {
+        if (!comp || !comp.id) return false
+
+        // 1. Search term filter
+        if (searchTerm.trim() !== "") {
+          const term = searchTerm.toLowerCase()
+          const idMatch = String(comp.id).toLowerCase().includes(term)
+          const nameMatch = comp.name ? String(comp.name).toLowerCase().includes(term) : false
+          if (!idMatch && !nameMatch) return false
+        }
+
+        // 2. Type filter
+        if (typeFilter !== "all") {
+          const type = String(comp.type || "").toLowerCase()
+          if (type !== typeFilter) return false
+        }
+
+        // 3. Severity filter
+        if (severityFilter !== "all") {
+          const compDiagnostics = diagnostics.filter((d: any) => {
+            const path = d.path
+            if (!path) return false
+            return path === `system.components[${originalIdx}]` || path.startsWith(`system.components[${originalIdx}].`)
+          })
+          
+          if (severityFilter === "has-issues") {
+            if (compDiagnostics.length === 0) return false
+          } else {
+            const hasSeverity = compDiagnostics.some((d: any) => d.severity === severityFilter)
+            if (!hasSeverity) return false
+          }
+        }
+
+        return true
+      })
+  }, [components, searchTerm, typeFilter, severityFilter, diagnostics])
 
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col h-full font-sans select-none text-zinc-300 gap-4">
@@ -885,13 +930,87 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       </div>
 
       {/* Component Interactive List */}
-      <div className="flex flex-col flex-1 min-h-0 gap-1.5">
-        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Component Directory</h4>
+      <div className="flex flex-col flex-1 min-h-0 gap-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Component Directory</h4>
+          {filteredComponents.length !== totalComponents && (
+            <span className="text-[10px] text-zinc-500 font-mono">
+              Showing {filteredComponents.length} of {totalComponents}
+            </span>
+          )}
+        </div>
+
+        {/* Search & Filter Controls */}
+        <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-zinc-900 bg-zinc-950/40">
+          {/* Search box */}
+          <div className="relative flex items-center">
+            <span className="absolute left-2 text-zinc-500 pointer-events-none">
+              <SearchIcon size={12} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search components..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 pl-7 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+                className="absolute right-2 text-zinc-500 hover:text-zinc-300 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Quick Select Filter Dropdowns */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="type-filter" className="text-[10px] text-zinc-500 font-bold uppercase">Filter by Type</label>
+              <select
+                id="type-filter"
+                aria-label="Filter by Type"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="all">All Types</option>
+                <option value="gateway">Gateways</option>
+                <option value="stage">Stages</option>
+                <option value="brick">Bricks</option>
+                <option value="store">Stores</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="severity-filter" className="text-[10px] text-zinc-500 font-bold uppercase">Filter by Issue</label>
+              <select
+                id="severity-filter"
+                aria-label="Filter by Issue"
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="all">All Issues</option>
+                <option value="error">Errors</option>
+                <option value="warning">Warnings</option>
+                <option value="info">Infos</option>
+                <option value="has-issues">Any Issue</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto border border-zinc-900 bg-zinc-950/10 rounded-lg p-2 font-mono text-xs divide-y divide-zinc-900/50">
           {components.length === 0 ? (
             <p className="text-zinc-600 text-center py-4 italic">No components defined.</p>
+          ) : filteredComponents.length === 0 ? (
+            <p className="text-zinc-600 text-center py-4 italic">No components match search criteria.</p>
           ) : (
-            components.map((comp: any, idx: number) => {
+            filteredComponents.map(({ comp, originalIdx }: any) => {
               if (!comp || !comp.id) return null
               const isSelected = selectedUnit === comp.id
               const type = String(comp.type || '').toLowerCase()
@@ -908,7 +1027,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
               const compDiagnostics = diagnostics.filter(d => {
                 const path = d.path;
                 if (!path) return false;
-                return path === `system.components[${idx}]` || path.startsWith(`system.components[${idx}].`);
+                return path === `system.components[${originalIdx}]` || path.startsWith(`system.components[${originalIdx}].`);
               })
               const compErrors = compDiagnostics.filter(d => d.severity === "error")
               const compWarnings = compDiagnostics.filter(d => d.severity === "warning")
@@ -937,7 +1056,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
 
               return (
                 <button
-                  key={comp.id + '-' + idx}
+                  key={comp.id + '-' + originalIdx}
                   onClick={() => setSelectedUnit && setSelectedUnit(comp.id)}
                   className={`w-full flex items-center justify-between py-2 px-2 hover:bg-zinc-900/40 rounded transition-colors text-left ${isSelected ? 'bg-indigo-500/10 text-indigo-300 border-l-2 border-indigo-500' : 'text-zinc-400'}`}
                 >

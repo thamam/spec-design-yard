@@ -74,4 +74,71 @@ describe('Workspace Metrics Tab Feature', () => {
     const infoIndicator = screen.getAllByText(/Info/i)
     expect(infoIndicator.length).toBeGreaterThan(0)
   })
+
+  test('searching for components by text filters the component directory', () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Initially, inbox and digest_stage are in the list
+    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /digest_stage/i })).toBeInTheDocument()
+
+    // Find search input
+    const searchInput = screen.getByPlaceholderText(/Search components.../i)
+    expect(searchInput).toBeInTheDocument()
+
+    // Type "inbox" in search input
+    fireEvent.change(searchInput, { target: { value: 'inbox' } })
+
+    // Only inbox should be shown now
+    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
+  })
+
+  test('filtering components by type filters the component directory', () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Initially, inbox (Store) and digest_stage (Stage) are visible
+    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /digest_stage/i })).toBeInTheDocument()
+
+    // Find type filter select
+    const typeSelect = screen.getByRole('combobox', { name: /Filter by Type/i })
+    expect(typeSelect).toBeInTheDocument()
+
+    // Select "Store" type
+    fireEvent.change(typeSelect, { target: { value: 'store' } })
+
+    // Store should be visible, stage should be hidden
+    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
+  })
+
+  test('filtering components by issue severity filters the component directory', () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Find severity filter select
+    const severitySelect = screen.getByRole('combobox', { name: /Filter by Issue/i })
+    expect(severitySelect).toBeInTheDocument()
+
+    // Initially there are info-level issues for missing descriptions (e.g., in inbox)
+    // Select "Info" severity
+    fireEvent.change(severitySelect, { target: { value: 'info' } })
+
+    // Inbox has missing-metadata-description which is an Info issue
+    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    
+    // Check for "Error" selection. Since there are no errors in the initial spec,
+    // selecting "error" should result in an empty or nearly empty list (excluding components with no error)
+    fireEvent.change(severitySelect, { target: { value: 'error' } })
+    expect(screen.queryByRole('button', { name: /inbox/i })).not.toBeInTheDocument()
+  })
 })
