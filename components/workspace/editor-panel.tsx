@@ -280,9 +280,19 @@ interface FocusTabProps {
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
+  diagnostics?: Diagnostic[]
+  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
 }
 
-function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelectedUnit }: FocusTabProps) {
+function FocusTab({
+  specText,
+  setSpecText,
+  parsedSpec,
+  selectedUnit,
+  setSelectedUnit,
+  diagnostics = [],
+  onQuickFix,
+}: FocusTabProps) {
   const getSelectedUnitSpec = () => {
     if (!selectedUnit || !parsedSpec) return "Select a component on the diagram to inspect its isolated spec."
     try {
@@ -297,6 +307,48 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
   }
 
   const comp = parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
+
+  const compIdx = useMemo(() => {
+    if (!parsedSpec?.system?.components || !selectedUnit) return -1
+    return parsedSpec.system.components.findIndex((c: any) => c && c.id === selectedUnit)
+  }, [parsedSpec, selectedUnit])
+
+  const compDiagnostics = useMemo(() => {
+    if (compIdx === -1 || !diagnostics) return []
+    return diagnostics.filter(d => {
+      const path = d.path
+      if (!path) return false
+      return path === `system.components[${compIdx}]` || path.startsWith(`system.components[${compIdx}].`)
+    })
+  }, [diagnostics, compIdx])
+
+  const handleApplySingleFix = (d: Diagnostic) => {
+    if (!onQuickFix || !d.path || !d.code) return
+    let fixType = d.code
+    let extraData: any = undefined
+
+    if (d.code === "empty-system-name") {
+      fixType = "missing-system-name"
+    } else if (d.code === "invalid-metadata-version") {
+      fixType = "set-default-version"
+    } else if (d.code === "unrecognized-type") {
+      extraData = { type: "Stage" }
+    } else if (d.code === "disconnected-component") {
+      fixType = "delete-component"
+    } else if (d.code === "unreachable-component") {
+      fixType = "connect-from-gateway"
+    } else if (d.code === "gateway-to-store" || d.code === "store-to-store") {
+      fixType = "insert-stage"
+    } else if (d.code === "sink-stage-brick") {
+      fixType = "connect-to-store"
+    } else if (d.code === "empty-gateway") {
+      fixType = "connect-to-stage"
+    } else if (d.code === "unused-store") {
+      fixType = "connect-to-store"
+    }
+
+    onQuickFix(d.path, fixType, extraData)
+  }
 
   // 1. Local state for form fields to guarantee zero-lag typing
   const [formState, setFormState] = useState<Record<string, string>>({})
@@ -540,6 +592,43 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
               </button>
             </div>
           </div>
+
+          {/* Component Diagnostics Panel */}
+          {compDiagnostics.length > 0 && (
+            <div data-testid="focus-diagnostics-container" className="border border-amber-500/30 bg-amber-500/5 p-4 rounded-xl flex flex-col gap-2 shrink-0">
+              <h3 className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wide">
+                <span>⚠️</span>
+                Validation Issues ({compDiagnostics.length})
+              </h3>
+              <div className="flex flex-col gap-2">
+                {compDiagnostics.map((d, idx) => {
+                  const isFixable = d.code && d.path && FIXABLE_DIAGNOSTIC_CODES.has(d.code)
+                  return (
+                    <div key={idx} className="flex items-start justify-between gap-4 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900/60 text-xs">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-zinc-300">{d.message}</span>
+                        {d.path && (
+                          <span className="text-[9px] text-zinc-500 font-mono">
+                            {d.path}
+                          </span>
+                        )}
+                      </div>
+                      {isFixable && onQuickFix && (
+                        <button
+                          type="button"
+                          data-testid={`focus-quick-fix-${d.code}`}
+                          onClick={() => handleApplySingleFix(d)}
+                          className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider bg-amber-600 hover:bg-amber-500 text-white rounded shadow transition-colors active:scale-95 shrink-0"
+                        >
+                          Quick-Fix
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Form Editor Panel */}
           <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
@@ -1437,7 +1526,15 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <FocusTab specText={specText} setSpecText={setSpecText} parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
+        <FocusTab
+          specText={specText}
+          setSpecText={setSpecText}
+          parsedSpec={parsedSpec}
+          selectedUnit={selectedUnit}
+          setSelectedUnit={setSelectedUnit}
+          diagnostics={diagnostics}
+          onQuickFix={handleQuickFix}
+        />
       </div>
 
       <div
