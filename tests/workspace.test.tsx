@@ -308,4 +308,33 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(rect).toBeDefined()
     expect(rect.id).toBe('inbox')
   })
+
+  test('FocusTab property editor updates spec text correctly', () => {
+    render(<Workspace />)
+    
+    // Switch to Metrics Tab to select the component from the list
+    const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabBtn)
+    
+    // Select inbox component via clicking its button in the directory
+    const inboxBtn = screen.getByRole('button', { name: /inbox/i })
+    fireEvent.click(inboxBtn)
+    
+    // Now switch to Focus Tab
+    const focusTabBtn = screen.getByRole('tab', { name: /Focus/i })
+    fireEvent.click(focusTabBtn)
+    
+    // Check that interactive form fields are in the document
+    const nameInput = screen.getByTestId('focus-name-input') as HTMLInputElement
+    expect(nameInput).toBeInTheDocument()
+    expect(nameInput.value).toBe('inbox/')
+    
+    // Change Name input value
+    fireEvent.change(nameInput, { target: { value: 'incoming_box' } })
+    
+    // Verify that the Workspace state and textarea are updated!
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('name: incoming_box')
+    expect(textarea.value).not.toContain('name: inbox/')
+  })
 })
