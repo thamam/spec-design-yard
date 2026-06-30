@@ -297,6 +297,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
 
+      if (!('label' in conn) || !conn.label || String(conn.label).trim() === "") {
+        diagnostics.push({
+          severity: "info",
+          message: `Connection from "${compId}" to "${target}" lacks a label. Consider adding a descriptive label for architectural documentation.`,
+          path: connPath,
+          code: "missing-connection-label",
+        })
+      }
+
       // Check unrecognized connection keys
       const allowedConnectionKeys = new Set(["target", "label"])
       Object.keys(conn).forEach((key) => {

@@ -1145,7 +1145,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "circular-dependency",
   "invalid-metadata-color",
   "invalid-connection-label",
-  "unused-store"
+  "unused-store",
+  "missing-connection-label"
 ])
 
 export function EditorPanel({
@@ -1723,6 +1724,22 @@ export function EditorPanel({
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
                         >
                           Set to Zinc
+                        </button>
+                      )}
+                      {d.code === "invalid-connection-label" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "invalid-connection-label")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Convert Label to String
+                        </button>
+                      )}
+                      {d.code === "missing-connection-label" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "missing-connection-label")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                        >
+                          Add Label
                         </button>
                       )}
                       {d.code === "missing-metadata-description" && (

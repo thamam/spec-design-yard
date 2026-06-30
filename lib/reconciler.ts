@@ -416,7 +416,33 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       } else if (fixType === "component-overlap") {
         const currentX = doc.getIn(parts) as number
         if (typeof currentX === "number" && Number.isFinite(currentX)) {
-          doc.setIn(parts, currentX + 100)
+          const compsNode = doc.getIn(["system", "components"]) as any
+          const existingCoords = new Set<string>()
+          if (compsNode && compsNode.items) {
+            compsNode.items.forEach((cNode: any) => {
+              if (cNode && typeof cNode.get === "function") {
+                const cx = cNode.get("x")
+                const cy = cNode.get("y")
+                if (typeof cx === "number" && typeof cy === "number") {
+                  existingCoords.add(`${Math.round(cx)},${Math.round(cy)}`)
+                }
+              }
+            })
+          }
+          const compYPath = parts.slice(0, -1).concat(["y"])
+          const currentY = (doc.getIn(compYPath) as number) || 160
+
+          let newX = currentX + 100
+          while (existingCoords.has(`${Math.round(newX)},${Math.round(currentY)}`)) {
+            newX += 100
+          }
+          doc.setIn(parts, Math.round(newX))
+          modified = true
+        }
+      } else if (fixType === "missing-connection-label") {
+        const connNode = doc.getIn(parts) as any
+        if (connNode && typeof connNode.set === "function") {
+          connNode.set("label", "[Add Label]")
           modified = true
         }
       } else if (fixType === "missing-metadata-description") {
