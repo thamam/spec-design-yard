@@ -433,6 +433,35 @@ export function ExcalidrawCanvas({
   const addedIdsRef = useRef<Set<string>>(new Set())
   const connectedArrowsRef = useRef<Set<string>>(new Set())
   const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
+  const lastSelectedUnitRef = useRef<string | null>(null)
+
+  // Centering and selecting component on Canvas when selectedUnit changes from outside
+  useEffect(() => {
+    if (excalidrawAPI && selectedUnit && elements.length > 0) {
+      if (lastSelectedUnitRef.current === selectedUnit) return
+      lastSelectedUnitRef.current = selectedUnit
+
+      const matchedElement = elements.find((el) => el.id === selectedUnit)
+      if (matchedElement) {
+        try {
+          excalidrawAPI.updateScene({
+            appState: {
+              selectedElementIds: { [selectedUnit]: true }
+            }
+          })
+          excalidrawAPI.scrollToContent([matchedElement], {
+            fitToViewport: false,
+            viewportZoomFactor: 0.9,
+            animate: true
+          })
+        } catch (e) {
+          console.error("Failed to center on selected unit: ", e)
+        }
+      }
+    } else if (excalidrawAPI && !selectedUnit) {
+      lastSelectedUnitRef.current = null
+    }
+  }, [excalidrawAPI, selectedUnit, elements])
 
   // Synchronize deleted, added, and connected IDs ref with current elements
   useEffect(() => {
@@ -547,6 +576,7 @@ export function ExcalidrawCanvas({
                 parsedSpec?.system?.components?.some((c: any) => c.id === id)
               )
               if (matchedId && matchedId !== selectedUnit) {
+                lastSelectedUnitRef.current = matchedId
                 setSelectedUnit(matchedId)
               }
             }

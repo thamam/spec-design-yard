@@ -293,4 +293,19 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
 
     expect(textarea.value).toContain('version: v0.1.0')
   })
+
+  test('ExcalidrawCanvas compilation creates correct elements and assigns rectangle IDs', () => {
+    const mockSpec = {
+      system: {
+        name: 'Test Canvas Spec',
+        components: [
+          { id: 'inbox', type: 'Store', name: 'inbox/' }
+        ]
+      }
+    }
+    const elements = compileSpecToExcalidrawElements(mockSpec)
+    const rect = elements.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    expect(rect).toBeDefined()
+    expect(rect.id).toBe('inbox')
+  })
 })
