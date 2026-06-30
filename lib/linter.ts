@@ -521,6 +521,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
     const compType = typeMap[compId]
 
+    if (compType === "store" && !incomingSet.has(compId)) {
+      diagnostics.push({
+        severity: "warning",
+        message: `Store component "${compId}" has no incoming connections. Stores should act as state repositories and receive data flow.`,
+        path: `system.components[${compIdx}].type`,
+        code: "unused-store",
+      })
+    }
+
     if (compType === "gateway" && outgoingCount[compId] === 0) {
       diagnostics.push({
         severity: "warning",

@@ -809,7 +809,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "empty-gateway",
   "circular-dependency",
   "invalid-metadata-color",
-  "invalid-connection-label"
+  "invalid-connection-label",
+  "unused-store"
 ])
 
 export function EditorPanel({
@@ -902,6 +903,8 @@ export function EditorPanel({
         fixType = "connect-to-store"
       } else if (d.code === "empty-gateway") {
         fixType = "connect-to-stage"
+      } else if (d.code === "unused-store") {
+        fixType = "connect-to-store"
       }
 
       return {
@@ -1264,12 +1267,48 @@ export function EditorPanel({
                         </button>
                       )}
                       {d.code === "disconnected-component" && (
-                        <button
-                          onClick={() => handleQuickFix(d.path!, "delete-component")}
-                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
-                        >
-                          Delete Component
-                        </button>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "delete-component")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                          >
+                            Delete Component
+                          </button>
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "connect-from-gateway")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
+                          >
+                            Connect from Gateway
+                          </button>
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "connect-to-store")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                          >
+                            Connect to Store
+                          </button>
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "connect-to-stage")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 transition-all"
+                          >
+                            Connect to Stage
+                          </button>
+                        </div>
+                      )}
+                      {d.code === "unused-store" && (
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "delete-component")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all"
+                          >
+                            Delete Store
+                          </button>
+                          <button
+                            onClick={() => handleQuickFix(d.path!, "connect-to-store")}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
+                          >
+                            Connect Node to Store
+                          </button>
+                        </div>
                       )}
                       {d.code === "unreachable-component" && (
                         <div className="flex gap-1.5 flex-wrap">

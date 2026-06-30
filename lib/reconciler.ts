@@ -455,43 +455,105 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           modified = true
         }
       } else if (fixType === "connect-to-store") {
-        const compNode = doc.getIn(parts) as any
+        let compNode = doc.getIn(parts) as any
+        if (parts[parts.length - 1] === "type") {
+          compNode = doc.getIn(parts.slice(0, -1)) as any
+        }
         if (compNode && typeof compNode.get === "function") {
           const compId = compNode.get("id")
+          const compType = String(compNode.get("type") || "").toLowerCase()
           const compsNode = doc.getIn(["system", "components"]) as any
-          let targetStoreId = ""
-          if (compsNode && compsNode.items) {
-            for (const c of compsNode.items) {
-              if (c && typeof c.get === "function") {
-                const id = c.get("id")
-                const type = String(c.get("type") || "").toLowerCase()
-                if (type === "store" && id !== compId) {
-                  targetStoreId = id
-                  break
+
+          if (compType === "store") {
+            // The component is a Store. We want to connect some Stage/Brick TO this Store.
+            let candidateNode: any = null
+            if (compsNode && compsNode.items) {
+              // Priority 1: A Stage/Brick with no connections
+              for (const c of compsNode.items) {
+                if (c && typeof c.get === "function" && c.get("id") !== compId) {
+                  const type = String(c.get("type") || "").toLowerCase()
+                  if (type === "stage" || type === "brick") {
+                    const conns = c.get("connections")
+                    if (!conns || (conns.items && conns.items.length === 0)) {
+                      candidateNode = c
+                      break
+                    }
+                  }
+                }
+              }
+              // Priority 2: Any Stage/Brick
+              if (!candidateNode) {
+                for (const c of compsNode.items) {
+                  if (c && typeof c.get === "function" && c.get("id") !== compId) {
+                    const type = String(c.get("type") || "").toLowerCase()
+                    if (type === "stage" || type === "brick") {
+                      candidateNode = c
+                      break
+                    }
+                  }
                 }
               }
             }
-          }
-          if (targetStoreId) {
-            let conns = compNode.get("connections") as any
-            if (!conns || typeof conns.get !== "function") {
-              compNode.set("connections", doc.createNode([]))
-              conns = compNode.get("connections")
-            }
-            let connExists = false
-            if (conns && conns.items) {
-              connExists = conns.items.some((connNode: any) => {
-                if (connNode && typeof connNode.get === "function") {
-                  return connNode.get("target") === targetStoreId
+
+            if (candidateNode) {
+              let conns = candidateNode.get("connections") as any
+              if (!conns || typeof conns.get !== "function") {
+                candidateNode.set("connections", doc.createNode([]))
+                conns = candidateNode.get("connections")
+              }
+              let connExists = false
+              if (conns && conns.items) {
+                connExists = conns.items.some((connNode: any) => {
+                  if (connNode && typeof connNode.get === "function") {
+                    return connNode.get("target") === compId
+                  }
+                  return false
+                })
+              }
+              if (!connExists) {
+                const newConn = doc.createNode({ target: compId })
+                if (conns && typeof conns.add === "function") {
+                  conns.add(newConn)
+                  modified = true
                 }
-                return false
-              })
+              }
             }
-            if (!connExists) {
-              const newConn = doc.createNode({ target: targetStoreId })
-              if (conns && typeof conns.add === "function") {
-                conns.add(newConn)
-                modified = true
+          } else {
+            // Original logic: component is Stage/Brick. Connect IT to some Store.
+            let targetStoreId = ""
+            if (compsNode && compsNode.items) {
+              for (const c of compsNode.items) {
+                if (c && typeof c.get === "function") {
+                  const id = c.get("id")
+                  const type = String(c.get("type") || "").toLowerCase()
+                  if (type === "store" && id !== compId) {
+                    targetStoreId = id
+                    break
+                  }
+                }
+              }
+            }
+            if (targetStoreId) {
+              let conns = compNode.get("connections") as any
+              if (!conns || typeof conns.get !== "function") {
+                compNode.set("connections", doc.createNode([]))
+                conns = compNode.get("connections")
+              }
+              let connExists = false
+              if (conns && conns.items) {
+                connExists = conns.items.some((connNode: any) => {
+                  if (connNode && typeof connNode.get === "function") {
+                    return connNode.get("target") === targetStoreId
+                  }
+                  return false
+                })
+              }
+              if (!connExists) {
+                const newConn = doc.createNode({ target: targetStoreId })
+                if (conns && typeof conns.add === "function") {
+                  conns.add(newConn)
+                  modified = true
+                }
               }
             }
           }
