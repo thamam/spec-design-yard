@@ -18,7 +18,11 @@ export function parsePath(path: string): (string | number)[] {
   let match
   while ((match = regex.exec(path)) !== null) {
     if (match[1] !== undefined) {
-      parts.push(match[1])
+      const key = match[1]
+      // Security: Prevent Prototype Pollution
+      if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+        parts.push(key)
+      }
     } else if (match[2] !== undefined) {
       parts.push(parseInt(match[2], 10))
     }
@@ -262,11 +266,15 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           if (!compNode || typeof compNode.get !== 'function') return
           const compId = compNode.get('id')
           if (compId === id) {
-            const parts = parsePath(path)
-            const currentVal = compNode.getIn(parts)
-            if (currentVal !== value) {
-              compNode.setIn(parts, value)
-              modified = true
+            try {
+              const parts = parsePath(path)
+              const currentVal = compNode.getIn(parts)
+              if (currentVal !== value) {
+                compNode.setIn(parts, value)
+                modified = true
+              }
+            } catch (e) {
+              console.warn(`Failed to safely set property ${path} on component ${id}:`, e)
             }
           }
         })

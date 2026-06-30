@@ -298,15 +298,88 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
 
   const comp = parsedSpec?.system?.components?.find((c: any) => c.id === selectedUnit)
 
-  const handleFieldChange = (path: string, value: any) => {
-    if (!selectedUnit) return
-    const updated = reconcileSpec(specText, {
-      type: "update-property",
-      payload: { id: selectedUnit, path, value }
-    })
-    if (updated !== specText) {
-      setSpecText(updated)
+  // 1. Local state for form fields to guarantee zero-lag typing
+  const [formState, setFormState] = useState<Record<string, string>>({})
+  const [prevUnit, setPrevUnit] = useState<string | null>(null)
+
+  // 2. Reset form state on selection change
+  if (selectedUnit !== prevUnit) {
+    setPrevUnit(selectedUnit)
+    if (selectedUnit && comp) {
+      setFormState({
+        name: comp.name || "",
+        type: comp.type || "Stage",
+        owner: comp.metadata?.owner || "",
+        status: comp.metadata?.status || "draft",
+        color: comp.metadata?.color || "zinc",
+        version: comp.metadata?.version || "",
+        description: comp.metadata?.description || "",
+      })
+    } else {
+      setFormState({})
     }
+  }
+
+  // 3. Keep form state synchronized with external YAML updates, but only for un-focused elements to prevent cursor jumps
+  useEffect(() => {
+    if (selectedUnit && comp) {
+      setFormState(prev => {
+        const activeEl = typeof document !== "undefined" ? document.activeElement : null
+        const activeTestId = activeEl?.getAttribute("data-testid")
+        
+        const nextState = { ...prev }
+        if (activeTestId !== "focus-name-input") nextState.name = comp.name || ""
+        if (activeTestId !== "focus-type-select") nextState.type = comp.type || "Stage"
+        if (activeTestId !== "focus-owner-input") nextState.owner = comp.metadata?.owner || ""
+        if (activeTestId !== "focus-status-select") nextState.status = comp.metadata?.status || "draft"
+        if (activeTestId !== "focus-color-select") nextState.color = comp.metadata?.color || "zinc"
+        if (activeTestId !== "focus-version-input") nextState.version = comp.metadata?.version || ""
+        if (activeTestId !== "focus-description-textarea") nextState.description = comp.metadata?.description || ""
+        return nextState
+      })
+    }
+  }, [comp, selectedUnit])
+
+  // 4. Debounce AST reconciliation / parent state updates
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [selectedUnit])
+
+  const handleFieldChange = (path: string, value: any) => {
+    // Instantly update local state so character insertion is buttery-smooth (60fps)
+    setFormState(prev => {
+      const next = { ...prev }
+      if (path === "name") next.name = value
+      else if (path === "type") next.type = value
+      else if (path === "metadata.owner") next.owner = value
+      else if (path === "metadata.status") next.status = value
+      else if (path === "metadata.color") next.color = value
+      else if (path === "metadata.version") next.version = value
+      else if (path === "metadata.description") next.description = value
+      return next
+    })
+
+    // Debounce the heavier parent AST/Excalidraw updates (200ms)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      if (!selectedUnit) return
+      const updated = reconcileSpec(specText, {
+        type: "update-property",
+        payload: { id: selectedUnit, path, value }
+      })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
+    }, 200)
   }
 
   return (
@@ -339,7 +412,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <input
                   type="text"
                   data-testid="focus-name-input"
-                  value={comp.name || ""}
+                  value={formState.name || ""}
                   onChange={(e) => handleFieldChange("name", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. My Processing Stage"
@@ -351,7 +424,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component Type</label>
                 <select
                   data-testid="focus-type-select"
-                  value={comp.type || "Stage"}
+                  value={formState.type || "Stage"}
                   onChange={(e) => handleFieldChange("type", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
@@ -368,7 +441,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <input
                   type="text"
                   data-testid="focus-owner-input"
-                  value={comp.metadata?.owner || ""}
+                  value={formState.owner || ""}
                   onChange={(e) => handleFieldChange("metadata.owner", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. tom"
@@ -380,7 +453,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Deployment Status</label>
                 <select
                   data-testid="focus-status-select"
-                  value={comp.metadata?.status || "draft"}
+                  value={formState.status || "draft"}
                   onChange={(e) => handleFieldChange("metadata.status", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
@@ -395,7 +468,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Theme / Color</label>
                 <select
                   data-testid="focus-color-select"
-                  value={comp.metadata?.color || "zinc"}
+                  value={formState.color || "zinc"}
                   onChange={(e) => handleFieldChange("metadata.color", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
                 >
@@ -415,7 +488,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 <input
                   type="text"
                   data-testid="focus-version-input"
-                  value={comp.metadata?.version || ""}
+                  value={formState.version || ""}
                   onChange={(e) => handleFieldChange("metadata.version", e.target.value)}
                   className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. 1.0.0"
@@ -428,7 +501,7 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
               <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Architectural Description</label>
               <textarea
                 data-testid="focus-description-textarea"
-                value={comp.metadata?.description || ""}
+                value={formState.description || ""}
                 onChange={(e) => handleFieldChange("metadata.description", e.target.value)}
                 rows={2}
                 className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md focus:outline-none transition-all resize-none font-mono"
