@@ -302,6 +302,11 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
   const [formState, setFormState] = useState<Record<string, string>>({})
   const [prevUnit, setPrevUnit] = useState<string | null>(null)
 
+  // Outgoing connection states
+  const [newConnTarget, setNewConnTarget] = useState("")
+  const [newConnLabel, setNewConnLabel] = useState("")
+  const [localConnectionLabels, setLocalConnectionLabels] = useState<Record<string, string>>({})
+
   // 2. Reset form state on selection change
   if (selectedUnit !== prevUnit) {
     setPrevUnit(selectedUnit)
@@ -315,8 +320,14 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
         version: comp.metadata?.version || "",
         description: comp.metadata?.description || "",
       })
+      setNewConnTarget("")
+      setNewConnLabel("")
+      setLocalConnectionLabels({})
     } else {
       setFormState({})
+      setNewConnTarget("")
+      setNewConnLabel("")
+      setLocalConnectionLabels({})
     }
   }
 
@@ -339,6 +350,32 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
       })
     }
   }, [comp, selectedUnit])
+
+  // Synchronize connection labels from external YAML updates dynamically
+  useEffect(() => {
+    if (comp) {
+      const conns = Array.isArray(comp.connections) ? comp.connections : []
+      const newLabels: Record<string, string> = {}
+      conns.forEach((c: any) => {
+        if (c && typeof c === "object" && typeof c.target === "string") {
+          newLabels[c.target] = c.label || ""
+        } else if (typeof c === "string") {
+          newLabels[c] = ""
+        }
+      })
+      setLocalConnectionLabels(prev => {
+        const next = { ...prev }
+        Object.keys(newLabels).forEach(target => {
+          const activeEl = typeof document !== "undefined" ? document.activeElement : null
+          const activeTestId = activeEl?.getAttribute("data-testid")
+          if (activeTestId !== `focus-conn-label-input-${target}`) {
+            next[target] = newLabels[target]
+          }
+        })
+        return next
+      })
+    }
+  }, [comp])
 
   // 4. Debounce AST reconciliation / parent state updates
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -375,6 +412,67 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
       const updated = reconcileSpec(specText, {
         type: "update-property",
         payload: { id: selectedUnit, path, value }
+      })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
+    }, 200)
+  }
+
+  const connectionsList = useMemo(() => {
+    const conns = Array.isArray(comp?.connections) ? comp.connections : []
+    return conns.map((c: any) => {
+      if (typeof c === "string") {
+        return { target: c, label: "" }
+      }
+      if (c && typeof c === "object" && typeof c.target === "string") {
+        return { target: c.target, label: c.label || "" }
+      }
+      return null
+    }).filter(Boolean) as { target: string, label: string }[]
+  }, [comp?.connections])
+
+  const handleDisconnect = (target: string) => {
+    if (!selectedUnit) return
+    const updated = reconcileSpec(specText, {
+      type: "disconnect",
+      payload: { source: selectedUnit, target }
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+    }
+  }
+
+  const handleAddConnection = () => {
+    if (!selectedUnit || !newConnTarget) return
+    let updated = reconcileSpec(specText, {
+      type: "connect",
+      payload: { source: selectedUnit, target: newConnTarget }
+    })
+    if (newConnLabel.trim()) {
+      updated = reconcileSpec(updated, {
+        type: "connection-label",
+        payload: { source: selectedUnit, target: newConnTarget, label: newConnLabel.trim() }
+      })
+    }
+    if (updated !== specText) {
+      setSpecText(updated)
+      setNewConnTarget("")
+      setNewConnLabel("")
+    }
+  }
+
+  const handleConnectionLabelChange = (target: string, value: string) => {
+    setLocalConnectionLabels(prev => ({ ...prev, [target]: value }))
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      if (!selectedUnit) return
+      const updated = reconcileSpec(specText, {
+        type: "connection-label",
+        payload: { source: selectedUnit, target, label: value }
       })
       if (updated !== specText) {
         setSpecText(updated)
@@ -507,6 +605,86 @@ function FocusTab({ specText, setSpecText, parsedSpec, selectedUnit, setSelected
                 className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md focus:outline-none transition-all resize-none font-mono"
                 placeholder="Briefly describe what this component does..."
               />
+            </div>
+          </div>
+
+          {/* Outgoing Connections Manager */}
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
+              Outgoing Connections
+            </h3>
+
+            {/* List of existing connections */}
+            {connectionsList.length > 0 ? (
+              <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
+                {connectionsList.map((conn) => (
+                  <div key={conn.target} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
+                    <button
+                      onClick={() => setSelectedUnit(conn.target)}
+                      className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
+                      title={`Focus on ${conn.target}`}
+                    >
+                      {conn.target}
+                    </button>
+                    <input
+                      type="text"
+                      data-testid={`focus-conn-label-input-${conn.target}`}
+                      value={localConnectionLabels[conn.target] || ""}
+                      onChange={(e) => handleConnectionLabelChange(conn.target, e.target.value)}
+                      placeholder="Add connection label..."
+                      className="flex-1 bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
+                    />
+                    <button
+                      onClick={() => handleDisconnect(conn.target)}
+                      className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-zinc-500 italic">No outgoing connections from this component.</p>
+            )}
+
+            {/* Add connection controls */}
+            <div className="border-t border-zinc-900/60 pt-3 flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Add Connection</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  data-testid="add-connection-select"
+                  value={newConnTarget}
+                  onChange={(e) => setNewConnTarget(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all cursor-pointer flex-1"
+                >
+                  <option value="">Select target...</option>
+                  {(parsedSpec?.system?.components || [])
+                    .map((c: any) => c.id)
+                    .filter((id: string) => id !== selectedUnit && !connectionsList.some((nc) => nc.target === id))
+                    .map((id: string) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  type="text"
+                  data-testid="add-connection-label-input"
+                  value={newConnLabel}
+                  onChange={(e) => setNewConnLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  className="bg-zinc-950 border border-zinc-850 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all font-mono flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddConnection}
+                  disabled={!newConnTarget}
+                  className="px-3 py-1.5 rounded text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-850 disabled:text-zinc-600 disabled:border-zinc-900 disabled:cursor-not-allowed text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0"
+                >
+                  Add Connection
+                </button>
+              </div>
             </div>
           </div>
 
