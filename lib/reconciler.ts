@@ -363,6 +363,32 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       if (fixType === "missing-system-name" || fixType === "empty-system-name") {
         doc.setIn(parts, "unnamed_system")
         modified = true
+      } else if (fixType === "missing-system-metadata") {
+        const sysNode = doc.get("system") as any
+        if (sysNode && typeof sysNode.set === "function") {
+          sysNode.set("metadata", doc.createNode({
+            owner: "architecture-team",
+            description: "System architecture design and component specifications.",
+            version: "1.0.0",
+            status: "draft"
+          }))
+          modified = true
+        }
+      } else if (fixType === "invalid-system-metadata-object") {
+        doc.setIn(parts, doc.createNode({}))
+        modified = true
+      } else if (fixType === "invalid-system-metadata-status") {
+        doc.setIn(parts, "draft")
+        modified = true
+      } else if (fixType === "invalid-system-metadata-version") {
+        doc.setIn(parts, "1.0.0")
+        modified = true
+      } else if (fixType === "placeholder-system-metadata-description" || fixType === "missing-system-metadata-description") {
+        doc.setIn(parts, "System architecture design and component specifications.")
+        modified = true
+      } else if (fixType === "placeholder-system-metadata-owner" || fixType === "missing-system-metadata-owner") {
+        doc.setIn(parts, "architecture-team")
+        modified = true
       } else if (fixType === "missing-component-id") {
         const compNode = doc.getIn(parts) as any
         if (compNode && typeof compNode.set === "function" && typeof compNode.get === "function") {
@@ -403,7 +429,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           connsNode.delete(connIdx)
           modified = true
         }
-      } else if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key" || fixType === "unrecognized-system-key" || fixType === "unrecognized-connection-key") {
+      } else if (fixType === "unrecognized-metadata-key" || fixType === "unrecognized-component-key" || fixType === "unrecognized-system-key" || fixType === "unrecognized-connection-key" || fixType === "unrecognized-system-metadata-key") {
         const parentPath = parts.slice(0, -1)
         const keyToDelete = parts[parts.length - 1] as string
         const parentNode = doc.getIn(parentPath) as any

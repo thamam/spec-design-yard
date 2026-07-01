@@ -31,18 +31,111 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     })
   }
 
-  const allowedSystemKeys = new Set(["name", "components"])
+  const allowedSystemKeys = new Set(["name", "components", "metadata"])
   if (system && typeof system === "object" && !Array.isArray(system)) {
     Object.keys(system).forEach((k) => {
       if (!allowedSystemKeys.has(k)) {
         diagnostics.push({
           severity: "warning",
-          message: `Unrecognized key "${k}" in top-level system. Valid system keys are: name, components.`,
+          message: `Unrecognized key "${k}" in top-level system. Valid system keys are: name, components, metadata.`,
           path: `system.${k}`,
           code: "unrecognized-system-key",
         })
       }
     })
+
+    if ("metadata" in system) {
+      const sysMeta = system.metadata
+      if (!sysMeta || typeof sysMeta !== "object" || Array.isArray(sysMeta)) {
+        diagnostics.push({
+          severity: "error",
+          message: 'System "metadata" must be an object.',
+          path: "system.metadata",
+          code: "invalid-system-metadata-object",
+        })
+      } else {
+        const allowedSysMetaKeys = new Set(["owner", "description", "status", "version"])
+        Object.keys(sysMeta).forEach((k) => {
+          if (!allowedSysMetaKeys.has(k)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Unrecognized metadata key "${k}" in top-level system metadata. Valid system metadata keys are: owner, description, status, version.`,
+              path: `system.metadata.${k}`,
+              code: "unrecognized-system-metadata-key",
+            })
+          }
+        })
+
+        if ("status" in sysMeta) {
+          const statusVal = String(sysMeta.status || "").trim().toLowerCase()
+          const validStatuses = new Set(["draft", "active", "deprecated"])
+          if (!validStatuses.has(statusVal)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Unrecognized system status value "${sysMeta.status}". Valid status values are: draft, active, deprecated.`,
+              path: "system.metadata.status",
+              code: "invalid-system-metadata-status",
+            })
+          }
+        }
+
+        if ("version" in sysMeta) {
+          const versionVal = String(sysMeta.version || "").trim()
+          const semverRegex = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/
+          if (versionVal !== "" && !semverRegex.test(versionVal)) {
+            diagnostics.push({
+              severity: "warning",
+              message: `System metadata version "${sysMeta.version}" does not follow semantic versioning format (e.g. 1.0.0 or v1.2.3).`,
+              path: "system.metadata.version",
+              code: "invalid-system-metadata-version",
+            })
+          }
+        }
+
+        if (!sysMeta.description || String(sysMeta.description).trim() === "") {
+          diagnostics.push({
+            severity: "info",
+            message: "System metadata lacks a description field for architectural documentation.",
+            path: "system.metadata",
+            code: "missing-system-metadata-description",
+          })
+        } else {
+          if (PLACEHOLDER_REGEX.test(String(sysMeta.description).trim())) {
+            diagnostics.push({
+              severity: "warning",
+              message: `System metadata has a placeholder description "${sysMeta.description}". Please provide a meaningful description.`,
+              path: "system.metadata.description",
+              code: "placeholder-system-metadata-description",
+            })
+          }
+        }
+
+        if (!sysMeta.owner || String(sysMeta.owner).trim() === "") {
+          diagnostics.push({
+            severity: "info",
+            message: "System metadata lacks an owner field for architectural documentation.",
+            path: "system.metadata",
+            code: "missing-system-metadata-owner",
+          })
+        } else {
+          if (PLACEHOLDER_REGEX.test(String(sysMeta.owner).trim())) {
+            diagnostics.push({
+              severity: "warning",
+              message: `System metadata has a placeholder owner "${sysMeta.owner}". Please assign a valid owner.`,
+              path: "system.metadata.owner",
+              code: "placeholder-system-metadata-owner",
+            })
+          }
+        }
+      }
+    } else {
+      diagnostics.push({
+        severity: "info",
+        message: "System is missing the metadata block (owner, description, version, status).",
+        path: "system",
+        code: "missing-system-metadata",
+      })
+    }
   }
 
   const components = system.components

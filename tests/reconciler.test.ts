@@ -684,4 +684,83 @@ system:
     expect(updated).toContain('owner: tom') // preserves metadata
     expect(updated).toContain('status: active')
   })
+
+  test('quick-fix missing-system-metadata initializes metadata block', () => {
+    const spec = `system:
+  name: No Meta System
+  components: []
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system',
+        fixType: 'missing-system-metadata'
+      }
+    })
+    expect(updated).toContain('metadata:')
+    expect(updated).toContain('owner: architecture-team')
+    expect(updated).toContain('version: 1.0.0')
+  })
+
+  test('quick-fix invalid system metadata properties', () => {
+    const spec = `system:
+  name: Invalid System
+  metadata:
+    owner: todo
+    description: '[add description]'
+    status: invalid-status
+    version: bad-version
+    unrecognized_sys_meta: value
+  components: []
+`
+    // Test unrecognized key
+    let updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.metadata.unrecognized_sys_meta',
+        fixType: 'unrecognized-system-metadata-key'
+      }
+    })
+    expect(updated).not.toContain('unrecognized_sys_meta:')
+
+    // Test invalid status
+    updated = reconcileSpec(updated, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.metadata.status',
+        fixType: 'invalid-system-metadata-status'
+      }
+    })
+    expect(updated).toContain('status: draft')
+
+    // Test invalid version
+    updated = reconcileSpec(updated, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.metadata.version',
+        fixType: 'invalid-system-metadata-version'
+      }
+    })
+    expect(updated).toContain('version: 1.0.0')
+
+    // Test placeholder/missing description & owner
+    updated = reconcileSpec(updated, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.metadata.description',
+        role: 'user', // wait, extraData is empty
+        fixType: 'placeholder-system-metadata-description'
+      }
+    })
+    expect(updated).toContain('System architecture design and component specifications.')
+
+    updated = reconcileSpec(updated, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.metadata.owner',
+        fixType: 'placeholder-system-metadata-owner'
+      }
+    })
+    expect(updated).toContain('owner: architecture-team')
+  })
 })

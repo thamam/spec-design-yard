@@ -1049,6 +1049,7 @@ interface MetricsTabProps {
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
   diagnostics?: Diagnostic[]
+  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
 }
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
@@ -1063,10 +1064,21 @@ interface ComponentWithIndex {
   originalIdx: number
 }
 
-function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS }: MetricsTabProps) {
+function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS, onQuickFix }: MetricsTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
+
+  const systemMetadata = parsedSpec?.system?.metadata
+  const hasSystemMetadata = !!systemMetadata && typeof systemMetadata === "object" && !Array.isArray(systemMetadata)
+
+  const sysMetadataDiagnostics = useMemo(() => {
+    if (!diagnostics) return []
+    return diagnostics.filter((d) => {
+      const p = d.path || ""
+      return p === "system" || p === "system.metadata" || p.startsWith("system.metadata.")
+    })
+  }, [diagnostics])
 
   // 1. Pre-group diagnostics by component index in O(D) time
   const diagnosticsByComponent = useMemo(() => {
@@ -1228,6 +1240,91 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             </span>
           </div>
         </div>
+      </div>
+
+      {/* System Metadata Card */}
+      <div data-testid="system-metadata-card" className="border border-zinc-900 bg-zinc-950/40 p-3.5 rounded-lg flex flex-col gap-3 shrink-0">
+        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-1.5">
+          <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">System Specification Metadata</h4>
+          {sysMetadataDiagnostics.length > 0 && (
+            <span className="text-[10px] text-amber-500 font-mono font-bold flex items-center gap-1">
+              ⚠️ {sysMetadataDiagnostics.length} Issue{sysMetadataDiagnostics.length > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
+        {!hasSystemMetadata ? (
+          <div className="flex flex-col items-center justify-center p-4 bg-zinc-950/20 border border-dashed border-zinc-800 rounded-lg text-center gap-2">
+            <p className="text-xs text-zinc-500 italic max-w-sm">
+              System architecture metadata (owner, description, version, status) is not initialized. Add metadata to compile world-class documentation.
+            </p>
+            {onQuickFix && (
+              <button
+                type="button"
+                onClick={() => onQuickFix("system", "missing-system-metadata")}
+                className="mt-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold uppercase tracking-wide transition-colors active:scale-95 cursor-pointer"
+              >
+                Initialize System Metadata
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5 text-xs font-mono">
+            {/* Version & Status line */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Version:</span>
+                <span className="text-zinc-200 font-bold">{systemMetadata.version || <span className="text-zinc-600 italic">not set</span>}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Status:</span>
+                <span className={`font-bold capitalize ${
+                  String(systemMetadata.status).toLowerCase() === "active" ? "text-emerald-400" :
+                  String(systemMetadata.status).toLowerCase() === "deprecated" ? "text-rose-400" :
+                  "text-amber-400"
+                }`}>{systemMetadata.status || "draft"}</span>
+              </div>
+            </div>
+
+            {/* Owner field */}
+            <div className="flex flex-col gap-0.5 border-t border-zinc-900/40 pt-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Owner:</span>
+              <span className="text-zinc-200 font-bold">{systemMetadata.owner || <span className="text-zinc-600 italic">not set</span>}</span>
+            </div>
+
+            {/* Description field */}
+            <div className="flex flex-col gap-0.5 border-t border-zinc-900/40 pt-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Description:</span>
+              <p className="text-zinc-300 font-sans leading-relaxed text-[11px] whitespace-pre-wrap">{systemMetadata.description || <span className="text-zinc-600 italic">No description provided.</span>}</p>
+            </div>
+
+            {/* Individual Diagnostic Alerts */}
+            {sysMetadataDiagnostics.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2 bg-zinc-950/60 p-2.5 rounded border border-zinc-900">
+                <span className="text-[9px] text-zinc-500 uppercase font-sans font-bold">Documentation Issues & Warnings:</span>
+                <div className="flex flex-col gap-1.5 max-h-24 overflow-y-auto">
+                  {sysMetadataDiagnostics.map((d, i) => (
+                    <div key={i} className="flex items-start justify-between gap-2 border-b border-zinc-900/50 pb-1.5 last:border-0 last:pb-0">
+                      <div className="flex items-start gap-1 text-[11px] text-amber-400 font-sans leading-relaxed">
+                        <span className="shrink-0">{d.severity === "error" ? "❌" : d.severity === "warning" ? "⚠️" : "ℹ️"}</span>
+                        <span>{d.message}</span>
+                      </div>
+                      {onQuickFix && d.path && d.code && (
+                        <button
+                          type="button"
+                          onClick={() => onQuickFix(d.path!, d.code!)}
+                          className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 hover:text-white text-[9px] text-zinc-400 uppercase tracking-wide font-sans rounded transition-colors cursor-pointer shrink-0"
+                        >
+                          Fix
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Grid of stats */}
@@ -1466,7 +1563,16 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "circular-dependency",
   "invalid-metadata-color",
   "invalid-connection-label",
-  "unused-store"
+  "unused-store",
+  "missing-system-metadata",
+  "invalid-system-metadata-object",
+  "invalid-system-metadata-status",
+  "invalid-system-metadata-version",
+  "placeholder-system-metadata-description",
+  "missing-system-metadata-description",
+  "placeholder-system-metadata-owner",
+  "missing-system-metadata-owner",
+  "unrecognized-system-metadata-key"
 ])
 
 export function EditorPanel({
@@ -1744,7 +1850,7 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <MetricsTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} diagnostics={diagnostics} />
+        <MetricsTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} diagnostics={diagnostics} onQuickFix={handleQuickFix} />
       </div>
 
       {/* Diagnostics Panel */}

@@ -837,5 +837,68 @@ describe('Advanced Linter Features', () => {
       expect(descPlaceholders[0].severity).toBe('warning')
       expect(ownerPlaceholders[0].severity).toBe('warning')
     })
+
+    test('validates system-level metadata and placeholders', () => {
+      const spec = {
+        system: {
+          name: 'System Meta Test',
+          metadata: {
+            owner: 'todo',
+            description: '[add description]',
+            status: 'unknown-status',
+            version: 'invalid-semver',
+            unrecognized_sys_meta: 'invalid'
+          },
+          components: []
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      
+      const ownerPlaceholder = diagnostics.find(d => d.code === 'placeholder-system-metadata-owner')
+      const descPlaceholder = diagnostics.find(d => d.code === 'placeholder-system-metadata-description')
+      const invalidStatus = diagnostics.find(d => d.code === 'invalid-system-metadata-status')
+      const invalidVersion = diagnostics.find(d => d.code === 'invalid-system-metadata-version')
+      const unrecognizedKey = diagnostics.find(d => d.code === 'unrecognized-system-metadata-key')
+
+      expect(ownerPlaceholder).toBeDefined()
+      expect(descPlaceholder).toBeDefined()
+      expect(invalidStatus).toBeDefined()
+      expect(invalidVersion).toBeDefined()
+      expect(unrecognizedKey).toBeDefined()
+
+      expect(ownerPlaceholder?.severity).toBe('warning')
+      expect(descPlaceholder?.severity).toBe('warning')
+      expect(invalidStatus?.severity).toBe('warning')
+      expect(invalidVersion?.severity).toBe('warning')
+      expect(unrecognizedKey?.severity).toBe('warning')
+    })
+
+    test('flags missing system-level metadata and missing fields inside it', () => {
+      const specNoMeta = {
+        system: {
+          name: 'No Meta System',
+          components: []
+        }
+      }
+      const diagnosticsNoMeta = lintSpec(specNoMeta)
+      const missingMeta = diagnosticsNoMeta.find(d => d.code === 'missing-system-metadata')
+      expect(missingMeta).toBeDefined()
+      expect(missingMeta?.severity).toBe('info')
+
+      const specEmptyMeta = {
+        system: {
+          name: 'Empty Meta System',
+          metadata: {},
+          components: []
+        }
+      }
+      const diagnosticsEmptyMeta = lintSpec(specEmptyMeta)
+      const missingOwner = diagnosticsEmptyMeta.find(d => d.code === 'missing-system-metadata-owner')
+      const missingDesc = diagnosticsEmptyMeta.find(d => d.code === 'missing-system-metadata-description')
+      expect(missingOwner).toBeDefined()
+      expect(missingDesc).toBeDefined()
+      expect(missingOwner?.severity).toBe('info')
+      expect(missingDesc?.severity).toBe('info')
+    })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -140,5 +140,34 @@ describe('Workspace Metrics Tab Feature', () => {
     // selecting "error" should result in an empty or nearly empty list (excluding components with no error)
     fireEvent.change(severitySelect, { target: { value: 'error' } })
     expect(screen.queryByRole('button', { name: /inbox/i })).not.toBeInTheDocument()
+  })
+
+  test('displays system metadata block and handles initializing system metadata', () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Should display System Specification Metadata header
+    expect(screen.getByText(/System Specification Metadata/i)).toBeInTheDocument()
+
+    // Since initial spec does not have system metadata, it should show the missing metadata message
+    expect(screen.getByText(/System architecture metadata/i)).toBeInTheDocument()
+
+    // Click on "Initialize System Metadata" button
+    const initBtn = screen.getByRole('button', { name: /Initialize System Metadata/i })
+    expect(initBtn).toBeInTheDocument()
+    fireEvent.click(initBtn)
+
+    // After clicking, system metadata should be initialized and displayed
+    expect(screen.getByText(/System Version:/i)).toBeInTheDocument()
+    expect(screen.getByText(/System Status:/i)).toBeInTheDocument()
+    expect(screen.getByText(/System Owner:/i)).toBeInTheDocument()
+    expect(screen.getByText(/System Description:/i)).toBeInTheDocument()
+
+    // It should show default initialized values inside the metadata card
+    const card = screen.getByTestId("system-metadata-card")
+    expect(within(card).getByText(/architecture-team/i)).toBeInTheDocument()
+    expect(within(card).getByText(/1.0.0/i)).toBeInTheDocument()
   })
 })
