@@ -284,6 +284,17 @@ interface FocusTabProps {
   onQuickFix?: (path: string, fixType: string, extraData?: any) => void
 }
 
+function getConnectionBadgeLabel(d: Diagnostic): string {
+  if (d.code === "orphan-connection") return "Target Missing"
+  if (d.code === "gateway-to-store") return "Gateway to Store"
+  if (d.code === "store-to-store") return "Store to Store"
+  if (d.code === "stage-brick-to-gateway") return "Stage/Brick to Gateway"
+  if (d.code === "self-connection") return "Self Connection"
+  if (d.code === "duplicate-connection") return "Duplicate Connection"
+  if (d.code === "connection-case-mismatch") return "Case Mismatch"
+  return d.message
+}
+
 function FocusTab({
   specText,
   setSpecText,
@@ -532,15 +543,15 @@ function FocusTab({
 
   const connectionsList = useMemo(() => {
     const conns = Array.isArray(comp?.connections) ? comp.connections : []
-    return conns.map((c: any) => {
+    return conns.map((c: any, originalIdx: number) => {
       if (typeof c === "string") {
-        return { target: c, label: "" }
+        return { target: c, label: "", originalIdx }
       }
       if (c && typeof c === "object" && typeof c.target === "string") {
-        return { target: c.target, label: c.label || "" }
+        return { target: c.target, label: c.label || "", originalIdx }
       }
       return null
-    }).filter(Boolean) as { target: string, label: string }[]
+    }).filter(Boolean) as { target: string, label: string; originalIdx: number }[]
   }, [comp?.connections])
 
   const handleDisconnect = (target: string) => {
@@ -594,15 +605,15 @@ function FocusTab({
 
   const inboundConnectionsList = useMemo(() => {
     if (!selectedUnit || !parsedSpec?.system?.components) return []
-    const list: { source: string; label: string }[] = []
-    parsedSpec.system.components.forEach((c: any) => {
+    const list: { source: string; label: string; sourceIdx: number; originalIdx: number }[] = []
+    parsedSpec.system.components.forEach((c: any, sourceIdx: number) => {
       if (!c || !c.id || c.id === selectedUnit) return
       const conns = Array.isArray(c.connections) ? c.connections : []
-      conns.forEach((conn: any) => {
+      conns.forEach((conn: any, originalIdx: number) => {
         if (typeof conn === "string" && conn === selectedUnit) {
-          list.push({ source: c.id, label: "" })
+          list.push({ source: c.id, label: "", sourceIdx, originalIdx })
         } else if (conn && typeof conn === "object" && conn.target === selectedUnit) {
-          list.push({ source: c.id, label: conn.label || "" })
+          list.push({ source: c.id, label: conn.label || "", sourceIdx, originalIdx })
         }
       })
     })
@@ -867,31 +878,57 @@ function FocusTab({
             {/* List of existing connections */}
             {connectionsList.length > 0 ? (
               <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
-                {connectionsList.map((conn) => (
-                  <div key={conn.target} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
-                    <button
-                      onClick={() => setSelectedUnit(conn.target)}
-                      className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
-                      title={`Focus on ${conn.target}`}
-                    >
-                      {conn.target}
-                    </button>
-                    <input
-                      type="text"
-                      data-testid={`focus-conn-label-input-${conn.target}`}
-                      value={localConnectionLabels[conn.target] || ""}
-                      onChange={(e) => handleConnectionLabelChange(conn.target, e.target.value)}
-                      placeholder="Add connection label..."
-                      className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
-                    />
-                    <button
-                      onClick={() => handleDisconnect(conn.target)}
-                      className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
-                    >
-                      Disconnect
-                    </button>
-                  </div>
-                ))}
+                {connectionsList.map((conn) => {
+                  const connDiagnostics = diagnostics.filter(d => {
+                    if (!d.path) return false
+                    const exactPath = `system.components[${compIdx}].connections[${conn.originalIdx}]`
+                    return d.path === exactPath || d.path === `${exactPath}.target`
+                  })
+                  return (
+                    <div key={conn.target} className="flex flex-col gap-1 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
+                      <div className="flex items-center gap-2 w-full">
+                        <button
+                          onClick={() => setSelectedUnit(conn.target)}
+                          className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
+                          title={`Focus on ${conn.target}`}
+                        >
+                          {conn.target}
+                        </button>
+                        <input
+                          type="text"
+                          data-testid={`focus-conn-label-input-${conn.target}`}
+                          value={localConnectionLabels[conn.target] || ""}
+                          onChange={(e) => handleConnectionLabelChange(conn.target, e.target.value)}
+                          placeholder="Add connection label..."
+                          className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
+                        />
+                        <button
+                          onClick={() => handleDisconnect(conn.target)}
+                          className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                      {connDiagnostics.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-0.5 px-1">
+                          {connDiagnostics.map((d, dIdx) => (
+                            <span
+                              key={dIdx}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 border ${
+                                d.severity === "error"
+                                  ? "bg-red-500/10 border-red-500/20 text-red-400"
+                                  : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                              }`}
+                            >
+                              <span>{d.severity === "error" ? "❌" : "⚠️"}</span>
+                              <span>{getConnectionBadgeLabel(d)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-[11px] text-zinc-500 italic">No outgoing connections from this component.</p>
@@ -949,32 +986,58 @@ function FocusTab({
             {/* List of existing inbound connections */}
             {inboundConnectionsList.length > 0 ? (
               <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
-                {inboundConnectionsList.map((conn, idx) => (
-                  <div key={`${conn.source}-${idx}`} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
-                    <button
-                      onClick={() => setSelectedUnit(conn.source)}
-                      className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
-                      title={`Focus on ${conn.source}`}
-                    >
-                      {conn.source}
-                    </button>
-                    <input
-                      type="text"
-                      data-testid={`focus-inbound-conn-label-input-${conn.source}`}
-                      value={localInboundConnectionLabels[conn.source] || ""}
-                      onChange={(e) => handleInboundConnectionLabelChange(conn.source, e.target.value)}
-                      placeholder="Add inbound connection label..."
-                      className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
-                    />
-                    <button
-                      onClick={() => handleInboundDisconnect(conn.source)}
-                      data-testid={`disconnect-inbound-${conn.source}`}
-                      className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
-                    >
-                      Remove Inbound
-                    </button>
-                  </div>
-                ))}
+                {inboundConnectionsList.map((conn, idx) => {
+                  const inboundDiagnostics = diagnostics.filter(d => {
+                    if (!d.path) return false
+                    const exactPath = `system.components[${conn.sourceIdx}].connections[${conn.originalIdx}]`
+                    return d.path === exactPath || d.path === `${exactPath}.target`
+                  })
+                  return (
+                    <div key={`${conn.source}-${idx}`} className="flex flex-col gap-1 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
+                      <div className="flex items-center gap-2 w-full">
+                        <button
+                          onClick={() => setSelectedUnit(conn.source)}
+                          className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
+                          title={`Focus on ${conn.source}`}
+                        >
+                          {conn.source}
+                        </button>
+                        <input
+                          type="text"
+                          data-testid={`focus-inbound-conn-label-input-${conn.source}`}
+                          value={localInboundConnectionLabels[conn.source] || ""}
+                          onChange={(e) => handleInboundConnectionLabelChange(conn.source, e.target.value)}
+                          placeholder="Add inbound connection label..."
+                          className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
+                        />
+                        <button
+                          onClick={() => handleInboundDisconnect(conn.source)}
+                          data-testid={`disconnect-inbound-${conn.source}`}
+                          className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
+                        >
+                          Remove Inbound
+                        </button>
+                      </div>
+                      {inboundDiagnostics.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-0.5 px-1">
+                          {inboundDiagnostics.map((d, dIdx) => (
+                            <span
+                              key={dIdx}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 border ${
+                                d.severity === "error"
+                                  ? "bg-red-500/10 border-red-500/20 text-red-400"
+                                  : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                              }`}
+                            >
+                              <span>{d.severity === "error" ? "❌" : "⚠️"}</span>
+                              <span>{getConnectionBadgeLabel(d)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-[11px] text-zinc-500 italic">No incoming connections to this component.</p>
