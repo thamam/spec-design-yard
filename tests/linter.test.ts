@@ -804,5 +804,38 @@ describe('Advanced Linter Features', () => {
       expect(unrecognizedKeyWarn?.message).toContain('Unrecognized connection key "unrecognized_key"')
       expect(unrecognizedKeyWarn?.path).toBe('system.components[0].connections[0].unrecognized_key')
     })
+
+    test('flags placeholder metadata description and owner as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Placeholder Spec',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                description: '[Add Description]',
+                owner: 'todo'
+              }
+            },
+            {
+              id: 'node_b',
+              type: 'Stage',
+              metadata: {
+                description: 'TBD',
+                owner: 'placeholder'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const descPlaceholders = diagnostics.filter(d => d.code === 'placeholder-metadata-description')
+      const ownerPlaceholders = diagnostics.filter(d => d.code === 'placeholder-metadata-owner')
+      expect(descPlaceholders.length).toBe(2)
+      expect(ownerPlaceholders.length).toBe(2)
+      expect(descPlaceholders[0].severity).toBe('warning')
+      expect(ownerPlaceholders[0].severity).toBe('warning')
+    })
   })
 })

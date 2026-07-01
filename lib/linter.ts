@@ -229,6 +229,16 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             path: `${pathPrefix}`,
             code: "missing-metadata-description",
           })
+        } else {
+          const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
+          if (placeholderRegex.test(String(meta.description).trim())) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Component "${compId}" has a placeholder description "${meta.description}". Please provide a meaningful description.`,
+              path: `${pathPrefix}.metadata.description`,
+              code: "placeholder-metadata-description",
+            })
+          }
         }
         if (!meta.owner || String(meta.owner).trim() === "") {
           diagnostics.push({
@@ -237,6 +247,16 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             path: `${pathPrefix}`,
             code: "missing-metadata-owner",
           })
+        } else {
+          const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
+          if (placeholderRegex.test(String(meta.owner).trim())) {
+            diagnostics.push({
+              severity: "warning",
+              message: `Component "${compId}" has a placeholder owner "${meta.owner}". Please assign a valid owner.`,
+              path: `${pathPrefix}.metadata.owner`,
+              code: "placeholder-metadata-owner",
+            })
+          }
         }
       }
     }
