@@ -276,7 +276,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 /* ── Focus Tab ── */
 interface FocusTabProps {
   specText: string
-  setSpecText: (val: string) => void
+  setSpecText: (val: string | ((prev: string) => string)) => void
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
@@ -381,18 +381,32 @@ function FocusTab({
         const activeEl = typeof document !== "undefined" ? document.activeElement : null
         const activeTestId = activeEl?.getAttribute("data-testid")
 
-        const nextState = { ...prev }
-        if (activeTestId !== "focus-system-name-input") nextState.systemName = sys.name || ""
-        if (activeTestId !== "focus-system-version-input") nextState.systemVersion = sysMeta.version || ""
-        if (activeTestId !== "focus-system-status-select") nextState.systemStatus = sysMeta.status || "draft"
-        if (activeTestId !== "focus-system-owner-input") nextState.systemOwner = sysMeta.owner || ""
-        if (activeTestId !== "focus-system-description-textarea") nextState.systemDescription = sysMeta.description || ""
-        return nextState
+        const systemName = activeTestId !== "focus-system-name-input" ? (sys.name || "") : prev.systemName
+        const systemVersion = activeTestId !== "focus-system-version-input" ? (sysMeta.version || "") : prev.systemVersion
+        const systemStatus = activeTestId !== "focus-system-status-select" ? (sysMeta.status || "draft") : prev.systemStatus
+        const systemOwner = activeTestId !== "focus-system-owner-input" ? (sysMeta.owner || "") : prev.systemOwner
+        const systemDescription = activeTestId !== "focus-system-description-textarea" ? (sysMeta.description || "") : prev.systemDescription
+
+        if (
+          systemName === prev.systemName &&
+          systemVersion === prev.systemVersion &&
+          systemStatus === prev.systemStatus &&
+          systemOwner === prev.systemOwner &&
+          systemDescription === prev.systemDescription
+        ) {
+          return prev
+        }
+
+        return { systemName, systemVersion, systemStatus, systemOwner, systemDescription }
       })
     }
   }, [parsedSpec, selectedUnit])
 
-  const handleGlobalFieldChange = (field: string, path: string, value: any) => {
+  const handleGlobalFieldChange = (
+    field: "systemName" | "systemVersion" | "systemStatus" | "systemOwner" | "systemDescription",
+    path: string,
+    value: string
+  ) => {
     // 1. Instantly update local state so character insertion is buttery-smooth (60fps)
     setGlobalFormState(prev => ({
       ...prev,
