@@ -1,3 +1,5 @@
+const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
+
 export interface Diagnostic {
   severity: "error" | "warning" | "info"
   message: string
@@ -230,8 +232,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             code: "missing-metadata-description",
           })
         } else {
-          const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
-          if (placeholderRegex.test(String(meta.description).trim())) {
+          if (PLACEHOLDER_REGEX.test(String(meta.description).trim())) {
             diagnostics.push({
               severity: "warning",
               message: `Component "${compId}" has a placeholder description "${meta.description}". Please provide a meaningful description.`,
@@ -248,8 +249,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             code: "missing-metadata-owner",
           })
         } else {
-          const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
-          if (placeholderRegex.test(String(meta.owner).trim())) {
+          if (PLACEHOLDER_REGEX.test(String(meta.owner).trim())) {
             diagnostics.push({
               severity: "warning",
               message: `Component "${compId}" has a placeholder owner "${meta.owner}". Please assign a valid owner.`,
