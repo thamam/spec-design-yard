@@ -366,6 +366,7 @@ function FocusTab({
 
   // Separate connection label debounce ref
   const connectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const inboundConnectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // 2. Reset form state on selection change
   if (selectedUnit !== prevUnit) {
@@ -451,7 +452,7 @@ function FocusTab({
   // Synchronize inbound connection labels from external YAML updates dynamically
   useEffect(() => {
     if (selectedUnit && parsedSpec?.system?.components) {
-      const newInboundLabels: Record<string, string> = {}
+      const newInboundLabels: Record<string, string> = Object.create(null)
       parsedSpec.system.components.forEach((c: any) => {
         if (!c || !c.id || c.id === selectedUnit) return
         const conns = Array.isArray(c.connections) ? c.connections : []
@@ -491,6 +492,9 @@ function FocusTab({
       }
       if (connectionDebounceTimerRef.current) {
         clearTimeout(connectionDebounceTimerRef.current)
+      }
+      if (inboundConnectionDebounceTimerRef.current) {
+        clearTimeout(inboundConnectionDebounceTimerRef.current)
       }
     }
   }, [selectedUnit])
@@ -609,10 +613,10 @@ function FocusTab({
     if (source === "__proto__" || source === "constructor" || source === "prototype") return
     setLocalInboundConnectionLabels(prev => ({ ...prev, [source]: value }))
 
-    if (connectionDebounceTimerRef.current) {
-      clearTimeout(connectionDebounceTimerRef.current)
+    if (inboundConnectionDebounceTimerRef.current) {
+      clearTimeout(inboundConnectionDebounceTimerRef.current)
     }
-    connectionDebounceTimerRef.current = setTimeout(() => {
+    inboundConnectionDebounceTimerRef.current = setTimeout(() => {
       if (!selectedUnit) return
       const updated = reconcileSpec(specText, {
         type: "connection-label",
@@ -682,7 +686,7 @@ function FocusTab({
           <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-lg flex items-center justify-between shrink-0 font-mono">
             <span className="text-indigo-300 text-[11px]">
               Selected: <span className="font-bold">{selectedUnit}</span>
-              <span className="sr-only" style={{ display: 'none' }}>Selected Unit: {selectedUnit}</span>
+              <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: '0' }}>Selected Unit: {selectedUnit}</span>
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -945,8 +949,8 @@ function FocusTab({
             {/* List of existing inbound connections */}
             {inboundConnectionsList.length > 0 ? (
               <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
-                {inboundConnectionsList.map((conn) => (
-                  <div key={conn.source} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
+                {inboundConnectionsList.map((conn, idx) => (
+                  <div key={`${conn.source}-${idx}`} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
                     <button
                       onClick={() => setSelectedUnit(conn.source)}
                       className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
