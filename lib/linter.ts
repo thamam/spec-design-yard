@@ -96,7 +96,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           diagnostics.push({
             severity: "info",
             message: "System metadata lacks a description field for architectural documentation.",
-            path: "system.metadata",
+            path: "system.metadata.description",
             code: "missing-system-metadata-description",
           })
         } else {
@@ -114,7 +114,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           diagnostics.push({
             severity: "info",
             message: "System metadata lacks an owner field for architectural documentation.",
-            path: "system.metadata",
+            path: "system.metadata.owner",
             code: "missing-system-metadata-owner",
           })
         } else {

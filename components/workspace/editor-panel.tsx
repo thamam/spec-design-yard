@@ -1274,28 +1274,44 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Version:</span>
-                <span className="text-zinc-200 font-bold">{systemMetadata.version || <span className="text-zinc-600 italic">not set</span>}</span>
+                <span className="text-zinc-200 font-bold">
+                  {typeof systemMetadata.version === "object"
+                    ? JSON.stringify(systemMetadata.version)
+                    : (systemMetadata.version || <span className="text-zinc-600 italic">not set</span>)}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Status:</span>
                 <span className={`font-bold capitalize ${
-                  String(systemMetadata.status).toLowerCase() === "active" ? "text-emerald-400" :
-                  String(systemMetadata.status).toLowerCase() === "deprecated" ? "text-rose-400" :
+                  String(systemMetadata.status || "draft").toLowerCase() === "active" ? "text-emerald-400" :
+                  String(systemMetadata.status || "draft").toLowerCase() === "deprecated" ? "text-rose-400" :
                   "text-amber-400"
-                }`}>{systemMetadata.status || "draft"}</span>
+                }`}>
+                  {typeof systemMetadata.status === "object"
+                    ? JSON.stringify(systemMetadata.status)
+                    : (systemMetadata.status || "draft")}
+                </span>
               </div>
             </div>
 
             {/* Owner field */}
             <div className="flex flex-col gap-0.5 border-t border-zinc-900/40 pt-1.5">
               <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Owner:</span>
-              <span className="text-zinc-200 font-bold">{systemMetadata.owner || <span className="text-zinc-600 italic">not set</span>}</span>
+              <span className="text-zinc-200 font-bold">
+                {typeof systemMetadata.owner === "object"
+                  ? JSON.stringify(systemMetadata.owner)
+                  : (systemMetadata.owner || <span className="text-zinc-600 italic">not set</span>)}
+              </span>
             </div>
 
             {/* Description field */}
             <div className="flex flex-col gap-0.5 border-t border-zinc-900/40 pt-1.5">
               <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Description:</span>
-              <p className="text-zinc-300 font-sans leading-relaxed text-[11px] whitespace-pre-wrap">{systemMetadata.description || <span className="text-zinc-600 italic">No description provided.</span>}</p>
+              <p className="text-zinc-300 font-sans leading-relaxed text-[11px] whitespace-pre-wrap">
+                {typeof systemMetadata.description === "object"
+                  ? JSON.stringify(systemMetadata.description)
+                  : (systemMetadata.description || <span className="text-zinc-600 italic">No description provided.</span>)}
+              </p>
             </div>
 
             {/* Individual Diagnostic Alerts */}
@@ -1304,7 +1320,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
                 <span className="text-[9px] text-zinc-500 uppercase font-sans font-bold">Documentation Issues & Warnings:</span>
                 <div className="flex flex-col gap-1.5 max-h-24 overflow-y-auto">
                   {sysMetadataDiagnostics.map((d, i) => (
-                    <div key={i} className="flex items-start justify-between gap-2 border-b border-zinc-900/50 pb-1.5 last:border-0 last:pb-0">
+                    <div key={`${d.code || "diag"}-${i}`} className="flex items-start justify-between gap-2 border-b border-zinc-900/50 pb-1.5 last:border-0 last:pb-0">
                       <div className="flex items-start gap-1 text-[11px] text-amber-400 font-sans leading-relaxed">
                         <span className="shrink-0">{d.severity === "error" ? "❌" : d.severity === "warning" ? "⚠️" : "ℹ️"}</span>
                         <span>{d.message}</span>
