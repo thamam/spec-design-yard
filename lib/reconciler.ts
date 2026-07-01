@@ -299,7 +299,18 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       }
     } else if (change.type === "update-property") {
       const { id, path, value } = change.payload
-      if (comps && comps.items) {
+      if (id === "system") {
+        try {
+          const parts = parsePath(path)
+          const currentVal = doc.getIn(parts)
+          if (currentVal !== value) {
+            doc.setIn(parts, value)
+            modified = true
+          }
+        } catch (e) {
+          console.warn(`Failed to safely set system property ${path}:`, e)
+        }
+      } else if (comps && comps.items) {
         comps.items.forEach((compNode: any) => {
           if (!compNode || typeof compNode.get !== 'function') return
           const compId = compNode.get('id')
