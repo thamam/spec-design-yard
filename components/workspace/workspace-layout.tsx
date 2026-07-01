@@ -102,12 +102,10 @@ export function WorkspaceLayout() {
   const [isHydrated, setIsHydrated] = useState(false)
 
   const lastLoadedSpecRef = useRef<string | null>(null)
-  const isHydratingRef = useRef<boolean>(false)
 
   // Load custom saved spec when user signs in
   useEffect(() => {
     if (session.user) {
-      isHydratingRef.current = true
       const savedDoc = db.getSpec("main")
       if (savedDoc && savedDoc.yamlContent) {
         lastLoadedSpecRef.current = savedDoc.yamlContent
@@ -116,21 +114,25 @@ export function WorkspaceLayout() {
         lastLoadedSpecRef.current = INITIAL_SPEC
       }
       setIsHydrated(true)
-      isHydratingRef.current = false
     } else {
       setIsHydrated(false)
       lastLoadedSpecRef.current = null
     }
   }, [session.user])
 
-  // Save current spec to DB on modification (if signed in and hydrated)
+  // Save current spec to DB on modification (if signed in and hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
-    if (session.user && specText && isHydrated && !isHydratingRef.current) {
+    if (session.user && specText && isHydrated) {
       if (specText === lastLoadedSpecRef.current) {
         return
       }
-      db.saveSpec("main", "External Brain v0.2", specText)
-      lastLoadedSpecRef.current = specText
+
+      const timer = setTimeout(() => {
+        db.saveSpec("main", "External Brain v0.2", specText)
+        lastLoadedSpecRef.current = specText
+      }, 1000)
+
+      return () => clearTimeout(timer)
     }
   }, [specText, session.user, isHydrated])
 

@@ -138,6 +138,9 @@ describe('Database Hydration Resilience & Auto-Save Security Checks', () => {
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: textarea.value + '\n# Added comment' } })
 
+    // Wait for the debouncer (1000ms) to fire if present
+    await new Promise(resolve => setTimeout(resolve, 1100))
+
     // Verify it saved the new edited content
     await waitFor(() => {
       expect(saveSpecSpy).toHaveBeenCalled()
