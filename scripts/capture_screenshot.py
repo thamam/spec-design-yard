@@ -1,4 +1,5 @@
 import asyncio
+import os
 from playwright.async_api import async_playwright
 
 async def main():
@@ -20,7 +21,8 @@ async def main():
         print("Waiting 12 seconds for client-side mounting...")
         await asyncio.sleep(12)
         
-        output_path = "/home/ubuntu/spec-design-yard/v0-workspace-screenshot.png"
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        output_path = os.path.join(base_dir, "v0-workspace-screenshot.png")
         print(f"Capturing screenshot to {output_path}...")
         await page.screenshot(path=output_path)
         print("SUCCESS: Screenshot captured and saved!")

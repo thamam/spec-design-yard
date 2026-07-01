@@ -1,0 +1,48 @@
+name: PR Screenshot Validation
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: pip install pillow numpy
+
+      - name: Build Next.js App
+        run: npm run build
+
+      - name: Start Next.js App
+        run: npx next start -p 3001 &
+
+      - name: Install Playwright browsers and dependencies
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Screenshot Validation
+        run: |
+          # Wait for server to start up
+          for i in {1..10}; do
+            curl -I http://localhost:3001 && break || sleep 2
+          done
+          python3 scripts/capture_screenshot.py
+          python3 scripts/analyze_pixels.py
