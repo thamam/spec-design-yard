@@ -364,6 +364,10 @@ function FocusTab({
   // 1. Local state for form fields to guarantee zero-lag typing
   const [formState, setFormState] = useState<Record<string, string>>({})
   const [prevUnit, setPrevUnit] = useState<string | null>(null)
+  
+  // Component ID rename states
+  const [idInput, setIdInput] = useState("")
+  const [idError, setIdError] = useState<string | null>(null)
 
   // Outgoing connection states
   const [newConnTarget, setNewConnTarget] = useState("")
@@ -398,6 +402,8 @@ function FocusTab({
       setNewInboundConnSource("")
       setNewInboundConnLabel("")
       setLocalInboundConnectionLabels({})
+      setIdInput(selectedUnit)
+      setIdError(null)
     } else {
       setFormState({})
       setNewConnTarget("")
@@ -406,6 +412,8 @@ function FocusTab({
       setNewInboundConnSource("")
       setNewInboundConnLabel("")
       setLocalInboundConnectionLabels({})
+      setIdInput("")
+      setIdError(null)
     }
   }
 
@@ -428,6 +436,17 @@ function FocusTab({
       })
     }
   }, [comp, selectedUnit])
+
+  // Sync component ID field with external changes when not focused
+  useEffect(() => {
+    if (selectedUnit) {
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null
+      const activeTestId = activeEl?.getAttribute("data-testid")
+      if (activeTestId !== "focus-id-input") {
+        setIdInput(selectedUnit)
+      }
+    }
+  }, [selectedUnit])
 
   // Synchronize connection labels from external YAML updates dynamically
   useEffect(() => {
@@ -539,6 +558,39 @@ function FocusTab({
         setSpecText(updated)
       }
     }, 200)
+  }
+
+  const handleIdRename = () => {
+    if (!selectedUnit) return
+    const cleaned = idInput.trim()
+    if (cleaned === selectedUnit) {
+      setIdError(null)
+      return
+    }
+    if (cleaned === "") {
+      setIdError("ID cannot be empty.")
+      return
+    }
+    if (!/^[a-zA-Z0-9_\-]+$/.test(cleaned)) {
+      setIdError("ID must be alphanumeric, hyphen, or underscore.")
+      return
+    }
+    const idExists = parsedSpec?.system?.components?.some((c: any) => c && c.id && c.id.toLowerCase() === cleaned.toLowerCase() && c.id !== selectedUnit)
+    if (idExists) {
+      setIdError(`Component ID "${cleaned}" already exists.`)
+      return
+    }
+
+    const updated = reconcileSpec(specText, {
+      type: "rename-id",
+      payload: { id: selectedUnit, newId: cleaned }
+    })
+    
+    if (updated !== specText) {
+      setSpecText(updated)
+      setSelectedUnit(cleaned)
+      setIdError(null)
+    }
   }
 
   const connectionsList = useMemo(() => {
@@ -764,6 +816,43 @@ function FocusTab({
             </h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Component ID with Rename trigger */}
+              <div className="flex flex-col gap-1.5 col-span-1 sm:col-span-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component ID (System Key)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    data-testid="focus-id-input"
+                    value={idInput}
+                    onChange={(e) => {
+                      setIdInput(e.target.value)
+                      setIdError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleIdRename()
+                      }
+                    }}
+                    className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                    placeholder="e.g. processor"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleIdRename}
+                    data-testid="focus-id-rename-btn"
+                    className="px-3.5 py-1.5 rounded-md text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0 active:scale-95"
+                  >
+                    Rename ID
+                  </button>
+                </div>
+                {idError && (
+                  <span className="text-[10px] text-red-400 mt-0.5" data-testid="focus-id-error">
+                    ⚠️ {idError}
+                  </span>
+                )}
+              </div>
+
               {/* Name field */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Display Name</label>

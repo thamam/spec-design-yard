@@ -4,6 +4,7 @@ export type CanvasChange =
   | { type: "coords"; payload: { id: string; x: number; y: number }[] }
   | { type: "delete"; payload: { ids: string[] } }
   | { type: "rename"; payload: { id: string; newName: string; newType?: string } }
+  | { type: "rename-id"; payload: { id: string; newId: string } }
   | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
   | { type: "quick-fix-all"; payload: { fixes: { path: string; fixType: string; extraData?: any }[] } }
   | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
@@ -217,6 +218,42 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
                 compNode.set('type', newType)
               }
             }
+          }
+        })
+      }
+    } else if (change.type === "rename-id") {
+      const { id, newId } = change.payload
+      if (id && newId && id !== newId && comps && comps.items) {
+        // 1. Rename the component's ID itself
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+          const compId = compNode.get('id')
+          if (compId === id) {
+            compNode.set('id', newId)
+            modified = true
+          }
+        })
+
+        // 2. Scan all other components to update connection references pointing to 'id'
+        comps.items.forEach((compNode: any) => {
+          if (!compNode || typeof compNode.get !== 'function') return
+          const conns = compNode.get('connections')
+          if (conns && conns.items && Array.isArray(conns.items)) {
+            conns.items.forEach((connNode: any, idx: number) => {
+              if (connNode && typeof connNode.get === 'function') {
+                const target = connNode.get('target')
+                if (target === id) {
+                  connNode.set('target', newId)
+                  modified = true
+                }
+              } else if (connNode) {
+                const val = typeof connNode.toJSON === 'function' ? connNode.toJSON() : connNode
+                if (val === id) {
+                  conns.set(idx, newId)
+                  modified = true
+                }
+              }
+            })
           }
         })
       }

@@ -64,6 +64,39 @@ describe('AST Reconciliation Layer', () => {
     expect(updated).toContain('id: inbox') // ID remains the same to preserve references
   })
 
+  test('reconciles renaming a component ID bidirectionally updating all references', () => {
+    const specWithMixedConns = `system:
+  name: Test System
+  components:
+    - id: inbox
+      type: Store
+      name: inbox/
+      connections:
+        - target: digest_stage
+          label: process
+        - digest_stage
+    - id: digest_stage
+      type: Stage
+      name: digest
+`
+    const updated = reconcileSpec(specWithMixedConns, {
+      type: 'rename-id',
+      payload: { id: 'digest_stage', newId: 'processing_engine' }
+    })
+
+    // 1. Component ID itself must be renamed
+    expect(updated).toContain('id: processing_engine')
+    expect(updated).not.toContain('id: digest_stage')
+
+    // 2. Object target connection must be renamed
+    expect(updated).toContain('target: processing_engine')
+    expect(updated).not.toContain('target: digest_stage')
+
+    // 3. String connection must be renamed
+    expect(updated).toContain('- processing_engine')
+    expect(updated).not.toContain('- digest_stage')
+  })
+
   test('gracefully handles null and invalid components in YAML parsed spec', () => {
     const corruptedSpec = `system:
   name: Corrupted
