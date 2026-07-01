@@ -359,6 +359,11 @@ function FocusTab({
   const [newConnLabel, setNewConnLabel] = useState("")
   const [localConnectionLabels, setLocalConnectionLabels] = useState<Record<string, string>>({})
 
+  // Inbound connection states
+  const [newInboundConnSource, setNewInboundConnSource] = useState("")
+  const [newInboundConnLabel, setNewInboundConnLabel] = useState("")
+  const [localInboundConnectionLabels, setLocalInboundConnectionLabels] = useState<Record<string, string>>({})
+
   // Separate connection label debounce ref
   const connectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -378,11 +383,17 @@ function FocusTab({
       setNewConnTarget("")
       setNewConnLabel("")
       setLocalConnectionLabels({})
+      setNewInboundConnSource("")
+      setNewInboundConnLabel("")
+      setLocalInboundConnectionLabels({})
     } else {
       setFormState({})
       setNewConnTarget("")
       setNewConnLabel("")
       setLocalConnectionLabels({})
+      setNewInboundConnSource("")
+      setNewInboundConnLabel("")
+      setLocalInboundConnectionLabels({})
     }
   }
 
@@ -436,6 +447,39 @@ function FocusTab({
       })
     }
   }, [comp])
+
+  // Synchronize inbound connection labels from external YAML updates dynamically
+  useEffect(() => {
+    if (selectedUnit && parsedSpec?.system?.components) {
+      const newInboundLabels: Record<string, string> = {}
+      parsedSpec.system.components.forEach((c: any) => {
+        if (!c || !c.id || c.id === selectedUnit) return
+        const conns = Array.isArray(c.connections) ? c.connections : []
+        conns.forEach((conn: any) => {
+          if (typeof conn === "string" && conn === selectedUnit) {
+            newInboundLabels[c.id] = ""
+          } else if (conn && typeof conn === "object" && conn.target === selectedUnit) {
+            newInboundLabels[c.id] = conn.label || ""
+          }
+        })
+      })
+
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null
+      const activeTestId = activeEl?.getAttribute("data-testid") || ""
+
+      setLocalInboundConnectionLabels(prev => {
+        const next: Record<string, string> = {}
+        Object.keys(newInboundLabels).forEach(source => {
+          if (activeTestId === `focus-inbound-conn-label-input-${source}`) {
+            next[source] = prev[source] ?? newInboundLabels[source]
+          } else {
+            next[source] = newInboundLabels[source] || ""
+          }
+        })
+        return next
+      })
+    }
+  }, [parsedSpec, selectedUnit])
 
   // 4. Debounce AST reconciliation / parent state updates
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -544,6 +588,72 @@ function FocusTab({
     }, 200)
   }
 
+  const inboundConnectionsList = useMemo(() => {
+    if (!selectedUnit || !parsedSpec?.system?.components) return []
+    const list: { source: string; label: string }[] = []
+    parsedSpec.system.components.forEach((c: any) => {
+      if (!c || !c.id || c.id === selectedUnit) return
+      const conns = Array.isArray(c.connections) ? c.connections : []
+      conns.forEach((conn: any) => {
+        if (typeof conn === "string" && conn === selectedUnit) {
+          list.push({ source: c.id, label: "" })
+        } else if (conn && typeof conn === "object" && conn.target === selectedUnit) {
+          list.push({ source: c.id, label: conn.label || "" })
+        }
+      })
+    })
+    return list
+  }, [parsedSpec, selectedUnit])
+
+  const handleInboundConnectionLabelChange = (source: string, value: string) => {
+    if (source === "__proto__" || source === "constructor" || source === "prototype") return
+    setLocalInboundConnectionLabels(prev => ({ ...prev, [source]: value }))
+
+    if (connectionDebounceTimerRef.current) {
+      clearTimeout(connectionDebounceTimerRef.current)
+    }
+    connectionDebounceTimerRef.current = setTimeout(() => {
+      if (!selectedUnit) return
+      const updated = reconcileSpec(specText, {
+        type: "connection-label",
+        payload: { source, target: selectedUnit, label: value }
+      })
+      if (updated !== specText) {
+        setSpecText(updated)
+      }
+    }, 200)
+  }
+
+  const handleInboundDisconnect = (source: string) => {
+    if (!selectedUnit) return
+    const updated = reconcileSpec(specText, {
+      type: "disconnect",
+      payload: { source, target: selectedUnit }
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+    }
+  }
+
+  const handleAddInboundConnection = () => {
+    if (!selectedUnit || !newInboundConnSource) return
+    let updated = reconcileSpec(specText, {
+      type: "connect",
+      payload: { source: newInboundConnSource, target: selectedUnit }
+    })
+    if (newInboundConnLabel.trim()) {
+      updated = reconcileSpec(updated, {
+        type: "connection-label",
+        payload: { source: newInboundConnSource, target: selectedUnit, label: newInboundConnLabel.trim() }
+      })
+    }
+    if (updated !== specText) {
+      setSpecText(updated)
+      setNewInboundConnSource("")
+      setNewInboundConnLabel("")
+    }
+  }
+
   const handleDuplicate = () => {
     if (!selectedUnit || !parsedSpec) return
     const components = parsedSpec?.system?.components || []
@@ -572,6 +682,7 @@ function FocusTab({
           <div className="h-8 px-3 border border-indigo-500/30 bg-indigo-500/5 rounded-lg flex items-center justify-between shrink-0 font-mono">
             <span className="text-indigo-300 text-[11px]">
               Selected: <span className="font-bold">{selectedUnit}</span>
+              <span className="sr-only" style={{ display: 'none' }}>Selected Unit: {selectedUnit}</span>
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -819,6 +930,90 @@ function FocusTab({
                   className="px-3 py-1.5 rounded text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-900 disabled:text-zinc-600 disabled:border-zinc-900 disabled:cursor-not-allowed text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0"
                 >
                   Add Connection
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Incoming Connections Manager */}
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
+              Incoming Connections
+            </h3>
+
+            {/* List of existing inbound connections */}
+            {inboundConnectionsList.length > 0 ? (
+              <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
+                {inboundConnectionsList.map((conn) => (
+                  <div key={conn.source} className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-lg border border-zinc-900/60">
+                    <button
+                      onClick={() => setSelectedUnit(conn.source)}
+                      className="text-xs font-mono font-semibold text-indigo-400 hover:text-indigo-300 hover:underline transition-all truncate max-w-[120px]"
+                      title={`Focus on ${conn.source}`}
+                    >
+                      {conn.source}
+                    </button>
+                    <input
+                      type="text"
+                      data-testid={`focus-inbound-conn-label-input-${conn.source}`}
+                      value={localInboundConnectionLabels[conn.source] || ""}
+                      onChange={(e) => handleInboundConnectionLabelChange(conn.source, e.target.value)}
+                      placeholder="Add inbound connection label..."
+                      className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-[11px] px-2 py-1 rounded focus:outline-none transition-all font-mono"
+                    />
+                    <button
+                      onClick={() => handleInboundDisconnect(conn.source)}
+                      data-testid={`disconnect-inbound-${conn.source}`}
+                      className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all cursor-pointer shrink-0"
+                    >
+                      Remove Inbound
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-zinc-500 italic">No incoming connections to this component.</p>
+            )}
+
+            {/* Add inbound connection controls */}
+            <div className="border-t border-zinc-900/60 pt-3 flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Add Incoming Connection</span>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  data-testid="add-inbound-connection-select"
+                  value={newInboundConnSource}
+                  onChange={(e) => setNewInboundConnSource(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all cursor-pointer flex-1"
+                >
+                  <option value="">Select source...</option>
+                  {(Array.from(new Set((parsedSpec?.system?.components || [])
+                    .map((c: any) => c.id)
+                    .filter((id: any): id is string => typeof id === "string")
+                  )) as string[])
+                    .filter((id: string) => id !== selectedUnit && !inboundConnectionsList.some((nc) => nc.source === id))
+                    .map((id: string) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  type="text"
+                  data-testid="add-inbound-connection-label-input"
+                  value={newInboundConnLabel}
+                  onChange={(e) => setNewInboundConnLabel(e.target.value)}
+                  placeholder="Inbound label (optional)"
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs px-2 py-1.5 rounded focus:outline-none transition-all font-mono flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddInboundConnection}
+                  data-testid="add-inbound-connection-btn"
+                  disabled={!newInboundConnSource}
+                  className="px-3 py-1.5 rounded text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-900 disabled:text-zinc-600 disabled:border-zinc-900 disabled:cursor-not-allowed text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0"
+                >
+                  Add Inbound Connection
                 </button>
               </div>
             </div>
