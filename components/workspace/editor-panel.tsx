@@ -1476,6 +1476,117 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     // Health Score Calculation: starts at 100%, drops by 15% per error and 5% per warning
     const healthPct = Math.max(0, 100 - (errorsCount * 15) - (warningsCount * 5))
 
+    const connectionDensity = totalComponents > 0 ? parseFloat((totalConnections / totalComponents).toFixed(2)) : 0
+
+    let couplingRating = "Empty"
+    if (connectionDensity > 0) {
+      if (connectionDensity < 1.0) couplingRating = "Loose"
+      else if (connectionDensity < 1.8) couplingRating = "Balanced"
+      else if (connectionDensity < 2.5) couplingRating = "Dense"
+      else couplingRating = "Spaghettified"
+    }
+
+    // Connected components (undirected subgraphs count)
+    const ids = new Set<string>()
+    components.forEach((c: any) => {
+      if (c && typeof c.id === 'string' && c.id.trim() !== "") {
+        ids.add(c.id.trim())
+      }
+    })
+
+    const adjUndirected: Record<string, string[]> = Object.create(null)
+    ids.forEach(id => {
+      adjUndirected[id] = []
+    })
+
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              if (!adjUndirected[u].includes(v)) adjUndirected[u].push(v)
+              if (!adjUndirected[v].includes(u)) adjUndirected[v].push(u)
+            }
+          }
+        })
+      }
+    })
+
+    const visitedNodes = new Set<string>()
+    let subgraphsCount = 0
+
+    ids.forEach(startNode => {
+      if (!visitedNodes.has(startNode)) {
+        subgraphsCount++
+        const queue = [startNode]
+        visitedNodes.add(startNode)
+        let qIdx = 0
+        while (qIdx < queue.length) {
+          const node = queue[qIdx++]
+          const neighbors = adjUndirected[node] || []
+          for (const neighbor of neighbors) {
+            if (!visitedNodes.has(neighbor)) {
+              visitedNodes.add(neighbor)
+              queue.push(neighbor)
+            }
+          }
+        }
+      }
+    })
+
+    // Hotspot components calculation
+    const incomingCountMap: Record<string, number> = Object.create(null)
+    const outgoingCountMap: Record<string, number> = Object.create(null)
+    ids.forEach(id => {
+      incomingCountMap[id] = 0
+      outgoingCountMap[id] = 0
+    })
+
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              outgoingCountMap[u]++
+              incomingCountMap[v]++
+            }
+          }
+        })
+      }
+    })
+
+    const hotspots = components
+      .filter((c: any) => c && typeof c.id === 'string' && ids.has(c.id.trim()))
+      .map((c: any) => {
+        const id = c.id.trim()
+        const outDeg = outgoingCountMap[id] || 0
+        const inDeg = incomingCountMap[id] || 0
+        const degree = outDeg + inDeg
+        return {
+          id,
+          name: c.name || id,
+          type: c.type || "Stage",
+          degree,
+          incoming: inDeg,
+          outgoing: outDeg
+        }
+      })
+      .sort((a: any, b: any) => b.degree - a.degree)
+
     return {
       components,
       systemName,
@@ -1488,7 +1599,11 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       errorsCount,
       warningsCount,
       infoCount,
-      healthPct
+      healthPct,
+      connectionDensity,
+      couplingRating,
+      subgraphsCount,
+      hotspots
     }
   }, [parsedSpec, diagnostics])
 
@@ -1504,7 +1619,11 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     errorsCount,
     warningsCount,
     infoCount,
-    healthPct
+    healthPct,
+    connectionDensity,
+    couplingRating,
+    subgraphsCount,
+    hotspots
   } = metrics
 
   // Filter the components list in O(N) using O(1) map lookups
@@ -1688,6 +1807,27 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
           <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Total Connections</span>
           <span className="text-xl font-bold text-indigo-400">{totalConnections}</span>
         </div>
+        <div className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Connection Density</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl font-bold text-emerald-400">{connectionDensity}</span>
+            <span className={`text-[10px] font-bold uppercase ${
+              couplingRating === "Loose" ? "text-emerald-500" :
+              couplingRating === "Balanced" ? "text-indigo-400" :
+              couplingRating === "Dense" ? "text-amber-500" :
+              couplingRating === "Spaghettified" ? "text-rose-500" :
+              "text-zinc-500"
+            }`}>
+              {couplingRating}
+            </span>
+          </div>
+        </div>
+        <div className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Independent Subgraphs</span>
+          <span className="text-xl font-bold text-sky-400">
+            {subgraphsCount} {subgraphsCount === 1 ? "Subgraph" : "Subgraphs"}
+          </span>
+        </div>
       </div>
 
       {/* Breakdown by Type */}
@@ -1722,6 +1862,35 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             </span>
             <span className="font-bold text-zinc-300">{storeCount} Stores</span>
           </div>
+        </div>
+      </div>
+
+      {/* Architectural Hotspots / Network Hubs */}
+      <div className="flex flex-col gap-1.5 shrink-0 border-t border-zinc-900 pt-3">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Architectural Hotspots</h4>
+        <div className="flex flex-col gap-1.5 text-xs font-mono">
+          {hotspots.slice(0, 3).map((h: any) => {
+            let badgeColor = "bg-zinc-900/40 text-zinc-400 border-zinc-900"
+            if (h.degree >= 5) badgeColor = "bg-rose-950/30 text-rose-400 border-rose-900/40"
+            else if (h.degree >= 3) badgeColor = "bg-amber-950/30 text-amber-400 border-amber-900/40"
+            else if (h.degree >= 1) badgeColor = "bg-indigo-950/30 text-indigo-400 border-indigo-900/40"
+
+            return (
+              <div key={h.id} className={`flex items-center justify-between p-2 rounded border ${badgeColor}`}>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold">{h.id}</span>
+                  <span className="text-[10px] text-zinc-500 font-sans">({h.type})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-500">In: {h.incoming} / Out: {h.outgoing}</span>
+                  <span className="font-bold">{h.id} (Degree: {h.degree})</span>
+                </div>
+              </div>
+            )
+          })}
+          {hotspots.length === 0 && (
+            <p className="text-[11px] text-zinc-500 italic">No connections in system to analyze hotspots.</p>
+          )}
         </div>
       </div>
 

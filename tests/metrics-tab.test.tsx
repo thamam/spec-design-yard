@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -170,4 +170,48 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(within(card).getByText(/architecture-team/i)).toBeInTheDocument()
     expect(within(card).getByText(/1.0.0/i)).toBeInTheDocument()
   })
+
+  test('displays connection density index, coupling rating, and hotspot/subgraph metrics', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // 1. Verify Connection Density Index is displayed (15 connections / 11 components = 1.36)
+    expect(screen.getByText(/Connection Density/i)).toBeInTheDocument()
+    expect(screen.getByText("1.36")).toBeInTheDocument()
+
+    // 2. Verify Coupling Rating is displayed ("Balanced")
+    expect(screen.getByText("Balanced")).toBeInTheDocument()
+
+    // 3. Verify Hotspot / Hub Components is displayed and lists top components
+    expect(screen.getByText(/Architectural Hotspots/i)).toBeInTheDocument()
+    // digest_stage has 1 outgoing + 5 incoming connections = 6 total degree (highest in system)
+    expect(screen.getByText("digest_stage (Degree: 6)")).toBeInTheDocument()
+
+    // 4. Verify Independent Subgraphs count is displayed
+    expect(screen.getByText(/Independent Subgraphs/i)).toBeInTheDocument()
+    expect(screen.getByText("1 Subgraph")).toBeInTheDocument()
+
+    // 5. Test with an additional disconnected component
+    const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
+    fireEvent.click(codeTabBtn)
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const specWithDisconnected = `${textarea.value}
+    - id: disconnected_island
+      type: Stage
+      name: Disconnected Island
+`
+    fireEvent.change(textarea, { target: { value: specWithDisconnected } })
+
+    // Switch back to Metrics Tab
+    fireEvent.click(metricsTabButton)
+
+    // Verify Independent Subgraphs count has updated to 2 Subgraphs
+    await waitFor(() => {
+      expect(screen.getByText("2 Subgraphs")).toBeInTheDocument()
+    })
+  })
 })
+
