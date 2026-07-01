@@ -101,25 +101,38 @@ export function WorkspaceLayout() {
   const [session, setSession] = useState<UserSession>({ user: null })
   const [isHydrated, setIsHydrated] = useState(false)
 
+  const lastLoadedSpecRef = useRef<string | null>(null)
+  const isHydratingRef = useRef<boolean>(false)
+
   // Load custom saved spec when user signs in
   useEffect(() => {
     if (session.user) {
+      isHydratingRef.current = true
       const savedDoc = db.getSpec("main")
       if (savedDoc && savedDoc.yamlContent) {
+        lastLoadedSpecRef.current = savedDoc.yamlContent
         setSpecText(savedDoc.yamlContent)
+      } else {
+        lastLoadedSpecRef.current = INITIAL_SPEC
       }
       setIsHydrated(true)
+      isHydratingRef.current = false
     } else {
       setIsHydrated(false)
+      lastLoadedSpecRef.current = null
     }
-  }, [session])
+  }, [session.user])
 
   // Save current spec to DB on modification (if signed in and hydrated)
   useEffect(() => {
-    if (session.user && specText && isHydrated) {
+    if (session.user && specText && isHydrated && !isHydratingRef.current) {
+      if (specText === lastLoadedSpecRef.current) {
+        return
+      }
       db.saveSpec("main", "External Brain v0.2", specText)
+      lastLoadedSpecRef.current = specText
     }
-  }, [specText, session, isHydrated])
+  }, [specText, session.user, isHydrated])
 
   const handleLogin = useCallback((email: string, name: string) => {
     setSession({ user: { email, name } })
