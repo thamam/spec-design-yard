@@ -1923,7 +1923,9 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "missing-system-metadata-description",
   "placeholder-system-metadata-owner",
   "missing-system-metadata-owner",
-  "unrecognized-system-metadata-key"
+  "unrecognized-system-metadata-key",
+  "missing-connection-label",
+  "duplicate-connection-label"
 ])
 
 export function EditorPanel({

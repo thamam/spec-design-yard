@@ -377,6 +377,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
 
     const seenTargets = new Set<string>()
+    const seenLabels = new Set<string>()
     comp.connections.forEach((conn: any, connIdx: number) => {
       const connPath = `${pathPrefix}[${connIdx}]`
       if (!conn || typeof conn !== "object") {
@@ -408,6 +409,32 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           path: `${connPath}.label`,
           code: "invalid-connection-label",
         })
+      }
+
+      // Check for missing connection label on Stage/Brick
+      const currentCompType = typeMap[compId]
+      if ((currentCompType === "stage" || currentCompType === "brick") && (!conn.label || typeof conn.label !== "string" || conn.label.trim() === "")) {
+        diagnostics.push({
+          severity: "info",
+          message: `Connection from "${compId}" to "${target}" lacks a label describing the data flow.`,
+          path: connPath,
+          code: "missing-connection-label",
+        })
+      }
+
+      // Check for duplicate connection label on same component
+      if (conn.label && typeof conn.label === "string" && conn.label.trim() !== "") {
+        const trimmedLabel = conn.label.trim()
+        if (seenLabels.has(trimmedLabel)) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Component "${compId}" has duplicate connection label "${trimmedLabel}" on connection to "${target}".`,
+            path: connPath,
+            code: "duplicate-connection-label",
+          })
+        } else {
+          seenLabels.add(trimmedLabel)
+        }
       }
 
       // Check unrecognized connection keys

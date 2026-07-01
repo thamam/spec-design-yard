@@ -796,4 +796,45 @@ system:
     })
     expect(updated).toContain('owner: architecture-team')
   })
+
+  test('quick-fix missing connection label sets a default label', () => {
+    const spec = `system:
+  components:
+    - id: stage_1
+      type: Stage
+      connections:
+        - target: store_1
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[0]',
+        fixType: 'missing-connection-label'
+      }
+    })
+
+    expect(updated).toContain('label: processes data')
+  })
+
+  test('quick-fix duplicate connection label appends a suffix', () => {
+    const spec = `system:
+  components:
+    - id: stage_1
+      type: Stage
+      connections:
+        - target: store_1
+          label: sends events
+        - target: store_2
+          label: sends events
+`
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: {
+        path: 'system.components[0].connections[1]',
+        fixType: 'duplicate-connection-label'
+      }
+    })
+
+    expect(updated).toContain('label: sends events 2')
+  })
 })

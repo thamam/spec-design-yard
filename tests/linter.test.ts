@@ -900,5 +900,83 @@ describe('Advanced Linter Features', () => {
       expect(missingOwner?.severity).toBe('info')
       expect(missingDesc?.severity).toBe('info')
     })
+
+    test('flags missing connection labels on Stage and Brick components as info', () => {
+      const spec = {
+        system: {
+          name: 'Label Test',
+          components: [
+            {
+              id: 'stage_1',
+              type: 'Stage',
+              connections: [
+                { target: 'store_1' } // Missing label!
+              ]
+            },
+            {
+              id: 'brick_1',
+              type: 'Brick',
+              connections: [
+                { target: 'stage_1', label: '' } // Empty label is also missing!
+              ]
+            },
+            {
+              id: 'store_1',
+              type: 'Store',
+              connections: [
+                { target: 'stage_1' } // Stores don't trigger missing connection label!
+              ]
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const stageMissing = diagnostics.find(d => d.path === 'system.components[0].connections[0]' && d.code === 'missing-connection-label')
+      const brickMissing = diagnostics.find(d => d.path === 'system.components[1].connections[0]' && d.code === 'missing-connection-label')
+      const storeMissing = diagnostics.find(d => d.path === 'system.components[2].connections[0]' && d.code === 'missing-connection-label')
+
+      expect(stageMissing).toBeDefined()
+      expect(stageMissing?.severity).toBe('info')
+      expect(stageMissing?.message).toContain('Connection from "stage_1" to "store_1" lacks a label')
+
+      expect(brickMissing).toBeDefined()
+      expect(brickMissing?.severity).toBe('info')
+
+      expect(storeMissing).toBeUndefined()
+    })
+
+    test('flags duplicate connection labels on any component as warning', () => {
+      const spec = {
+        system: {
+          name: 'Duplicate Label Test',
+          components: [
+            {
+              id: 'stage_1',
+              type: 'Stage',
+              connections: [
+                { target: 'store_1', label: 'sends events' },
+                { target: 'brick_1', label: 'sends events' } // Duplicate label!
+              ]
+            },
+            {
+              id: 'store_1',
+              type: 'Store'
+            },
+            {
+              id: 'brick_1',
+              type: 'Brick'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const duplicateLabelDiag = diagnostics.find(d => d.path === 'system.components[0].connections[1]' && d.code === 'duplicate-connection-label')
+      
+      expect(duplicateLabelDiag).toBeDefined()
+      expect(duplicateLabelDiag?.severity).toBe('warning')
+      expect(duplicateLabelDiag?.message).toContain('Component "stage_1" has duplicate connection label "sends events"')
+    })
   })
 })
