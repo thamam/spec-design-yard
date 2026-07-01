@@ -276,7 +276,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 /* ── Focus Tab ── */
 interface FocusTabProps {
   specText: string
-  setSpecText: (val: string) => void
+  setSpecText: (val: string | ((prev: string) => string)) => void
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
@@ -359,6 +359,73 @@ function FocusTab({
     }
 
     onQuickFix(d.path, fixType, extraData)
+  }
+
+  // Global system settings state
+  const [globalFormState, setGlobalFormState] = useState<Record<string, string>>({
+    systemName: "",
+    systemVersion: "",
+    systemStatus: "draft",
+    systemOwner: "",
+    systemDescription: "",
+  })
+
+  const globalDebounceTimersRef = useRef<Record<string, NodeJS.Timeout>>(Object.create(null))
+
+  // Synchronize global settings state with parsed spec (for un-focused elements)
+  useEffect(() => {
+    if (!selectedUnit && parsedSpec?.system) {
+      const sys = parsedSpec.system
+      const sysMeta = sys.metadata || {}
+      setGlobalFormState(prev => {
+        const activeEl = typeof document !== "undefined" ? document.activeElement : null
+        const activeTestId = activeEl?.getAttribute("data-testid")
+
+        const systemName = activeTestId !== "focus-system-name-input" ? (sys.name || "") : prev.systemName
+        const systemVersion = activeTestId !== "focus-system-version-input" ? (sysMeta.version || "") : prev.systemVersion
+        const systemStatus = activeTestId !== "focus-system-status-select" ? (sysMeta.status || "draft") : prev.systemStatus
+        const systemOwner = activeTestId !== "focus-system-owner-input" ? (sysMeta.owner || "") : prev.systemOwner
+        const systemDescription = activeTestId !== "focus-system-description-textarea" ? (sysMeta.description || "") : prev.systemDescription
+
+        if (
+          systemName === prev.systemName &&
+          systemVersion === prev.systemVersion &&
+          systemStatus === prev.systemStatus &&
+          systemOwner === prev.systemOwner &&
+          systemDescription === prev.systemDescription
+        ) {
+          return prev
+        }
+
+        return { systemName, systemVersion, systemStatus, systemOwner, systemDescription }
+      })
+    }
+  }, [parsedSpec, selectedUnit])
+
+  const handleGlobalFieldChange = (
+    field: "systemName" | "systemVersion" | "systemStatus" | "systemOwner" | "systemDescription",
+    path: string,
+    value: string
+  ) => {
+    // 1. Instantly update local state so character insertion is buttery-smooth (60fps)
+    setGlobalFormState(prev => ({
+      ...prev,
+      [field]: value
+    }))
+
+    // 2. Debounce parent AST/YAML updates (200ms) per field
+    if (globalDebounceTimersRef.current[field]) {
+      clearTimeout(globalDebounceTimersRef.current[field])
+    }
+
+    globalDebounceTimersRef.current[field] = setTimeout(() => {
+      setSpecText(prev => {
+        return reconcileSpec(prev, {
+          type: "update-property",
+          payload: { id: "system", path, value }
+        })
+      })
+    }, 200)
   }
 
   // 1. Local state for form fields to guarantee zero-lag typing
@@ -526,6 +593,9 @@ function FocusTab({
       if (inboundConnectionDebounceTimerRef.current) {
         clearTimeout(inboundConnectionDebounceTimerRef.current)
       }
+      Object.values(globalDebounceTimersRef.current).forEach(timer => {
+        if (timer) clearTimeout(timer)
+      })
     }
   }, [selectedUnit])
 
@@ -1184,12 +1254,125 @@ function FocusTab({
           </div>
         </div>
       ) : (
-        <div className="flex-1 border border-dashed border-zinc-900 rounded-lg flex flex-col items-center justify-center p-6 text-center text-zinc-500 min-h-[250px]">
-          <FocusIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
-          <p className="text-xs font-semibold">Diagram Selection Sync Active</p>
-          <p className="text-[11px] text-zinc-600 mt-1 max-w-xs leading-relaxed">
-            Click any component or container box in the Excalidraw diagram or the directory tree, and this view will automatically isolate and show only its specific spec block.
-          </p>
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto gap-4">
+          {/* Header */}
+          <div className="border border-zinc-900 bg-zinc-950/40 p-4 rounded-lg flex flex-col gap-1.5 shrink-0">
+            <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+              <FocusIcon size={16} className="text-indigo-400" />
+              Global System Settings
+            </h3>
+            <p className="text-[11px] text-zinc-500 leading-normal">
+              View and edit global system metadata, version, owner, and documentation rules.
+            </p>
+          </div>
+
+          {/* Form */}
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-lg flex flex-col gap-4 shrink-0">
+            {/* System Name field */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Name</label>
+              <input
+                type="text"
+                data-testid="focus-system-name-input"
+                value={globalFormState.systemName || ""}
+                onChange={(e) => handleGlobalFieldChange("systemName", "system.name", e.target.value)}
+                placeholder="My System Name"
+                className="w-full h-8 px-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs rounded transition-all focus:outline-none font-mono"
+              />
+            </div>
+
+            {/* Metadata check */}
+            {(() => {
+              const hasSystemMetadata = !!parsedSpec?.system?.metadata
+              if (!hasSystemMetadata) {
+                return (
+                  <div className="flex flex-col items-center justify-center p-4 bg-zinc-950/20 border border-dashed border-zinc-800 rounded-lg text-center gap-2">
+                    <p className="text-xs text-zinc-500 italic max-w-sm">
+                      System metadata is not initialized. Initialize metadata to configure owner, description, version, and status.
+                    </p>
+                    {onQuickFix && (
+                      <button
+                        type="button"
+                        data-testid="focus-system-init-metadata-btn"
+                        onClick={() => onQuickFix("system", "missing-system-metadata")}
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold uppercase tracking-wide transition-colors active:scale-95 cursor-pointer border border-indigo-500/20"
+                      >
+                        Initialize System Metadata
+                      </button>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* System Version */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Version</label>
+                      <input
+                        type="text"
+                        data-testid="focus-system-version-input"
+                        value={globalFormState.systemVersion || ""}
+                        onChange={(e) => handleGlobalFieldChange("systemVersion", "system.metadata.version", e.target.value)}
+                        placeholder="e.g. 1.0.0"
+                        className="w-full h-8 px-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs rounded transition-all focus:outline-none font-mono"
+                      />
+                    </div>
+
+                    {/* System Status */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Status</label>
+                      <select
+                        data-testid="focus-system-status-select"
+                        value={globalFormState.systemStatus || "draft"}
+                        onChange={(e) => handleGlobalFieldChange("systemStatus", "system.metadata.status", e.target.value)}
+                        className="w-full h-8 px-2 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs rounded transition-all focus:outline-none cursor-pointer font-sans"
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="active">Active</option>
+                        <option value="deprecated">Deprecated</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* System Owner */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Owner</label>
+                    <input
+                      type="text"
+                      data-testid="focus-system-owner-input"
+                      value={globalFormState.systemOwner || ""}
+                      onChange={(e) => handleGlobalFieldChange("systemOwner", "system.metadata.owner", e.target.value)}
+                      placeholder="e.g. architecture-team"
+                      className="w-full h-8 px-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs rounded transition-all focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  {/* System Description */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Description</label>
+                    <textarea
+                      data-testid="focus-system-description-textarea"
+                      value={globalFormState.systemDescription || ""}
+                      onChange={(e) => handleGlobalFieldChange("systemDescription", "system.metadata.description", e.target.value)}
+                      placeholder="Enter high-level architecture description..."
+                      rows={3}
+                      className="w-full p-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs rounded transition-all focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Prompt / hint */}
+          <div className="border border-dashed border-zinc-900/60 rounded-lg flex flex-col items-center justify-center p-5 text-center text-zinc-500 shrink-0">
+            <p className="text-[10px] font-semibold text-zinc-400">Diagram Selection Sync Active</p>
+            <p className="text-[9.5px] text-zinc-600 mt-1 max-w-xs leading-normal">
+              Click any component or box in the visual diagram, and this view will automatically switch to inspect and edit its properties.
+            </p>
+          </div>
         </div>
       )}
     </div>
