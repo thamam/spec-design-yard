@@ -722,6 +722,19 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
+      } else if (fixType === "missing-connection-label") {
+        const connNode = doc.getIn(parts) as any
+        if (connNode && typeof connNode.set === "function") {
+          connNode.set("label", "processes data")
+          modified = true
+        }
+      } else if (fixType === "duplicate-connection-label") {
+        const connNode = doc.getIn(parts) as any
+        if (connNode && typeof connNode.set === "function" && typeof connNode.get === "function") {
+          const currentLabel = String(connNode.get("label") || "")
+          connNode.set("label", currentLabel + " 2")
+          modified = true
+        }
       } else if (fixType === "invalid-id-format") {
         const currentId = String(doc.getIn(parts) || "").trim()
         let fixedId = currentId.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/__+/g, "_")
