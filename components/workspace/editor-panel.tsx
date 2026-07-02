@@ -1521,6 +1521,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
 
     const visitedNodes = new Set<string>()
     let subgraphsCount = 0
+    let largestSubgraphSize = 0
 
     ids.forEach(startNode => {
       if (!visitedNodes.has(startNode)) {
@@ -1528,6 +1529,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
         const queue = [startNode]
         visitedNodes.add(startNode)
         let qIdx = 0
+        let currentSize = 1
         while (qIdx < queue.length) {
           const node = queue[qIdx++]
           const neighbors = adjUndirected[node] || []
@@ -1535,8 +1537,12 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             if (!visitedNodes.has(neighbor)) {
               visitedNodes.add(neighbor)
               queue.push(neighbor)
+              currentSize++
             }
           }
+        }
+        if (currentSize > largestSubgraphSize) {
+          largestSubgraphSize = currentSize
         }
       }
     })
@@ -1587,6 +1593,68 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       })
       .sort((a: any, b: any) => b.degree - a.degree)
 
+    const systemCoherence = totalComponents > 0 ? Math.round((largestSubgraphSize / totalComponents) * 100) : 0
+
+    // Directed Adjacency Map for Depth calculation
+    const dirAdj: Record<string, string[]> = Object.create(null)
+    ids.forEach(id => {
+      dirAdj[id] = []
+    })
+
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              dirAdj[u].push(v)
+            }
+          }
+        })
+      }
+    })
+
+    // Find entry points: gateways or nodes with in-degree 0 in our active component ID list
+    const entryPoints: string[] = []
+    ids.forEach(id => {
+      const type = String(components.find((c: any) => c && typeof c.id === 'string' && c.id.trim() === id)?.type || '').toLowerCase()
+      if (type === 'gateway' || (incomingCountMap[id] || 0) === 0) {
+        entryPoints.push(id)
+      }
+    })
+
+    // DFS with cycle protection
+    const findMaxPath = (node: string, currentPath: Set<string>): number => {
+      const neighbors = dirAdj[node] || []
+      let maxSubPath = 0
+      for (const neighbor of neighbors) {
+        if (!currentPath.has(neighbor)) {
+          currentPath.add(neighbor)
+          const length = findMaxPath(neighbor, currentPath)
+          currentPath.delete(neighbor)
+          if (length > maxSubPath) {
+            maxSubPath = length
+          }
+        }
+      }
+      return 1 + maxSubPath
+    }
+
+    let maxExecutionDepth = 0
+    entryPoints.forEach(ep => {
+      const pathSet = new Set<string>([ep])
+      const depth = findMaxPath(ep, pathSet)
+      if (depth > maxExecutionDepth) {
+        maxExecutionDepth = depth
+      }
+    })
+
     return {
       components,
       systemName,
@@ -1603,7 +1671,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       connectionDensity,
       couplingRating,
       subgraphsCount,
-      hotspots
+      hotspots,
+      systemCoherence,
+      maxExecutionDepth
     }
   }, [parsedSpec, diagnostics])
 
@@ -1623,7 +1693,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     connectionDensity,
     couplingRating,
     subgraphsCount,
-    hotspots
+    hotspots,
+    systemCoherence,
+    maxExecutionDepth
   } = metrics
 
   // Filter the components list in O(N) using O(1) map lookups
@@ -1826,6 +1898,16 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
           <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Independent Subgraphs</span>
           <span className="text-xl font-bold text-sky-400">
             {subgraphsCount} {subgraphsCount === 1 ? "Subgraph" : "Subgraphs"}
+          </span>
+        </div>
+        <div data-testid="metrics-coherence" className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">System Coherence</span>
+          <span className="text-xl font-bold text-teal-400">{systemCoherence}%</span>
+        </div>
+        <div data-testid="metrics-depth" className="border border-zinc-900 bg-zinc-950/40 p-3 rounded-lg flex flex-col gap-1 font-mono">
+          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold">Max Execution Depth</span>
+          <span className="text-xl font-bold text-fuchsia-400">
+            {maxExecutionDepth} {maxExecutionDepth === 1 ? "Step" : "Steps"}
           </span>
         </div>
       </div>

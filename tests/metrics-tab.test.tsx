@@ -215,5 +215,43 @@ describe('Workspace Metrics Tab Feature', () => {
       expect(screen.getByText("2 Subgraphs")).toBeInTheDocument()
     })
   })
+
+  test('displays System Coherence and Max Execution Depth metrics', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // 1. Verify System Coherence is displayed (100% on initial spec)
+    const coherenceCard = screen.getByTestId("metrics-coherence")
+    expect(coherenceCard).toBeInTheDocument()
+    expect(within(coherenceCard).getByText("100%")).toBeInTheDocument()
+
+    // 2. Verify Max Execution Depth is displayed (6 on initial spec)
+    const depthCard = screen.getByTestId("metrics-depth")
+    expect(depthCard).toBeInTheDocument()
+    expect(within(depthCard).getByText("6 Steps")).toBeInTheDocument()
+
+    // 3. Test with a disconnected component (reduces cohesion)
+    const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
+    fireEvent.click(codeTabBtn)
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const specWithDisconnected = `${textarea.value}
+    - id: disconnected_island
+      type: Stage
+      name: Disconnected Island
+`
+    fireEvent.change(textarea, { target: { value: specWithDisconnected } })
+
+    // Switch back to Metrics Tab
+    fireEvent.click(metricsTabButton)
+
+    // Verify System Coherence count has updated (11/12 = 92%)
+    await waitFor(() => {
+      const coherenceCardUpdated = screen.getByTestId("metrics-coherence")
+      expect(within(coherenceCardUpdated).getByText("92%")).toBeInTheDocument()
+    })
+  })
 })
 
