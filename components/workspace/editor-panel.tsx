@@ -1869,7 +1869,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       <div className="flex flex-col gap-1.5 shrink-0 border-t border-zinc-900 pt-3">
         <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Architectural Hotspots</h4>
         <div className="flex flex-col gap-1.5 text-xs font-mono">
-          {hotspots.slice(0, 3).map((h: any) => {
+          {hotspots.slice(0, 3).map((h: any, idx: number) => {
             let badgeColor = "bg-zinc-900/40 text-zinc-400 border-zinc-900"
             if (h.degree >= 5) badgeColor = "bg-rose-950/30 text-rose-400 border-rose-900/40"
             else if (h.degree >= 3) badgeColor = "bg-amber-950/30 text-amber-400 border-amber-900/40"
@@ -1877,7 +1877,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
 
             return (
               <div
-                key={h.id}
+                key={`${h.id}-${idx}`}
                 onClick={() => setSelectedUnit && setSelectedUnit(h.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
