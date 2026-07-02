@@ -281,5 +281,19 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.click(focusTabButton)
     expect(screen.getByText(/Selected:/i).textContent).toContain('digest_stage')
   })
+
+  test('displays actionable architectural recommendations based on system metrics', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Check that the recommendations section is rendered
+    expect(screen.getByText(/Architectural Recommendations/i)).toBeInTheDocument()
+
+    // Since digest_stage is a SPOF, we expect a SPOF recommendation to be visible
+    expect(screen.getByText(/Critical single point of failure \(SPOF\) detected:/i)).toBeInTheDocument()
+    expect(screen.getByText(/Introduce parallel execution stages, fallback channels/i)).toBeInTheDocument()
+  })
 })
 
