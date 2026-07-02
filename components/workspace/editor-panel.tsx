@@ -21,7 +21,7 @@ import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 
 interface EditorPanelProps {
   specText?: string
-  setSpecText?: (val: string) => void
+  setSpecText?: (val: string | ((prev: string) => string)) => void
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
@@ -1587,6 +1587,43 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       })
       .sort((a: any, b: any) => b.degree - a.degree)
 
+    // Single Points of Failure / Articulation Points detection
+    const singlePointsOfFailure: any[] = []
+    if (components.length > 2) {
+      ids.forEach((v) => {
+        const visitedRemaining = new Set<string>()
+        let remainingSubgraphsCount = 0
+
+        ids.forEach(startNode => {
+          if (startNode !== v && !visitedRemaining.has(startNode)) {
+            remainingSubgraphsCount++
+            const queue = [startNode]
+            visitedRemaining.add(startNode)
+            let qIdx = 0
+            while (qIdx < queue.length) {
+              const node = queue[qIdx++]
+              const neighbors = adjUndirected[node] || []
+              for (const neighbor of neighbors) {
+                if (neighbor !== v && !visitedRemaining.has(neighbor)) {
+                  visitedRemaining.add(neighbor)
+                  queue.push(neighbor)
+                }
+              }
+            }
+          }
+        })
+
+        if (remainingSubgraphsCount > subgraphsCount) {
+          const compObj = components.find((c: any) => c && typeof c.id === 'string' && c.id.trim() === v)
+          singlePointsOfFailure.push({
+            id: v,
+            name: compObj?.name || v,
+            type: compObj?.type || "Stage"
+          })
+        }
+      })
+    }
+
     return {
       components,
       systemName,
@@ -1603,7 +1640,8 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       connectionDensity,
       couplingRating,
       subgraphsCount,
-      hotspots
+      hotspots,
+      singlePointsOfFailure
     }
   }, [parsedSpec, diagnostics])
 
@@ -1623,7 +1661,8 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     connectionDensity,
     couplingRating,
     subgraphsCount,
-    hotspots
+    hotspots,
+    singlePointsOfFailure
   } = metrics
 
   // Filter the components list in O(N) using O(1) map lookups
@@ -1902,6 +1941,42 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
           })}
           {hotspots.length === 0 && (
             <p className="text-[11px] text-zinc-500 italic">No connections in system to analyze hotspots.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Single Points of Failure / SPOFs */}
+      <div className="flex flex-col gap-1.5 shrink-0 border-t border-zinc-900 pt-3">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+          Single Points of Failure (SPOFs)
+        </h4>
+        <div className="flex flex-col gap-1.5 text-xs font-mono">
+          {singlePointsOfFailure.map((s: any, idx: number) => (
+            <div
+              key={`${s.id}-${idx}`}
+              onClick={() => setSelectedUnit && setSelectedUnit(s.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSelectedUnit && setSelectedUnit(s.id)
+                }
+              }}
+              tabIndex={0}
+              className="w-full text-left flex items-center justify-between p-2 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-rose-950/20 text-rose-300 border-rose-900/30"
+              aria-label={`Select SPOF ${s.id}`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold hover:underline">{s.id}</span>
+                <span className="text-[10px] text-zinc-500 font-sans">({s.type})</span>
+              </div>
+              <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/25 px-1.5 py-0.5 rounded font-sans uppercase font-bold shrink-0">
+                Critical SPOF
+              </span>
+            </div>
+          ))}
+          {singlePointsOfFailure.length === 0 && (
+            <p className="text-[11px] text-zinc-500 italic">No single points of failure detected. Robust, resilient architecture!</p>
           )}
         </div>
       </div>

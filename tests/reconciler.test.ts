@@ -781,7 +781,6 @@ system:
       type: 'quick-fix',
       payload: {
         path: 'system.metadata.description',
-        role: 'user', // wait, extraData is empty
         fixType: 'placeholder-system-metadata-description'
       }
     })
