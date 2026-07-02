@@ -96,6 +96,8 @@ export function WorkspaceLayout() {
   const [specText, setSpecText] = useState(INITIAL_SPEC)
   const [parsedSpec, setParsedSpec] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
+  const [pathSource, setPathSource] = useState<string>("")
+  const [pathTarget, setPathTarget] = useState<string>("")
 
   // User Session & DB storage states
   const [session, setSession] = useState<UserSession>({ user: null })
@@ -232,6 +234,10 @@ export function WorkspaceLayout() {
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
+            pathSource={pathSource}
+            setPathSource={setPathSource}
+            pathTarget={pathTarget}
+            setPathTarget={setPathTarget}
           />
         </div>
 
@@ -281,6 +287,8 @@ export function WorkspaceLayout() {
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
             onCanvasChange={handleCanvasChange}
+            pathSource={pathSource}
+            pathTarget={pathTarget}
           />
         </div>
       </div>

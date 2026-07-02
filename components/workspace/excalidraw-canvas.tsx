@@ -466,11 +466,15 @@ export function ExcalidrawCanvas({
   selectedUnit,
   setSelectedUnit,
   onCanvasChange,
+  pathSource,
+  pathTarget,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
   onCanvasChange?: (change: any[] | CanvasChange) => void
+  pathSource?: string
+  pathTarget?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -494,7 +498,7 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec), [parsedSpec])
+  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget), [parsedSpec, pathSource, pathTarget])
 
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)

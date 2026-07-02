@@ -67,11 +67,15 @@ export function CanvasPanel({
   selectedUnit,
   setSelectedUnit,
   onCanvasChange,
+  pathSource,
+  pathTarget,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
   onCanvasChange?: (change: any[] | CanvasChange) => void
+  pathSource?: string
+  pathTarget?: string
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
@@ -202,6 +206,8 @@ export function CanvasPanel({
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
             onCanvasChange={onCanvasChange}
+            pathSource={pathSource}
+            pathTarget={pathTarget}
           />
         )}
         {view === "grid" && <GridView parsedSpec={parsedSpec} />}

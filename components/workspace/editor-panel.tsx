@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, Fragment } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -25,6 +25,10 @@ interface EditorPanelProps {
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
+  pathSource?: string
+  setPathSource?: (val: string) => void
+  pathTarget?: string
+  setPathTarget?: (val: string) => void
 }
 
 /* ── Code Tab ── */
@@ -1385,6 +1389,10 @@ interface MetricsTabProps {
   setSelectedUnit?: (val: string | null) => void
   diagnostics?: Diagnostic[]
   onQuickFix?: (path: string, fixType: string, extraData?: any) => void
+  pathSource?: string
+  setPathSource?: (val: string) => void
+  pathTarget?: string
+  setPathTarget?: (val: string) => void
 }
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
@@ -1399,12 +1407,27 @@ interface ComponentWithIndex {
   originalIdx: number
 }
 
-function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = EMPTY_DIAGNOSTICS, onQuickFix }: MetricsTabProps) {
+function MetricsTab({
+  parsedSpec,
+  selectedUnit,
+  setSelectedUnit,
+  diagnostics = EMPTY_DIAGNOSTICS,
+  onQuickFix,
+  pathSource: propPathSource,
+  setPathSource: propSetPathSource,
+  pathTarget: propPathTarget,
+  setPathTarget: propSetPathTarget,
+}: MetricsTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
-  const [pathSource, setPathSource] = useState<string>("")
-  const [pathTarget, setPathTarget] = useState<string>("")
+
+  const [localPathSource, setLocalPathSource] = useState<string>("")
+  const [localPathTarget, setLocalPathTarget] = useState<string>("")
+  const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
+  const setPathSource = propSetPathSource || setLocalPathSource
+  const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
+  const setPathTarget = propSetPathTarget || setLocalPathTarget
 
   const systemMetadata = parsedSpec?.system?.metadata
   const hasSystemMetadata = !!systemMetadata && typeof systemMetadata === "object" && !Array.isArray(systemMetadata)
@@ -1674,6 +1697,36 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     allIds
   } = metrics
 
+  // Pre-computed O(1) type and label lookup maps for the path tracer to avoid nested linear scans on renders
+  const { componentTypeMap, edgeLabelMap } = useMemo(() => {
+    const typeMap = new Map<string, string>()
+    const labelMap = new Map<string, string>()
+    
+    if (components && Array.isArray(components)) {
+      components.forEach((c: any) => {
+        if (c && typeof c.id === 'string' && c.id.trim() !== '') {
+          const compId = c.id.trim()
+          typeMap.set(compId, c.type || "Stage")
+          
+          const conns = c.connections || []
+          if (Array.isArray(conns)) {
+            conns.forEach((conn: any) => {
+              const target = typeof conn === 'string' ? conn : conn?.target
+              if (typeof target === 'string' && target.trim() !== '') {
+                const label = conn?.label || null
+                if (label) {
+                  labelMap.set(`${compId}->${target.trim()}`, label)
+                }
+              }
+            })
+          }
+        }
+      })
+    }
+    
+    return { componentTypeMap: typeMap, edgeLabelMap: labelMap }
+  }, [components])
+
   // Interactive Path Finder & Lineage Analyzer
   const tracedPaths = useMemo(() => {
     if (!pathSource || !pathTarget || pathSource === pathTarget) return []
@@ -1706,14 +1759,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     return result
   }, [pathSource, pathTarget, adjDirected])
 
-  const getConnectionLabel = (from: string, to: string) => {
-    const compObj = components.find((c: any) => c && c.id === from)
-    if (compObj && Array.isArray(compObj.connections)) {
-      const conn = compObj.connections.find((cn: any) => cn && cn.target === to)
-      return conn?.label || null
-    }
-    return null
-  }
+  const getConnectionLabel = useCallback((from: string, to: string) => {
+    return edgeLabelMap.get(`${from}->${to}`) || null
+  }, [edgeLabelMap])
 
   // Filter the components list in O(N) using O(1) map lookups
   const filteredComponents = useMemo(() => {
@@ -2093,8 +2141,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
                       <div className="flex flex-wrap items-center gap-1 leading-relaxed">
                         {path.map((node, nIdx) => {
                           const isLast = nIdx === path.length - 1;
-                          const compObj = components.find((c: any) => c && c.id === node);
-                          const type = compObj?.type || "Stage";
+                          const type = componentTypeMap.get(node) || "Stage";
                           
                           // Determine color coding based on type
                           let typeColor = "text-zinc-400";
@@ -2102,6 +2149,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
                           else if (type.toLowerCase() === "store") typeColor = "text-indigo-400 font-bold";
                           else if (type.toLowerCase() === "brick") typeColor = "text-emerald-400";
                           else if (type.toLowerCase() === "stage") typeColor = "text-purple-400";
+
+                          const nextNode = isLast ? null : path[nIdx + 1];
+                          const connLabel = !isLast && nextNode ? edgeLabelMap.get(`${node}->${nextNode}`) : null;
 
                           return (
                             <Fragment key={`${node}-${nIdx}`}>
@@ -2119,9 +2169,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
                               {!isLast && (
                                 <div className="flex flex-col items-center justify-center px-0.5 text-zinc-500 shrink-0 select-none">
                                   <span className="text-xs">→</span>
-                                  {getConnectionLabel(node, path[nIdx + 1]) && (
-                                    <span className="text-[8px] font-sans text-zinc-600 max-w-[80px] truncate" title={getConnectionLabel(node, path[nIdx + 1]) || ""}>
-                                      {getConnectionLabel(node, path[nIdx + 1])}
+                                  {connLabel && (
+                                    <span className="text-[8px] font-sans text-zinc-600 max-w-[80px] truncate" title={connLabel}>
+                                      {connLabel}
                                     </span>
                                   )}
                                 </div>
@@ -2351,10 +2401,20 @@ export function EditorPanel({
   parsedSpec: propParsedSpec,
   selectedUnit: propSelectedUnit,
   setSelectedUnit: propSetSelectedUnit,
+  pathSource: propPathSource,
+  setPathSource: propSetPathSource,
+  pathTarget: propPathTarget,
+  setPathTarget: propSetPathTarget,
 }: EditorPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("code")
-  const [pathSource, setPathSource] = useState<string>("")
-  const [pathTarget, setPathTarget] = useState<string>("")
+  
+  const [localPathSource, setLocalPathSource] = useState<string>("")
+  const [localPathTarget, setLocalPathTarget] = useState<string>("")
+  const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
+  const setPathSource = propSetPathSource || setLocalPathSource
+  const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
+  const setPathTarget = propSetPathTarget || setLocalPathTarget
+
   const [wordWrap, setWordWrap] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -2622,7 +2682,17 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <MetricsTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} diagnostics={diagnostics} onQuickFix={handleQuickFix} />
+        <MetricsTab
+          parsedSpec={parsedSpec}
+          selectedUnit={selectedUnit}
+          setSelectedUnit={setSelectedUnit}
+          diagnostics={diagnostics}
+          onQuickFix={handleQuickFix}
+          pathSource={pathSource}
+          setPathSource={setPathSource}
+          pathTarget={pathTarget}
+          setPathTarget={setPathTarget}
+        />
       </div>
 
       {/* Diagnostics Panel */}
