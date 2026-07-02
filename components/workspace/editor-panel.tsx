@@ -1681,10 +1681,10 @@ function MetricsTab({
 
     // 3. Isolated Stores
     const isolatedStores = components.filter((c: any) => {
-      if (!c) return false
+      if (!c || typeof c.id !== 'string') return false
       const type = String(c.type || "").toLowerCase()
-      const id = c.id?.trim()
-      return type === "store" && id && ids.has(id) && (incomingCountMap[id] || 0) === 0
+      const id = c.id.trim()
+      return type === "store" && ids.has(id) && (incomingCountMap[id] || 0) === 0
     })
     if (isolatedStores.length > 0) {
       const storeIds = isolatedStores.map((s: any) => s.id).join(", ")
@@ -1697,11 +1697,11 @@ function MetricsTab({
 
     // 4. Processing Sinks
     const sinkComponents = components.filter((c: any) => {
-      if (!c) return false
-      const id = c.id?.trim()
+      if (!c || typeof c.id !== 'string') return false
+      const id = c.id.trim()
       const type = String(c.type || "").toLowerCase()
       const isSinkType = type === "stage" || type === "brick"
-      return id && ids.has(id) && isSinkType && (outgoingCountMap[id] || 0) === 0 && (incomingCountMap[id] || 0) > 0
+      return ids.has(id) && isSinkType && (outgoingCountMap[id] || 0) === 0 && (incomingCountMap[id] || 0) > 0
     })
     if (sinkComponents.length > 0) {
       const sinkIds = sinkComponents.map((s: any) => s.id).join(", ")
@@ -1715,16 +1715,16 @@ function MetricsTab({
     // 5. Gateway Directly to Store
     const gatewayBypasses: string[] = []
     components.forEach((c: any) => {
-      if (!c) return
-      const id = c.id?.trim()
+      if (!c || typeof c.id !== 'string') return
+      const id = c.id.trim()
       const type = String(c.type || "").toLowerCase()
-      if (type === "gateway" && id && ids.has(id)) {
+      if (type === "gateway" && ids.has(id)) {
         const conns = c.connections || []
         if (Array.isArray(conns)) {
           conns.forEach((conn: any) => {
             const target = typeof conn === "string" ? conn : conn?.target
             if (typeof target === "string" && ids.has(target.trim())) {
-              const targetComp = components.find((co: any) => co.id === target.trim())
+              const targetComp = components.find((co: any) => co && typeof co.id === 'string' && co.id.trim() === target.trim())
               const targetType = String(targetComp?.type || "").toLowerCase()
               if (targetType === "store") {
                 gatewayBypasses.push(`${id} → ${target.trim()}`)
