@@ -1590,14 +1590,12 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     // Single Points of Failure / Articulation Points detection
     const singlePointsOfFailure: any[] = []
     if (components.length > 2) {
-       ids.forEach((v) => {
-         const remainingIds = new Set<string>()
-         Array.from(ids).filter(id => id !== v).forEach(id => remainingIds.add(id))
+      ids.forEach((v) => {
         const visitedRemaining = new Set<string>()
         let remainingSubgraphsCount = 0
 
-        remainingIds.forEach(startNode => {
-          if (!visitedRemaining.has(startNode)) {
+        ids.forEach(startNode => {
+          if (startNode !== v && !visitedRemaining.has(startNode)) {
             remainingSubgraphsCount++
             const queue = [startNode]
             visitedRemaining.add(startNode)

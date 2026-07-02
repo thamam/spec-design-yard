@@ -833,18 +833,16 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       }
     })
 
-    const buildUndirectedAdj = (excludeId?: string): Record<string, string[]> => {
+    const buildUndirectedAdj = (): Record<string, string[]> => {
       const adjUndir: Record<string, string[]> = Object.create(null)
       spofIds.forEach(id => {
-        if (id !== excludeId) {
-          adjUndir[id] = []
-        }
+        adjUndir[id] = []
       })
 
       components.forEach((c: any) => {
         if (!c || typeof c !== 'object' || typeof c.id !== 'string') return
         const u = c.id.trim()
-        if (u === "" || u === excludeId || !spofIds.has(u)) return
+        if (u === "" || !spofIds.has(u)) return
 
         const conns = c.connections || []
         if (Array.isArray(conns)) {
@@ -852,7 +850,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             const target = typeof conn === 'string' ? conn : conn?.target
             if (typeof target === 'string') {
               const v = target.trim()
-              if (v !== "" && v !== excludeId && v !== u && spofIds.has(v)) {
+              if (v !== "" && v !== u && spofIds.has(v)) {
                 if (!adjUndir[u].includes(v)) adjUndir[u].push(v)
                 if (!adjUndir[v].includes(u)) adjUndir[v].push(u)
               }
@@ -863,12 +861,16 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       return adjUndir
     }
 
-    const countComponents = (adjUndir: Record<string, string[]>, activeIds: Set<string>): number => {
+    const countComponentsWithExclude = (
+      adjUndir: Record<string, string[]>, 
+      activeIds: Set<string>, 
+      excludeId?: string
+    ): number => {
       const visitedUndir = new Set<string>()
       let count = 0
 
       activeIds.forEach(startNode => {
-        if (!visitedUndir.has(startNode)) {
+        if (startNode !== excludeId && !visitedUndir.has(startNode)) {
           count++
           const queue = [startNode]
           visitedUndir.add(startNode)
@@ -877,7 +879,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             const node = queue[qIdx++]
             const neighbors = adjUndir[node] || []
             for (const neighbor of neighbors) {
-              if (!visitedUndir.has(neighbor)) {
+              if (neighbor !== excludeId && !visitedUndir.has(neighbor)) {
                 visitedUndir.add(neighbor)
                 queue.push(neighbor)
               }
@@ -889,17 +891,14 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
 
     const fullAdj = buildUndirectedAdj()
-    const baseSubgraphsCount = countComponents(fullAdj, spofIds)
+    const baseSubgraphsCount = countComponentsWithExclude(fullAdj, spofIds)
 
     components.forEach((comp: any, compIdx: number) => {
       if (!comp || typeof comp !== 'object' || typeof comp.id !== 'string') return
       const v = comp.id.trim()
       if (v === "" || !spofIds.has(v)) return
 
-      const remainingIds = new Set<string>()
-      Array.from(spofIds).filter(id => id !== v).forEach(id => remainingIds.add(id))
-      const remainingAdj = buildUndirectedAdj(v)
-      const remainingSubgraphsCount = countComponents(remainingAdj, remainingIds)
+      const remainingSubgraphsCount = countComponentsWithExclude(fullAdj, spofIds, v)
 
       if (remainingSubgraphsCount > baseSubgraphsCount) {
         diagnostics.push({
