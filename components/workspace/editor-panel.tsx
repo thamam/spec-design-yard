@@ -1876,14 +1876,26 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             else if (h.degree >= 1) badgeColor = "bg-indigo-950/30 text-indigo-400 border-indigo-900/40"
 
             return (
-              <div key={h.id} className={`flex items-center justify-between p-2 rounded border ${badgeColor}`}>
+              <div
+                key={h.id}
+                onClick={() => setSelectedUnit && setSelectedUnit(h.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedUnit && setSelectedUnit(h.id)
+                  }
+                }}
+                tabIndex={0}
+                className={`w-full text-left flex items-center justify-between p-2 rounded border transition-all cursor-pointer hover:brightness-110 active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-indigo-500 ${badgeColor}`}
+                aria-label={`Select hotspot ${h.id}`}
+              >
                 <div className="flex items-center gap-1.5">
-                  <span className="font-bold">{h.id}</span>
+                  <span className="font-bold hover:underline">{h.id}</span>
                   <span className="text-[10px] text-zinc-500 font-sans">({h.type})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-zinc-500">In: {h.incoming} / Out: {h.outgoing}</span>
-                  <span className="font-bold">{h.id} (Degree: {h.degree})</span>
+                  <span className="font-bold">Degree: {h.degree}</span>
                 </div>
               </div>
             )

@@ -187,7 +187,9 @@ describe('Workspace Metrics Tab Feature', () => {
     // 3. Verify Hotspot / Hub Components is displayed and lists top components
     expect(screen.getByText(/Architectural Hotspots/i)).toBeInTheDocument()
     // digest_stage has 1 outgoing + 5 incoming connections = 6 total degree (highest in system)
-    expect(screen.getByText("digest_stage (Degree: 6)")).toBeInTheDocument()
+    const hotspotCard = screen.getByLabelText("Select hotspot digest_stage")
+    expect(hotspotCard).toBeInTheDocument()
+    expect(within(hotspotCard).getByText("Degree: 6")).toBeInTheDocument()
 
     // 4. Verify Independent Subgraphs count is displayed
     expect(screen.getByText(/Independent Subgraphs/i)).toBeInTheDocument()
