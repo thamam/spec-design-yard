@@ -978,5 +978,37 @@ describe('Advanced Linter Features', () => {
       expect(duplicateLabelDiag?.severity).toBe('warning')
       expect(duplicateLabelDiag?.message).toContain('Component "stage_1" has duplicate connection label "sends events"')
     })
+
+    test('flags single point of failure (articulation point) in components as warning', () => {
+      const spec = {
+        system: {
+          name: 'SPOF Test',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              connections: [{ target: 'node_b' }]
+            },
+            {
+              id: 'node_b',
+              type: 'Stage',
+              connections: [{ target: 'node_c' }]
+            },
+            {
+              id: 'node_c',
+              type: 'Stage'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const spofDiag = diagnostics.find(d => d.code === 'single-point-of-failure')
+      
+      expect(spofDiag).toBeDefined()
+      expect(spofDiag?.severity).toBe('warning')
+      expect(spofDiag?.message).toContain('Component "node_b" is a single point of failure (articulation point)')
+      expect(spofDiag?.path).toBe('system.components[1]')
+    })
   })
 })

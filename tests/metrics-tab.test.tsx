@@ -215,5 +215,28 @@ describe('Workspace Metrics Tab Feature', () => {
       expect(screen.getByText("2 Subgraphs")).toBeInTheDocument()
     })
   })
+
+  test('displays Single Points of Failure (SPOFs) list and supports selecting them', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Check that SPOFs section is rendered
+    expect(screen.getByText(/Single Points of Failure \(SPOFs\)/i)).toBeInTheDocument()
+
+    // Since digest_stage is a bridge component, verify it is listed as a SPOF
+    const spofCard = screen.getByLabelText("Select SPOF digest_stage")
+    expect(spofCard).toBeInTheDocument()
+    expect(within(spofCard).getByText(/Critical SPOF/i)).toBeInTheDocument()
+
+    // Click on digest_stage in SPOFs list
+    fireEvent.click(spofCard)
+
+    // Switch to Focus tab to verify that 'digest_stage' is selected
+    const focusTabButton = screen.getByRole('tab', { name: /Focus/i })
+    fireEvent.click(focusTabButton)
+    expect(screen.getByText(/Selected:/i).textContent).toContain('digest_stage')
+  })
 })
 

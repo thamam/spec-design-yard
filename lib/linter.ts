@@ -824,5 +824,93 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     }
   })
 
+  // Pass 6: Single Points of Failure / Articulation Points detection
+  if (components.length > 2) {
+    const spofIds = new Set<string>()
+    components.forEach((c: any) => {
+      if (c && typeof c === 'object' && typeof c.id === 'string' && c.id.trim() !== "" && ids.has(c.id.trim())) {
+        spofIds.add(c.id.trim())
+      }
+    })
+
+    const buildUndirectedAdj = (excludeId?: string): Record<string, string[]> => {
+      const adjUndir: Record<string, string[]> = Object.create(null)
+      spofIds.forEach(id => {
+        if (id !== excludeId) {
+          adjUndir[id] = []
+        }
+      })
+
+      components.forEach((c: any) => {
+        if (!c || typeof c !== 'object' || typeof c.id !== 'string') return
+        const u = c.id.trim()
+        if (u === "" || u === excludeId || !spofIds.has(u)) return
+
+        const conns = c.connections || []
+        if (Array.isArray(conns)) {
+          conns.forEach((conn: any) => {
+            const target = typeof conn === 'string' ? conn : conn?.target
+            if (typeof target === 'string') {
+              const v = target.trim()
+              if (v !== "" && v !== excludeId && v !== u && spofIds.has(v)) {
+                if (!adjUndir[u].includes(v)) adjUndir[u].push(v)
+                if (!adjUndir[v].includes(u)) adjUndir[v].push(u)
+              }
+            }
+          })
+        }
+      })
+      return adjUndir
+    }
+
+    const countComponents = (adjUndir: Record<string, string[]>, activeIds: Set<string>): number => {
+      const visitedUndir = new Set<string>()
+      let count = 0
+
+      activeIds.forEach(startNode => {
+        if (!visitedUndir.has(startNode)) {
+          count++
+          const queue = [startNode]
+          visitedUndir.add(startNode)
+          let qIdx = 0
+          while (qIdx < queue.length) {
+            const node = queue[qIdx++]
+            const neighbors = adjUndir[node] || []
+            for (const neighbor of neighbors) {
+              if (!visitedUndir.has(neighbor)) {
+                visitedUndir.add(neighbor)
+                queue.push(neighbor)
+              }
+            }
+          }
+        }
+      })
+      return count
+    }
+
+    const fullAdj = buildUndirectedAdj()
+    const baseSubgraphsCount = countComponents(fullAdj, spofIds)
+
+    components.forEach((comp: any, compIdx: number) => {
+      if (!comp || typeof comp !== 'object' || typeof comp.id !== 'string') return
+      const v = comp.id.trim()
+      if (v === "" || !spofIds.has(v)) return
+
+      const remainingIds = new Set<string>()
+      Array.from(spofIds).filter(id => id !== v).forEach(id => remainingIds.add(id))
+      const remainingAdj = buildUndirectedAdj(v)
+      const remainingSubgraphsCount = countComponents(remainingAdj, remainingIds)
+
+      if (remainingSubgraphsCount > baseSubgraphsCount) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${v}" is a single point of failure (articulation point) in the architecture. Its removal splits the system into disconnected subgraphs.`,
+          path: `system.components[${compIdx}]`,
+          code: "single-point-of-failure",
+        })
+      }
+    })
+  }
+
   return diagnostics;
 }
