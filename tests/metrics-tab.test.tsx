@@ -295,5 +295,23 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.getByText(/Critical single point of failure \(SPOF\) detected:/i)).toBeInTheDocument()
     expect(screen.getByText(/Introduce parallel execution stages, fallback channels/i)).toBeInTheDocument()
   })
+
+  test('displays flow bottleneck and asymmetric path bypass recommendations', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Verify recommendations are visible
+    expect(screen.getByText(/Architectural Recommendations/i)).toBeInTheDocument()
+
+    // Since the initial spec contains bottlenecks and asymmetric path bypasses:
+    expect(screen.getByText(/High-frequency system flow bottleneck detected:/i)).toBeInTheDocument()
+    expect(screen.getByText(/These components are present on a majority of all Gateway-to-Store pathways/i)).toBeInTheDocument()
+
+    // Bypasses like b1_schema -> review_stage
+    expect(screen.getByText(/Asymmetric path bypass connection\(s\) detected:/i)).toBeInTheDocument()
+    expect(screen.getByText(/These components connect directly to a downstream target but also feed it indirectly/i)).toBeInTheDocument()
+  })
 })
 

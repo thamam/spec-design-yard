@@ -1742,6 +1742,131 @@ function MetricsTab({
       })
     }
 
+    // 6. Flow Bottlenecks (nodes on >= 50% of Gateway-to-Store paths)
+    const gatewaysList = components.filter((c: any) => c && String(c.type || '').toLowerCase() === 'gateway').map((c: any) => c.id.trim())
+    const storesList = components.filter((c: any) => c && String(c.type || '').toLowerCase() === 'store').map((c: any) => c.id.trim())
+
+    const gateways = gatewaysList.length > 0 
+      ? gatewaysList 
+      : Array.from(ids).filter(id => (incomingCountMap[id] || 0) === 0 && (outgoingCountMap[id] || 0) > 0)
+      
+    const stores = storesList.length > 0 
+      ? storesList 
+      : Array.from(ids).filter(id => (outgoingCountMap[id] || 0) === 0 && (incomingCountMap[id] || 0) > 0)
+    
+    const gatewayStorePaths: string[][] = []
+    
+    const findPathsDFS = (curr: string, dest: string, visited: Set<string>, path: string[]) => {
+      if (gatewayStorePaths.length >= 100) return
+      if (path.length > 8) return
+      if (curr === dest) {
+        gatewayStorePaths.push([...path])
+        return
+      }
+      const neighbors = adjDirected[curr] || []
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor)
+          path.push(neighbor)
+          findPathsDFS(neighbor, dest, visited, path)
+          path.pop()
+          visited.delete(neighbor)
+        }
+      }
+    }
+
+    gateways.forEach((gw: string) => {
+      stores.forEach((st: string) => {
+        if (gw !== st && adjDirected[gw] && adjDirected[st]) {
+          const visited = new Set<string>([gw])
+          findPathsDFS(gw, st, visited, [gw])
+        }
+      })
+    })
+
+    const pathCount = gatewayStorePaths.length
+    const nodeOccurrenceCount: Record<string, number> = Object.create(null)
+    
+    if (pathCount >= 3) {
+      gatewayStorePaths.forEach((path: string[]) => {
+        for (let i = 1; i < path.length - 1; i++) {
+          const node = path[i]
+          nodeOccurrenceCount[node] = (nodeOccurrenceCount[node] || 0) + 1
+        }
+      })
+      
+      const bottleneckNodes: string[] = []
+      Object.keys(nodeOccurrenceCount).forEach((node: string) => {
+        const occurrences = nodeOccurrenceCount[node]
+        const ratio = occurrences / pathCount
+        if (ratio >= 0.5) {
+          bottleneckNodes.push(`${node} (${Math.round(ratio * 100)}%)`)
+        }
+      })
+      
+      if (bottleneckNodes.length > 0) {
+        recommendations.push({
+          type: "warning",
+          message: `High-frequency system flow bottleneck detected: ${bottleneckNodes.join(", ")}.`,
+          action: "These components are present on a majority of all Gateway-to-Store pathways. Consider scale-out deployment, replication, or partitioning tasks to prevent operational backpressure."
+        })
+      }
+    }
+
+    // 7. Asymmetric path bypass check
+    const hasAlternativePath = (start: string, target: string): boolean => {
+      const visited = new Set<string>([start])
+      const queue = [start]
+      let qIdx = 0
+      while (qIdx < queue.length) {
+        const node = queue[qIdx++]
+        const neighbors = adjDirected[node] || []
+        for (const neighbor of neighbors) {
+          if (node === start && neighbor === target) {
+            continue
+          }
+          if (neighbor === target) {
+            return true
+          }
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor)
+            queue.push(neighbor)
+          }
+        }
+      }
+      return false
+    }
+
+    const asymmetricBypasses: string[] = []
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              if (hasAlternativePath(u, v)) {
+                asymmetricBypasses.push(`${u} → ${v}`)
+              }
+            }
+          }
+        })
+      }
+    })
+
+    if (asymmetricBypasses.length > 0) {
+      recommendations.push({
+        type: "info",
+        message: `Asymmetric path bypass connection(s) detected: ${asymmetricBypasses.join(", ")}.`,
+        action: "These components connect directly to a downstream target but also feed it indirectly through an intermediate path. Verify if this parallel data feed is intentional or could lead to duplicate events."
+      })
+    }
+
     if (recommendations.length === 0 && totalComponents > 0 && healthPct === 100) {
       recommendations.push({
         type: "success",
