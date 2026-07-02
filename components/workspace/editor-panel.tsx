@@ -1652,6 +1652,104 @@ function MetricsTab({
       })
     }
 
+    const recommendations: { type: "info" | "warning" | "success"; message: string; action: string }[] = []
+
+    // 1. Coupling Insight
+    if (couplingRating === "Spaghettified" || couplingRating === "Dense") {
+      recommendations.push({
+        type: "warning",
+        message: `High connection coupling (${connectionDensity}).`,
+        action: "Consider introducing an asynchronous event broker or refactoring hub components to reduce tight coupling."
+      })
+    } else if (couplingRating === "Loose" && totalComponents > 1) {
+      recommendations.push({
+        type: "info",
+        message: "Loose connection coupling.",
+        action: "Ensure that all core processing paths are fully integrated and not running in silos."
+      })
+    }
+
+    // 2. SPOF Insight
+    if (singlePointsOfFailure.length > 0) {
+      const spofIds = singlePointsOfFailure.map(s => s.id).join(", ")
+      recommendations.push({
+        type: "warning",
+        message: `Critical single point of failure (SPOF) detected: ${spofIds}.`,
+        action: "Introduce parallel execution stages, fallback channels, or load balancers to protect system integrity."
+      })
+    }
+
+    // 3. Isolated Stores
+    const isolatedStores = components.filter((c: any) => {
+      if (!c) return false
+      const type = String(c.type || "").toLowerCase()
+      const id = c.id?.trim()
+      return type === "store" && id && ids.has(id) && (incomingCountMap[id] || 0) === 0
+    })
+    if (isolatedStores.length > 0) {
+      const storeIds = isolatedStores.map((s: any) => s.id).join(", ")
+      recommendations.push({
+        type: "warning",
+        message: `Isolated Data Store(s) with no inbound flow: ${storeIds}.`,
+        action: "Ensure these stores receive writes from an active processing stage or ingest gateway."
+      })
+    }
+
+    // 4. Processing Sinks
+    const sinkComponents = components.filter((c: any) => {
+      if (!c) return false
+      const id = c.id?.trim()
+      const type = String(c.type || "").toLowerCase()
+      const isSinkType = type === "stage" || type === "brick"
+      return id && ids.has(id) && isSinkType && (outgoingCountMap[id] || 0) === 0 && (incomingCountMap[id] || 0) > 0
+    })
+    if (sinkComponents.length > 0) {
+      const sinkIds = sinkComponents.map((s: any) => s.id).join(", ")
+      recommendations.push({
+        type: "warning",
+        message: `Processing sink stage/brick with no outbound flow: ${sinkIds}.`,
+        action: "Connect these terminal stages to downstream data stores or subsequent stages to complete the data lifecycle."
+      })
+    }
+
+    // 5. Gateway Directly to Store
+    const gatewayBypasses: string[] = []
+    components.forEach((c: any) => {
+      if (!c) return
+      const id = c.id?.trim()
+      const type = String(c.type || "").toLowerCase()
+      if (type === "gateway" && id && ids.has(id)) {
+        const conns = c.connections || []
+        if (Array.isArray(conns)) {
+          conns.forEach((conn: any) => {
+            const target = typeof conn === "string" ? conn : conn?.target
+            if (typeof target === "string" && ids.has(target.trim())) {
+              const targetComp = components.find((co: any) => co.id === target.trim())
+              const targetType = String(targetComp?.type || "").toLowerCase()
+              if (targetType === "store") {
+                gatewayBypasses.push(`${id} → ${target.trim()}`)
+              }
+            }
+          })
+        }
+      }
+    })
+    if (gatewayBypasses.length > 0) {
+      recommendations.push({
+        type: "warning",
+        message: `Direct Gateway-to-Store bypass connection detected: ${gatewayBypasses.join(", ")}.`,
+        action: "Route gateway ingestion traffic through a validation or sanitization Stage before writing to the Store."
+      })
+    }
+
+    if (recommendations.length === 0 && totalComponents > 0 && healthPct === 100) {
+      recommendations.push({
+        type: "success",
+        message: "Highly robust and clean system architecture layout.",
+        action: "All processing pipelines, entry gateways, and storage nodes are perfectly balanced with no detected SPOFs or flow bypasses!"
+      })
+    }
+
     return {
       components,
       systemName,
@@ -1671,7 +1769,8 @@ function MetricsTab({
       hotspots,
       singlePointsOfFailure,
       adjDirected,
-      allIds: Array.from(ids).sort()
+      allIds: Array.from(ids).sort(),
+      recommendations
     }
   }, [parsedSpec, diagnostics])
 
@@ -1694,7 +1793,8 @@ function MetricsTab({
     hotspots,
     singlePointsOfFailure,
     adjDirected,
-    allIds
+    allIds,
+    recommendations
   } = metrics
 
   // Pre-computed O(1) type and label lookup maps for the path tracer to avoid nested linear scans on renders
@@ -2072,6 +2172,45 @@ function MetricsTab({
           ))}
           {singlePointsOfFailure.length === 0 && (
             <p className="text-[11px] text-zinc-500 italic">No single points of failure detected. Robust, resilient architecture!</p>
+          )}
+        </div>
+      </div>
+
+      {/* Architectural Actionable Recommendations */}
+      <div className="flex flex-col gap-1.5 shrink-0 border-t border-zinc-900 pt-3">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Architectural Recommendations
+        </h4>
+        <div className="flex flex-col gap-2.5 text-xs font-sans">
+          {recommendations.map((rec, rIdx) => {
+            let itemBg = "bg-zinc-950/40 border-zinc-900/60";
+            let icon = "ℹ️";
+            let titleColor = "text-sky-400";
+            if (rec.type === "warning") {
+              itemBg = "bg-amber-950/15 border-amber-900/30";
+              icon = "⚠️";
+              titleColor = "text-amber-400";
+            } else if (rec.type === "success") {
+              itemBg = "bg-emerald-950/15 border-emerald-900/30";
+              icon = "✅";
+              titleColor = "text-emerald-400";
+            }
+
+            return (
+              <div key={rIdx} className={`p-3 rounded-lg border ${itemBg} flex flex-col gap-1.5`}>
+                <div className="flex items-center gap-1.5 font-bold leading-none font-sans">
+                  <span>{icon}</span>
+                  <span className={`${titleColor}`}>{rec.message}</span>
+                </div>
+                <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+                  {rec.action}
+                </p>
+              </div>
+            );
+          })}
+          {recommendations.length === 0 && (
+            <p className="text-[11px] text-zinc-500 italic">No recommendations. Run architectural validations to generate insights.</p>
           )}
         </div>
       </div>
