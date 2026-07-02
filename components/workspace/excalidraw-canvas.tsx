@@ -93,9 +93,12 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     })
 
     const visited = new Set<string>()
+    let pathCount = 0
     const findPaths = (node: string, currentPath: string[]) => {
+      if (pathCount >= 20) return // Cap results at 20 paths
       if (currentPath.length > 8) return
       if (node === pathTarget) {
+        pathCount++
         currentPath.forEach((n) => nodesOnPath.add(n))
         for (let i = 0; i < currentPath.length - 1; i++) {
           edgesOnPath.add(`${currentPath[i]}->${currentPath[i+1]}`)

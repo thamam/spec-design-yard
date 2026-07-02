@@ -1737,6 +1737,7 @@ function MetricsTab({
     const visited = new Set<string>()
 
     const findPaths = (node: string, currentPath: string[]) => {
+      if (result.length >= 20) return // Cap results at 20 paths
       if (currentPath.length > 8) return // limit path search depth
       if (node === pathTarget) {
         result.push([...currentPath])
@@ -1758,10 +1759,6 @@ function MetricsTab({
     findPaths(pathSource, [pathSource])
     return result
   }, [pathSource, pathTarget, adjDirected])
-
-  const getConnectionLabel = useCallback((from: string, to: string) => {
-    return edgeLabelMap.get(`${from}->${to}`) || null
-  }, [edgeLabelMap])
 
   // Filter the components list in O(N) using O(1) map lookups
   const filteredComponents = useMemo(() => {
