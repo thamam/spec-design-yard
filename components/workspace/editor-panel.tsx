@@ -1620,10 +1620,18 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       }
     })
 
+    // Pre-map the component ID to types for O(1) lookups
+    const componentTypes = new Map<string, string>()
+    components.forEach((c: any) => {
+      if (c && typeof c.id === 'string') {
+        componentTypes.set(c.id.trim(), String(c.type || '').toLowerCase())
+      }
+    })
+
     // Find entry points: gateways or nodes with in-degree 0 in our active component ID list
     const entryPoints: string[] = []
     ids.forEach(id => {
-      const type = String(components.find((c: any) => c && typeof c.id === 'string' && c.id.trim() === id)?.type || '').toLowerCase()
+      const type = componentTypes.get(id) || ""
       if (type === 'gateway' || (incomingCountMap[id] || 0) === 0) {
         entryPoints.push(id)
       }
