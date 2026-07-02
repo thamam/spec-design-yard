@@ -340,4 +340,44 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(textarea.value).toContain('name: incoming_box')
     expect(textarea.value).not.toContain('name: inbox/')
   })
+
+  test('compileSpecToExcalidrawElements applies highlight styles to elements on active trace path', () => {
+    const mockSpec = {
+      system: {
+        name: 'Highlight Test Spec',
+        components: [
+          { id: 'node_a', type: 'Store', name: 'A', connections: [{ target: 'node_b' }] },
+          { id: 'node_b', type: 'Stage', name: 'B', connections: [{ target: 'node_c' }] },
+          { id: 'node_c', type: 'Stage', name: 'C' }
+        ]
+      }
+    }
+    const elements = compileSpecToExcalidrawElements(mockSpec, 'node_a', 'node_c')
+
+    const rectA = elements.find((el: any) => el.id === 'node_a' && el.type === 'rectangle')
+    const rectB = elements.find((el: any) => el.id === 'node_b' && el.type === 'rectangle')
+    const rectC = elements.find((el: any) => el.id === 'node_c' && el.type === 'rectangle')
+
+    // On active trace path, rectangles should have highlighted styles
+    expect(rectA).toBeDefined()
+    expect(rectB).toBeDefined()
+    expect(rectC).toBeDefined()
+
+    expect(rectA.strokeColor).toBe('#818cf8')
+    expect(rectA.strokeWidth).toBe(3)
+    expect(rectB.strokeColor).toBe('#818cf8')
+    expect(rectB.strokeWidth).toBe(3)
+
+    // The arrow between node_a and node_b, and node_b and node_c should be highlighted
+    const arrowAB = elements.find((el: any) => el.id === 'arrow-node_a-node_b' && el.type === 'arrow')
+    const arrowBC = elements.find((el: any) => el.id === 'arrow-node_b-node_c' && el.type === 'arrow')
+
+    expect(arrowAB).toBeDefined()
+    expect(arrowBC).toBeDefined()
+
+    expect(arrowAB.strokeColor).toBe('#818cf8')
+    expect(arrowAB.strokeWidth).toBe(3.5)
+    expect(arrowBC.strokeColor).toBe('#818cf8')
+    expect(arrowBC.strokeWidth).toBe(3.5)
+  })
 })

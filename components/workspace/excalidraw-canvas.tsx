@@ -50,11 +50,73 @@ function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { sour
   return { source: "", target: "" }
 }
 
-export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
+export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const components = parsedSpec.system.components
   const diagnostics = lintSpec(parsedSpec)
+
+  // Calculate directed paths up to 8 hops for trace path highlighting
+  const nodesOnPath = new Set<string>()
+  const edgesOnPath = new Set<string>() // key: "from->to"
+
+  if (pathSource && pathTarget && pathSource !== pathTarget) {
+    const ids = new Set<string>()
+    components.forEach((c: any) => {
+      if (c && typeof c.id === 'string' && c.id.trim() !== "") {
+        ids.add(c.id.trim())
+      }
+    })
+
+    const adjDirected: Record<string, string[]> = Object.create(null)
+    ids.forEach(id => {
+      adjDirected[id] = []
+    })
+
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
+            }
+          }
+        })
+      }
+    })
+
+    const visited = new Set<string>()
+    const findPaths = (node: string, currentPath: string[]) => {
+      if (currentPath.length > 8) return
+      if (node === pathTarget) {
+        currentPath.forEach((n) => nodesOnPath.add(n))
+        for (let i = 0; i < currentPath.length - 1; i++) {
+          edgesOnPath.add(`${currentPath[i]}->${currentPath[i+1]}`)
+        }
+        return
+      }
+      const neighbors = adjDirected[node] || []
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor)
+          currentPath.push(neighbor)
+          findPaths(neighbor, currentPath)
+          currentPath.pop()
+          visited.delete(neighbor)
+        }
+      }
+    }
+
+    visited.add(pathSource)
+    findPaths(pathSource, [pathSource])
+  }
 
   // Layout positions registry using Object.create(null) to prevent prototype pollution
   const positions: Record<string, { x: number; y: number }> = Object.create(null)
@@ -115,13 +177,19 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
     const isDuplicate = comp.id && idCounts[comp.id] > 1
     const hasError = isDuplicate || diagnosticsForComp.some((d) => d.severity === "error")
     const hasWarning = diagnosticsForComp.some((d) => d.severity === "warning")
+    const isOnPath = comp.id && nodesOnPath.has(comp.id.trim())
     
     // Determine colors matching our HUD and Excalidraw specs
     let strokeColor = '#6366f1' // Indigo
     let backgroundColor = 'rgba(99, 102, 241, 0.1)'
+    let strokeWidth = 2
     if (hasError) {
       strokeColor = '#ef4444' // Error Red
       backgroundColor = 'rgba(239, 68, 68, 0.15)'
+    } else if (isOnPath) {
+      strokeColor = '#818cf8' // Neon Indigo/bright purple-blue for active path lineage
+      backgroundColor = 'rgba(129, 140, 248, 0.25)' // Brighter neon glow
+      strokeWidth = 3 // Thicker outline
     } else if (hasWarning) {
       strokeColor = '#f59e0b' // Warning Amber
       backgroundColor = 'rgba(245, 158, 11, 0.15)'
@@ -173,7 +241,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
       strokeColor,
       backgroundColor,
       fillStyle: 'solid',
-      strokeWidth: 2,
+      strokeWidth,
       roughness: 1.2,
       roundness: { type: 3 }, // Rounded corners
       seed: getDeterministicSeed(rectId),
@@ -318,7 +386,9 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
 
       // Brick arrows are emerald, core arrows are zinc, orphan arrows are red
       const isBrickConn = String(comp.type || "").toLowerCase() === 'brick' || String(conn.target || "").toLowerCase() === 'brick'
-      const strokeColor = isOrphan ? '#ef4444' : (isBrickConn ? '#34d399' : '#52525b')
+      const isOnEdge = comp.id && conn.target && edgesOnPath.has(`${comp.id.trim()}->${conn.target.trim()}`)
+      const strokeColor = isOrphan ? '#ef4444' : (isOnEdge ? '#818cf8' : (isBrickConn ? '#34d399' : '#52525b'))
+      const strokeWidth = isOnEdge ? 3.5 : 1.8
 
       const arrowVersion = getDeterministicSeed(`${arrowId}-${Math.round(sx)}-${Math.round(sy)}-${Math.round(dx)}-${Math.round(dy)}`)
 
@@ -334,7 +404,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any): any[] {
           [dx, dy],
         ],
         strokeColor,
-        strokeWidth: 1.8,
+        strokeWidth,
         roughness: 1.3,
         endArrowhead: 'arrow',
         startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
