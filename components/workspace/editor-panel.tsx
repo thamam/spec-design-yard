@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, Fragment } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -1403,6 +1403,8 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
+  const [pathSource, setPathSource] = useState<string>("")
+  const [pathTarget, setPathTarget] = useState<string>("")
 
   const systemMetadata = parsedSpec?.system?.metadata
   const hasSystemMetadata = !!systemMetadata && typeof systemMetadata === "object" && !Array.isArray(systemMetadata)
@@ -1495,8 +1497,10 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     })
 
     const adjUndirected: Record<string, string[]> = Object.create(null)
+    const adjDirected: Record<string, string[]> = Object.create(null)
     ids.forEach(id => {
       adjUndirected[id] = []
+      adjDirected[id] = []
     })
 
     components.forEach((c: any) => {
@@ -1513,6 +1517,7 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
             if (ids.has(v) && v !== u) {
               if (!adjUndirected[u].includes(v)) adjUndirected[u].push(v)
               if (!adjUndirected[v].includes(u)) adjUndirected[v].push(u)
+              if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
             }
           }
         })
@@ -1641,7 +1646,9 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
       couplingRating,
       subgraphsCount,
       hotspots,
-      singlePointsOfFailure
+      singlePointsOfFailure,
+      adjDirected,
+      allIds: Array.from(ids).sort()
     }
   }, [parsedSpec, diagnostics])
 
@@ -1662,8 +1669,51 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
     couplingRating,
     subgraphsCount,
     hotspots,
-    singlePointsOfFailure
+    singlePointsOfFailure,
+    adjDirected,
+    allIds
   } = metrics
+
+  // Interactive Path Finder & Lineage Analyzer
+  const tracedPaths = useMemo(() => {
+    if (!pathSource || !pathTarget || pathSource === pathTarget) return []
+    const adj = adjDirected || {}
+    if (!adj[pathSource] || !adj[pathTarget]) return []
+
+    const result: string[][] = []
+    const visited = new Set<string>()
+
+    const findPaths = (node: string, currentPath: string[]) => {
+      if (currentPath.length > 8) return // limit path search depth
+      if (node === pathTarget) {
+        result.push([...currentPath])
+        return
+      }
+      const neighbors = adj[node] || []
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor)
+          currentPath.push(neighbor)
+          findPaths(neighbor, currentPath)
+          currentPath.pop()
+          visited.delete(neighbor)
+        }
+      }
+    }
+
+    visited.add(pathSource)
+    findPaths(pathSource, [pathSource])
+    return result
+  }, [pathSource, pathTarget, adjDirected])
+
+  const getConnectionLabel = (from: string, to: string) => {
+    const compObj = components.find((c: any) => c && c.id === from)
+    if (compObj && Array.isArray(compObj.connections)) {
+      const conn = compObj.connections.find((cn: any) => cn && cn.target === to)
+      return conn?.label || null
+    }
+    return null
+  }
 
   // Filter the components list in O(N) using O(1) map lookups
   const filteredComponents = useMemo(() => {
@@ -1981,6 +2031,117 @@ function MetricsTab({ parsedSpec, selectedUnit, setSelectedUnit, diagnostics = E
         </div>
       </div>
 
+      {/* Interactive Flow & Path Tracer */}
+      <div className="flex flex-col gap-2 shrink-0 border-t border-zinc-900 pt-3">
+        <h4 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20 animate-pulse" />
+          Interactive Flow & Path Tracer
+        </h4>
+        <div className="flex flex-col gap-2 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900 text-xs font-sans">
+          {/* Node Selector Grid */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="trace-start-select" className="text-[9px] text-zinc-500 uppercase font-bold">Trace Path Start</label>
+              <select
+                id="trace-start-select"
+                aria-label="Trace Path Start"
+                value={pathSource}
+                onChange={(e) => setPathSource(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">Select Start Node...</option>
+                {allIds.map((id: string) => (
+                  <option key={`start-${id}`} value={id}>{id}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="trace-end-select" className="text-[9px] text-zinc-500 uppercase font-bold">Trace Path End</label>
+              <select
+                id="trace-end-select"
+                aria-label="Trace Path End"
+                value={pathTarget}
+                onChange={(e) => setPathTarget(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="">Select End Node...</option>
+                {allIds.map((id: string) => (
+                  <option key={`end-${id}`} value={id}>{id}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tracer Results */}
+          {pathSource && pathTarget && (
+            <div className="flex flex-col gap-2 border-t border-zinc-900/60 pt-2.5 font-mono">
+              {pathSource === pathTarget ? (
+                <p className="text-[11px] text-zinc-500 italic">Start and End nodes are the same. Please select distinct nodes.</p>
+              ) : tracedPaths.length === 0 ? (
+                <div className="p-2 rounded bg-zinc-950/20 border border-zinc-900 text-center text-zinc-500">
+                  <p className="text-[11px] italic">No active directed data flow path exists from "{pathSource}" to "{pathTarget}".</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 font-sans border-b border-zinc-900/65 pb-1 mb-1 font-bold">
+                    <span>Found {tracedPaths.length} Path{tracedPaths.length > 1 ? "s" : ""}</span>
+                    <span>Max depth: 8 hops</span>
+                  </div>
+                  {tracedPaths.slice(0, 5).map((path, pIdx) => (
+                    <div key={`path-${pIdx}`} className="p-2 rounded bg-zinc-950/30 border border-zinc-900 flex flex-col gap-1.5">
+                      <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
+                      <div className="flex flex-wrap items-center gap-1 leading-relaxed">
+                        {path.map((node, nIdx) => {
+                          const isLast = nIdx === path.length - 1;
+                          const compObj = components.find((c: any) => c && c.id === node);
+                          const type = compObj?.type || "Stage";
+                          
+                          // Determine color coding based on type
+                          let typeColor = "text-zinc-400";
+                          if (type.toLowerCase() === "gateway") typeColor = "text-amber-400 font-bold";
+                          else if (type.toLowerCase() === "store") typeColor = "text-indigo-400 font-bold";
+                          else if (type.toLowerCase() === "brick") typeColor = "text-emerald-400";
+                          else if (type.toLowerCase() === "stage") typeColor = "text-purple-400";
+
+                          return (
+                            <Fragment key={`${node}-${nIdx}`}>
+                              {/* Node interactive button */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUnit && setSelectedUnit(node)}
+                                aria-label={`Trace Path Node ${node}`}
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 hover:text-white transition-all text-left text-[11px] shrink-0 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer active:scale-95 text-zinc-100"
+                              >
+                                <span className="hover:underline text-zinc-100">{node}</span>
+                                <span className={`text-[9px] font-sans scale-[0.85] shrink-0 ${typeColor}`}>({type})</span>
+                              </button>
+
+                              {!isLast && (
+                                <div className="flex flex-col items-center justify-center px-0.5 text-zinc-500 shrink-0 select-none">
+                                  <span className="text-xs">→</span>
+                                  {getConnectionLabel(node, path[nIdx + 1]) && (
+                                    <span className="text-[8px] font-sans text-zinc-600 max-w-[80px] truncate" title={getConnectionLabel(node, path[nIdx + 1]) || ""}>
+                                      {getConnectionLabel(node, path[nIdx + 1])}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {tracedPaths.length > 5 && (
+                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">Showing first 5 paths.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Component Interactive List */}
       <div className="flex flex-col flex-1 min-h-0 gap-2">
         <div className="flex items-center justify-between">
@@ -2192,6 +2353,8 @@ export function EditorPanel({
   setSelectedUnit: propSetSelectedUnit,
 }: EditorPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("code")
+  const [pathSource, setPathSource] = useState<string>("")
+  const [pathTarget, setPathTarget] = useState<string>("")
   const [wordWrap, setWordWrap] = useState(false)
   const [copied, setCopied] = useState(false)
 

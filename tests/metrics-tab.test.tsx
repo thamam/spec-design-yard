@@ -238,5 +238,48 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.click(focusTabButton)
     expect(screen.getByText(/Selected:/i).textContent).toContain('digest_stage')
   })
+
+  test('Interactive Flow and Path Tracer calculates paths, displays connection labels, and handles clicks', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Check that Interactive Flow and Path Tracer is rendered
+    expect(screen.getByText(/Interactive Flow & Path Tracer/i)).toBeInTheDocument()
+
+    // Find the select elements
+    const startSelect = screen.getByLabelText("Trace Path Start") as HTMLSelectElement
+    const endSelect = screen.getByLabelText("Trace Path End") as HTMLSelectElement
+
+    expect(startSelect).toBeInTheDocument()
+    expect(endSelect).toBeInTheDocument()
+
+    // Select start and end nodes
+    // Let's use 'inbox' as start, and 'review_stage' as end
+    fireEvent.change(startSelect, { target: { value: 'inbox' } })
+    fireEvent.change(endSelect, { target: { value: 'review_stage' } })
+
+    // Check that paths list is displayed
+    // One path is: inbox -> digest_stage -> review_stage
+    // Wait for the path container/elements to show up
+    await waitFor(() => {
+      expect(screen.getByText(/Path 1/i)).toBeInTheDocument()
+    })
+
+    // Verify connection nodes are rendered along the path
+    expect(screen.getAllByText("inbox").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("digest_stage").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("review_stage").length).toBeGreaterThan(0)
+
+    // Click on 'digest_stage' in the path display to select it in workspace
+    const pathNodeBtn = screen.getByLabelText("Trace Path Node digest_stage")
+    fireEvent.click(pathNodeBtn)
+
+    // Switch to Focus tab to verify that 'digest_stage' is now the selected unit in workspace
+    const focusTabButton = screen.getByRole('tab', { name: /Focus/i })
+    fireEvent.click(focusTabButton)
+    expect(screen.getByText(/Selected:/i).textContent).toContain('digest_stage')
+  })
 })
 
