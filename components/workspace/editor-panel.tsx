@@ -1428,7 +1428,7 @@ function MetricsTab({
   const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
 
-  const simulationIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     return () => {
@@ -1899,7 +1899,7 @@ function MetricsTab({
     let minSuccessRate = 1.0
 
     path.forEach((nodeId) => {
-      const entry = componentsById.get(nodeId)
+      const entry = componentsById.get(nodeId ? nodeId.trim() : "")
       if (!entry) return
 
       const { comp, index: compIdx } = entry
