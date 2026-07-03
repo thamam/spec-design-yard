@@ -295,5 +295,50 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.getByText(/Critical single point of failure \(SPOF\) detected:/i)).toBeInTheDocument()
     expect(screen.getByText(/Introduce parallel execution stages, fallback channels/i)).toBeInTheDocument()
   })
+
+  test('displays interactive quick-fix action buttons inside architectural recommendations and applies them', async () => {
+    render(<Workspace />)
+
+    // First go to Code tab to inject a direct Gateway-to-Store connection (which has a quick-fix recommendation)
+    const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
+    fireEvent.click(codeTabBtn)
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const customSpecText = `system:
+  name: Bypass System
+  components:
+    - id: my_gateway
+      type: Gateway
+      name: Ingest Gateway
+      connections:
+        - target: my_store
+    - id: my_store
+      type: Store
+      name: Persistent Store
+`
+    fireEvent.change(textarea, { target: { value: customSpecText } })
+
+    // Switch to Metrics Tab
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // We expect the Gateway-to-Store bypass recommendation to be visible, along with its action button!
+    await waitFor(() => {
+      expect(screen.getByText(/Direct Gateway-to-Store bypass connection detected/i)).toBeInTheDocument()
+    })
+
+    const fixButton = screen.getByRole('button', { name: /Insert Validation Stage/i })
+    expect(fixButton).toBeInTheDocument()
+
+    // Click the fix button
+    fireEvent.click(fixButton)
+
+    // Switch back to Code Tab to verify that the spec has been updated with the inserted stage
+    fireEvent.click(codeTabBtn)
+    await waitFor(() => {
+      expect(textarea.value).toContain('id: my_gateway_to_my_store')
+      expect(textarea.value).toContain('type: Stage')
+    })
+  })
 })
 
