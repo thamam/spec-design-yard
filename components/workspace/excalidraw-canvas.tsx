@@ -481,6 +481,7 @@ export function ExcalidrawCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
+  const [WelcomeScreenComponent, setWelcomeScreenComponent] = useState<React.ComponentType<any> | null>(null)
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null)
   const [loadError, setLoadError] = useState(false)
 
@@ -497,6 +498,7 @@ export function ExcalidrawCanvas({
       .then((mod: any) => {
         const Comp = mod.Excalidraw ?? mod.default
         setExcalidrawComponent(() => Comp)
+        setWelcomeScreenComponent(() => mod.WelcomeScreen)
       })
       .catch(() => setLoadError(true))
   }, [])
@@ -892,7 +894,9 @@ export function ExcalidrawCanvas({
             }
           }
         }}
-      />
+      >
+        {WelcomeScreenComponent && <WelcomeScreenComponent />}
+      </ExcalidrawComponent>
     </div>
   )
 }

@@ -229,6 +229,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
                   return (
                     <div key={comp.id} className="space-y-1.5">
                       <div
+                        data-component-id={comp.id}
                         onClick={() => {
                           toggleNode(comp.id)
                           setSelectedUnit(comp.id)

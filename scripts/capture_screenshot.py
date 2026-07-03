@@ -18,8 +18,8 @@ async def main():
         except Exception as e:
             print(f"Warning during goto: {e}")
             
-        print("Waiting 12 seconds for client-side mounting...")
-        await asyncio.sleep(12)
+        print("Waiting for spec hydration ([data-component-id])...")
+        await page.wait_for_selector("[data-component-id]", timeout=20000)
         
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         output_path = os.path.join(base_dir, "v0-workspace-screenshot.png")
