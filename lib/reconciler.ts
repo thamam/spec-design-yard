@@ -989,6 +989,213 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
+      } else if (fixType === "stride-spoofing") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          const conns = compNode.get("connections")
+          if (conns && conns.items) {
+            conns.items.forEach((connNode: any, idx: number) => {
+              if (connNode && typeof connNode.get === "function" && typeof connNode.set === "function") {
+                const label = String(connNode.get("label") || "").toLowerCase()
+                const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
+                                      !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
+                if (!isSecureMatch) {
+                  connNode.set("label", "secure auth-token request")
+                  modified = true
+                }
+              } else if (typeof connNode === "string") {
+                conns.set(idx, doc.createNode({ target: connNode, label: "secure auth-token request" }))
+                modified = true
+              }
+            })
+          }
+        }
+      } else if (fixType === "stride-tampering") {
+        const connNode = doc.getIn(parts) as any
+        if (connNode) {
+          if (typeof connNode.set === "function") {
+            connNode.set("label", "secure encrypted TLS flow")
+            modified = true
+          } else {
+            const arrayPath = parts.slice(0, -1)
+            const connIdx = parts[parts.length - 1] as number
+            const connsArray = doc.getIn(arrayPath) as any
+            if (connsArray && typeof connsArray.set === "function") {
+              connsArray.set(connIdx, doc.createNode({ target: String(connNode), label: "secure encrypted TLS flow" }))
+              modified = true
+            }
+          }
+        }
+      } else if (fixType === "stride-repudiation") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          const storeId = String(compNode.get("id") || "").trim()
+          if (storeId) {
+            const compsNode = doc.getIn(["system", "components"]) as any
+            let auditId = ""
+            if (compsNode && compsNode.items) {
+              compsNode.items.forEach((c: any) => {
+                if (auditId) return
+                if (c && typeof c.get === "function") {
+                  const id = String(c.get("id") || "").trim()
+                  const isAudit = id.toLowerCase().includes("audit") ||
+                                  id.toLowerCase().includes("ledger") ||
+                                  id.toLowerCase().includes("logger") ||
+                                  id.toLowerCase().includes("log")
+                  if (isAudit) {
+                    auditId = id
+                  }
+                }
+              })
+            }
+
+            if (!auditId) {
+              auditId = "audit_logger"
+              const newAuditComp = doc.createNode({
+                id: auditId,
+                type: "Brick",
+                name: "Audit Logger",
+                metadata: {
+                  description: "Central audit trail ledger to log secure transactions and prevent Repudiation."
+                }
+              })
+              if (compsNode && typeof compsNode.add === "function") {
+                compsNode.add(newAuditComp)
+                modified = true
+              }
+            }
+
+            let conns = compNode.get("connections")
+            if (!conns || typeof conns.get !== "function") {
+              compNode.set("connections", doc.createNode([]))
+              conns = compNode.get("connections")
+            }
+
+            let alreadyConnected = false
+            if (conns && conns.items) {
+              alreadyConnected = conns.items.some((connNode: any) => {
+                const target = typeof connNode === "string" ? connNode : (connNode && typeof connNode.get === "function" ? connNode.get("target") : "")
+                return String(target).trim() === auditId
+              })
+            }
+
+            if (!alreadyConnected) {
+              const newConn = doc.createNode({ target: auditId, label: "logs events to central ledger" })
+              if (conns && typeof conns.add === "function") {
+                conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        }
+      } else if (fixType === "stride-information-disclosure") {
+        const connNode = doc.getIn(parts) as any
+        if (connNode) {
+          const targetStoreId = typeof connNode === "string" ? connNode : (connNode && typeof connNode.get === "function" ? connNode.get("target") : "")
+          if (targetStoreId) {
+            const verifierId = "auth_verifier"
+            const compsNode = doc.getIn(["system", "components"]) as any
+            let verifierExists = false
+            if (compsNode && compsNode.items) {
+              verifierExists = compsNode.items.some((c: any) => {
+                return c && typeof c.get === "function" && String(c.get("id") || "").trim() === verifierId
+              })
+            }
+
+            if (!verifierExists) {
+              const newVerifier = doc.createNode({
+                id: verifierId,
+                type: "Stage",
+                name: "Auth Verifier",
+                metadata: {
+                  description: "Validates incoming traffic tokens and sanitizes input data before routing to stores."
+                },
+                connections: [
+                  { target: targetStoreId, label: "routes validated and safe queries" }
+                ]
+              })
+              if (compsNode && typeof compsNode.add === "function") {
+                compsNode.add(newVerifier)
+                modified = true
+              }
+            }
+
+            if (typeof connNode.set === "function") {
+              connNode.set("target", verifierId)
+              connNode.set("label", "sends raw requests for validation")
+              modified = true
+            } else {
+              const arrayPath = parts.slice(0, -1)
+              const connIdx = parts[parts.length - 1] as number
+              const connsArray = doc.getIn(arrayPath) as any
+              if (connsArray && typeof connsArray.set === "function") {
+                connsArray.set(connIdx, doc.createNode({ target: verifierId, label: "sends raw requests for validation" }))
+                modified = true
+              }
+            }
+          }
+        }
+      } else if (fixType === "stride-elevation-of-privilege") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          const privId = String(compNode.get("id") || "").trim()
+          if (privId) {
+            const compsNode = doc.getIn(["system", "components"]) as any
+            let verifyId = ""
+            if (compsNode && compsNode.items) {
+              compsNode.items.forEach((c: any) => {
+                if (verifyId) return
+                if (c && typeof c.get === "function") {
+                  const id = String(c.get("id") || "").trim()
+                  const isVerify = id.toLowerCase().includes("verify") ||
+                                   id.toLowerCase().includes("auth") ||
+                                   id.toLowerCase().includes("secure")
+                  if (isVerify) {
+                    verifyId = id
+                  }
+                }
+              })
+            }
+
+            if (!verifyId) {
+              verifyId = "auth_verifier"
+              const newVerifier = doc.createNode({
+                id: verifyId,
+                type: "Stage",
+                name: "Auth Verifier",
+                metadata: {
+                  description: "Validates credentials and scopes to prevent Elevation of Privilege."
+                }
+              })
+              if (compsNode && typeof compsNode.add === "function") {
+                compsNode.add(newVerifier)
+                modified = true
+              }
+            }
+
+            let conns = compNode.get("connections")
+            if (!conns || typeof conns.get !== "function") {
+              compNode.set("connections", doc.createNode([]))
+              conns = compNode.get("connections")
+            }
+
+            let alreadyConnected = false
+            if (conns && conns.items) {
+              alreadyConnected = conns.items.some((connNode: any) => {
+                const target = typeof connNode === "string" ? connNode : (connNode && typeof connNode.get === "function" ? connNode.get("target") : "")
+                return String(target).trim() === verifyId
+              })
+            }
+
+            if (!alreadyConnected) {
+              const newConn = doc.createNode({ target: verifyId, label: "asserts authority & scopes" })
+              if (conns && typeof conns.add === "function") {
+                conns.add(newConn)
+                modified = true
+              }
+            }
+          }
+        }
       }
         })
       }

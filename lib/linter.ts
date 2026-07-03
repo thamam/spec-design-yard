@@ -911,5 +911,179 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     })
   }
 
+  // Pass 7: STRIDE Security & Threat Modeling Checks
+  if (components && Array.isArray(components)) {
+    const auditNodeIds = new Set<string>()
+    const verifyNodeIds = new Set<string>()
+    
+    components.forEach((other: any) => {
+      if (other && typeof other.id === 'string') {
+        const otherId = other.id.trim()
+        const otherName = String(other.name || "").toLowerCase()
+        const isAudit = otherId.toLowerCase().includes("audit") || 
+                        otherId.toLowerCase().includes("ledger") || 
+                        otherId.toLowerCase().includes("logger") || 
+                        otherId.toLowerCase().includes("log") ||
+                        otherName.includes("audit") ||
+                        otherName.includes("ledger")
+        if (isAudit) {
+          auditNodeIds.add(otherId)
+        }
+        
+        const isVerify = otherId.toLowerCase().includes("verify") ||
+                         otherId.toLowerCase().includes("auth") ||
+                         otherId.toLowerCase().includes("secure") ||
+                         otherName.includes("verify") ||
+                         otherName.includes("auth")
+        if (isVerify) {
+          verifyNodeIds.add(otherId)
+        }
+      }
+    })
+
+    components.forEach((comp: any, compIdx: number) => {
+      if (!comp || typeof comp !== 'object' || typeof comp.id !== 'string') return
+      const compId = comp.id.trim()
+      if (compId === "" || !ids.has(compId)) return
+
+      const type = String(comp.type || "").toLowerCase()
+
+      // 1. Spoofing Check (Gateways lacking owner or lacking secure/auth labels on outgoing connections)
+      if (type === "gateway") {
+        const conns = comp.connections || []
+        let hasSecureConn = false
+        if (Array.isArray(conns)) {
+          conns.forEach((conn: any) => {
+            const label = String(typeof conn === 'string' ? "" : (conn?.label || "")).toLowerCase()
+            const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
+                                  !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
+            if (isSecureMatch) {
+              hasSecureConn = true
+            }
+          })
+        }
+        if (!hasSecureConn) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Gateway "${compId}" is vulnerable to Spoofing. Outbound connections must use security/auth labels to guarantee trusted incoming identity.`,
+            path: `system.components[${compIdx}]`,
+            code: "stride-spoofing"
+          })
+        }
+      }
+
+      // 2. Tampering Check (Unlabeled connections or raw flows)
+      const conns = comp.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any, connIdx: number) => {
+          const label = typeof conn === 'string' ? "" : (conn?.label || "")
+          if (!label || String(label).trim() === "") {
+            diagnostics.push({
+              severity: "warning",
+              message: `Connection to "${typeof conn === 'string' ? conn : conn?.target}" is susceptible to Tampering. Consider adding a connection label specifying secure channels (TLS/gRPC/HTTPS).`,
+              path: `system.components[${compIdx}].connections[${connIdx}]`,
+              code: "stride-tampering"
+            })
+          }
+        })
+      }
+
+      // 3. Repudiation Check (Store nodes without audited event ledgers or logging neighbors)
+      if (type === "store") {
+        let hasAudit = false
+        const compConns = comp.connections || []
+        const hasOutToAudit = Array.isArray(compConns) && compConns.some((cn: any) => {
+          const target = typeof cn === 'string' ? cn : cn?.target
+          return typeof target === 'string' && auditNodeIds.has(target.trim())
+        })
+        
+        let hasInFromAudit = false
+        components.forEach((other: any) => {
+          if (other && typeof other.id === 'string' && auditNodeIds.has(other.id.trim())) {
+            const otherConns = other.connections || []
+            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
+              const target = typeof cn === 'string' ? cn : cn?.target
+              return typeof target === 'string' && target.trim() === compId
+            })
+            if (hasIn) hasInFromAudit = true
+          }
+        })
+        
+        if (hasOutToAudit || hasInFromAudit) {
+          hasAudit = true
+        }
+
+        if (!hasAudit) {
+          diagnostics.push({
+            severity: "info",
+            message: `Store "${compId}" lacks audit trails / log tracing. Connect an auditing/ledger Brick (e.g. b2_ledger) to store events and prevent Repudiation.`,
+            path: `system.components[${compIdx}]`,
+            code: "stride-repudiation"
+          })
+        }
+      }
+
+      // 4. Information Disclosure Check (direct Gateway-to-Store connections / bypasses)
+      if (type === "gateway") {
+        if (Array.isArray(conns)) {
+          conns.forEach((conn: any, connIdx: number) => {
+            const target = typeof conn === "string" ? conn : conn?.target
+            if (typeof target === "string" && ids.has(target.trim())) {
+              const targetType = typeMap[target.trim()] || ""
+              if (targetType === "store") {
+                diagnostics.push({
+                  severity: "warning",
+                  message: `Gateway connects directly to Store "${target.trim()}". Bypassing validation stages presents an Information Disclosure / Tampering threat.`,
+                  path: `system.components[${compIdx}].connections[${connIdx}]`,
+                  code: "stride-information-disclosure"
+                })
+              }
+            }
+          })
+        }
+      }
+
+      // 5. Elevation of Privilege Check (privileged component lacking verification node connections)
+      const isPrivileged = comp.metadata?.privileged === true || 
+                           compId.toLowerCase().includes("admin") || 
+                           compId.toLowerCase().includes("root") ||
+                           String(comp.name || "").toLowerCase().includes("admin") ||
+                           String(comp.name || "").toLowerCase().includes("root")
+      if (isPrivileged) {
+        let hasVerifyNode = false
+        const compConns = comp.connections || []
+        const hasOutToVerify = Array.isArray(compConns) && compConns.some((cn: any) => {
+          const target = typeof cn === 'string' ? cn : cn?.target
+          return typeof target === 'string' && verifyNodeIds.has(target.trim())
+        })
+        
+        let hasInFromVerify = false
+        components.forEach((other: any) => {
+          if (other && typeof other.id === 'string' && verifyNodeIds.has(other.id.trim())) {
+            const otherConns = other.connections || []
+            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
+              const target = typeof cn === 'string' ? cn : cn?.target
+              return typeof target === 'string' && target.trim() === compId
+            })
+            if (hasIn) hasInFromVerify = true
+          }
+        })
+        
+        if (hasOutToVerify || hasInFromVerify) {
+          hasVerifyNode = true
+        }
+
+        if (!hasVerifyNode) {
+          diagnostics.push({
+            severity: "warning",
+            message: `Privileged component "${compId}" lacks verification guards. Connect a verification Brick (e.g. b6_verify) to prevent unauthorized Elevation of Privilege.`,
+            path: `system.components[${compIdx}]`,
+            code: "stride-elevation-of-privilege"
+          })
+        }
+      }
+    })
+  }
+
   return diagnostics;
 }

@@ -296,5 +296,88 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     expect(updated).toContain('type: Stage')
     expect(updated).toContain('target: store_a_to_store_b')
   })
+
+  test('reconciles stride-spoofing by adding secure label to gateway connections', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: api_gw
+      type: Gateway
+      connections:
+        - target: stage_1
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-spoofing' }
+    })
+    expect(updated).toContain('label: secure auth-token request')
+  })
+
+  test('reconciles stride-tampering by adding secure label to connection', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: stage_1
+      type: Stage
+      connections:
+        - target: store_1
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].connections[0]', fixType: 'stride-tampering' }
+    })
+    expect(updated).toContain('label: secure encrypted TLS flow')
+  })
+
+  test('reconciles stride-repudiation by adding audit ledger component and connection', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: user_store
+      type: Store
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-repudiation' }
+    })
+    expect(updated).toContain('id: audit_logger')
+    expect(updated).toContain('target: audit_logger')
+  })
+
+  test('reconciles stride-information-disclosure by inserting auth verifier stage', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: api_gw
+      type: Gateway
+      connections:
+        - target: db_store
+    - id: db_store
+      type: Store
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].connections[0]', fixType: 'stride-information-disclosure' }
+    })
+    expect(updated).toContain('id: auth_verifier')
+    expect(updated).toContain('target: auth_verifier')
+  })
+
+  test('reconciles stride-elevation-of-privilege by connecting privileged node to verification stage', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: admin_panel
+      type: Stage
+      metadata:
+        privileged: true
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-elevation-of-privilege' }
+    })
+    expect(updated).toContain('id: auth_verifier')
+    expect(updated).toContain('target: auth_verifier')
+  })
 })
 

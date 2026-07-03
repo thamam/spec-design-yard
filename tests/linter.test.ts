@@ -1010,5 +1010,127 @@ describe('Advanced Linter Features', () => {
       expect(spofDiag?.message).toContain('Component "node_b" is a single point of failure (articulation point)')
       expect(spofDiag?.path).toBe('system.components[1]')
     })
+
+    test('flags STRIDE Spoofing threat on Gateway without proper metadata or auth', () => {
+      const spec = {
+        system: {
+          name: 'Spoofing Test',
+          components: [
+            {
+              id: 'api_gw',
+              type: 'Gateway',
+              connections: [
+                { target: 'stage_1', label: 'unsecured raw ingestion' }
+              ]
+            },
+            {
+              id: 'stage_1',
+              type: 'Stage'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const spoofingDiag = diagnostics.find(d => d.code === 'stride-spoofing')
+      expect(spoofingDiag).toBeDefined()
+      expect(spoofingDiag?.severity).toBe('warning')
+      expect(spoofingDiag?.message).toContain('Gateway "api_gw" is vulnerable to Spoofing')
+    })
+
+    test('flags STRIDE Tampering threat on unlabeled or unencrypted data paths', () => {
+      const spec = {
+        system: {
+          name: 'Tampering Test',
+          components: [
+            {
+              id: 'stage_1',
+              type: 'Stage',
+              connections: [
+                { target: 'store_1' } // Unlabeled tampering threat!
+              ]
+            },
+            {
+              id: 'store_1',
+              type: 'Store'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const tamperingDiag = diagnostics.find(d => d.code === 'stride-tampering')
+      expect(tamperingDiag).toBeDefined()
+      expect(tamperingDiag?.severity).toBe('warning')
+      expect(tamperingDiag?.message).toContain('is susceptible to Tampering')
+    })
+
+    test('flags STRIDE Repudiation threat on non-audited/non-logged Stores', () => {
+      const spec = {
+        system: {
+          name: 'Repudiation Test',
+          components: [
+            {
+              id: 'user_store',
+              type: 'Store' // Lacks log/audit brick connections!
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const repudiationDiag = diagnostics.find(d => d.code === 'stride-repudiation')
+      expect(repudiationDiag).toBeDefined()
+      expect(repudiationDiag?.severity).toBe('info')
+      expect(repudiationDiag?.message).toContain('Store "user_store" lacks audit trails / log tracing')
+    })
+
+    test('flags STRIDE Information Disclosure threat on direct Gateway-to-Store connections', () => {
+      const spec = {
+        system: {
+          name: 'Info Disclosure Test',
+          components: [
+            {
+              id: 'api_gw',
+              type: 'Gateway',
+              connections: [
+                { target: 'db_store' } // Direct connection to store bypasses validation
+              ]
+            },
+            {
+              id: 'db_store',
+              type: 'Store'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const infoDiag = diagnostics.find(d => d.code === 'stride-information-disclosure')
+      expect(infoDiag).toBeDefined()
+      expect(infoDiag?.severity).toBe('warning')
+      expect(infoDiag?.message).toContain('Gateway connects directly to Store "db_store"')
+    })
+
+    test('flags STRIDE Elevation of Privilege threat on unverified administrative blocks', () => {
+      const spec = {
+        system: {
+          name: 'EoP Test',
+          components: [
+            {
+              id: 'admin_panel',
+              type: 'Stage',
+              metadata: { privileged: true } // Privileged stage but no verify/auth brick in proximity
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const eopDiag = diagnostics.find(d => d.code === 'stride-elevation-of-privilege')
+      expect(eopDiag).toBeDefined()
+      expect(eopDiag?.severity).toBe('warning')
+      expect(eopDiag?.message).toContain('Privileged component "admin_panel" lacks verification guards')
+    })
   })
 })
