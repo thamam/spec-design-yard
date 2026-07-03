@@ -1428,12 +1428,33 @@ function MetricsTab({
   const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
 
+  const simulationIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current)
+      }
+    }
+  }, [])
+
   const [localPathSource, setLocalPathSource] = useState<string>("")
   const [localPathTarget, setLocalPathTarget] = useState<string>("")
   const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
   const setPathSource = propSetPathSource || setLocalPathSource
   const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
   const setPathTarget = propSetPathTarget || setLocalPathTarget
+
+  useEffect(() => {
+    setSimulationState("idle")
+    setSimulatingPathIndex(null)
+    setSimulatedPackets(0)
+    setSimulatedSuccessful(0)
+    if (simulationIntervalRef.current) {
+      clearInterval(simulationIntervalRef.current)
+      simulationIntervalRef.current = null
+    }
+  }, [pathSource, pathTarget])
 
   const systemMetadata = parsedSpec?.system?.metadata
   const hasSystemMetadata = !!systemMetadata && typeof systemMetadata === "object" && !Array.isArray(systemMetadata)
@@ -1859,14 +1880,29 @@ function MetricsTab({
     recommendations
   } = metrics
 
-  const computePathMetrics = (path: string[]) => {
+  // Pre-computed O(1) Component Lookup Map
+  const componentsById = useMemo(() => {
+    const map = new Map<string, { comp: any; index: number }>()
+    const compList = Array.isArray(components) ? components : []
+    compList.forEach((c: any, idx: number) => {
+      if (c && typeof c.id === "string") {
+        map.set(c.id.trim(), { comp: c, index: idx })
+      }
+    })
+    return map
+  }, [components])
+
+  // Memoized Path Metrics Calculation using O(1) map
+  const computePathMetrics = useCallback((path: string[]) => {
     let cumulativeLatency = 0
     let bottleneckCapacity = Infinity
     let minSuccessRate = 1.0
 
     path.forEach((nodeId) => {
-      const compIdx = (components as any[]).findIndex((c: any) => c && c.id === nodeId)
-      const comp = compIdx !== -1 ? (components as any[])[compIdx] : null
+      const entry = componentsById.get(nodeId)
+      if (!entry) return
+
+      const { comp, index: compIdx } = entry
       const type = String(comp?.type || "").toLowerCase()
 
       // 1. Latency
@@ -1900,13 +1936,11 @@ function MetricsTab({
       }
 
       // 3. Success rate based on diagnostics
-      if (compIdx !== -1) {
-        const compDiags = diagnosticsByComponent.get(compIdx) || []
-        compDiags.forEach((d) => {
-          if (d.severity === "error") minSuccessRate -= 0.20
-          else if (d.severity === "warning") minSuccessRate -= 0.05
-        })
-      }
+      const compDiags = diagnosticsByComponent.get(compIdx) || []
+      compDiags.forEach((d) => {
+        if (d.severity === "error") minSuccessRate -= 0.20
+        else if (d.severity === "warning") minSuccessRate -= 0.05
+      })
     })
 
     const finalSuccessRate = Math.max(0.50, Math.min(1.0, minSuccessRate))
@@ -1915,10 +1949,15 @@ function MetricsTab({
       bottleneckCapacity: bottleneckCapacity === Infinity ? 200 : bottleneckCapacity,
       successRate: finalSuccessRate
     }
-  }
+  }, [componentsById, diagnosticsByComponent])
 
   const handleStartSimulation = (path: string[], pathIdx: number) => {
     if (simulationState === "running") return
+
+    if (simulationIntervalRef.current) {
+      clearInterval(simulationIntervalRef.current)
+    }
+
     setSimulationState("running")
     setSimulatingPathIndex(pathIdx)
     setSimulatedPackets(0)
@@ -1931,11 +1970,13 @@ function MetricsTab({
     let successful = 0
     const totalPackets = 100
 
-    const interval = setInterval(() => {
+    simulationIntervalRef.current = setInterval(() => {
       packets += 10
       if (packets > totalPackets) {
-        packets = totalPackets
-        clearInterval(interval)
+        if (simulationIntervalRef.current) {
+          clearInterval(simulationIntervalRef.current)
+          simulationIntervalRef.current = null
+        }
         setSimulationState("completed")
       } else {
         const batchSuccess = Math.round(10 * successProb)
@@ -2008,6 +2049,14 @@ function MetricsTab({
     findPaths(pathSource, [pathSource])
     return result
   }, [pathSource, pathTarget, adjDirected])
+
+  // Traced paths with their pre-calculated latency, capacity, and success metrics
+  const tracedPathsWithMetrics = useMemo(() => {
+    return tracedPaths.slice(0, 5).map((path) => ({
+      path,
+      metrics: computePathMetrics(path)
+    }))
+  }, [tracedPaths, computePathMetrics])
 
   // Filter the components list in O(N) using O(1) map lookups
   const filteredComponents = useMemo(() => {
@@ -2428,8 +2477,7 @@ function MetricsTab({
                     <span>Found {tracedPaths.length} Path{tracedPaths.length > 1 ? "s" : ""}</span>
                     <span>Max depth: 8 hops</span>
                   </div>
-                  {tracedPaths.slice(0, 5).map((path, pIdx) => {
-                    const pathMetrics = computePathMetrics(path);
+                  {tracedPathsWithMetrics.map(({ path, metrics: pathMetrics }, pIdx) => {
                     return (
                       <div key={`path-${pIdx}`} className="p-2 rounded bg-zinc-950/30 border border-zinc-900 flex flex-col gap-1.5">
                         <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
