@@ -997,8 +997,8 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             conns.items.forEach((connNode: any, idx: number) => {
               if (connNode && typeof connNode.get === "function" && typeof connNode.set === "function") {
                 const label = String(connNode.get("label") || "").toLowerCase()
-                const isSecureMatch = /\b(auth|verify|secure|validate|token)\b/i.test(label) &&
-                                      !/\b(unsecure|insecure|unauth|nonsecure)\b/i.test(label)
+                const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
+                                      !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
                 if (!isSecureMatch) {
                   connNode.set("label", "secure auth-token request")
                   modified = true

@@ -913,6 +913,34 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
   // Pass 7: STRIDE Security & Threat Modeling Checks
   if (components && Array.isArray(components)) {
+    const auditNodeIds = new Set<string>()
+    const verifyNodeIds = new Set<string>()
+    
+    components.forEach((other: any) => {
+      if (other && typeof other.id === 'string') {
+        const otherId = other.id.trim()
+        const otherName = String(other.name || "").toLowerCase()
+        const isAudit = otherId.toLowerCase().includes("audit") || 
+                        otherId.toLowerCase().includes("ledger") || 
+                        otherId.toLowerCase().includes("logger") || 
+                        otherId.toLowerCase().includes("log") ||
+                        otherName.includes("audit") ||
+                        otherName.includes("ledger")
+        if (isAudit) {
+          auditNodeIds.add(otherId)
+        }
+        
+        const isVerify = otherId.toLowerCase().includes("verify") ||
+                         otherId.toLowerCase().includes("auth") ||
+                         otherId.toLowerCase().includes("secure") ||
+                         otherName.includes("verify") ||
+                         otherName.includes("auth")
+        if (isVerify) {
+          verifyNodeIds.add(otherId)
+        }
+      }
+    })
+
     components.forEach((comp: any, compIdx: number) => {
       if (!comp || typeof comp !== 'object' || typeof comp.id !== 'string') return
       const compId = comp.id.trim()
@@ -927,8 +955,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         if (Array.isArray(conns)) {
           conns.forEach((conn: any) => {
             const label = String(typeof conn === 'string' ? "" : (conn?.label || "")).toLowerCase()
-            const isSecureMatch = /\b(auth|verify|secure|validate|token)\b/i.test(label) &&
-                                  !/\b(unsecure|insecure|unauth|nonsecure)\b/i.test(label)
+            const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
+                                  !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
             if (isSecureMatch) {
               hasSecureConn = true
             }
@@ -963,29 +991,28 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       // 3. Repudiation Check (Store nodes without audited event ledgers or logging neighbors)
       if (type === "store") {
         let hasAudit = false
+        const compConns = comp.connections || []
+        const hasOutToAudit = Array.isArray(compConns) && compConns.some((cn: any) => {
+          const target = typeof cn === 'string' ? cn : cn?.target
+          return typeof target === 'string' && auditNodeIds.has(target.trim())
+        })
+        
+        let hasInFromAudit = false
         components.forEach((other: any) => {
-          if (other && typeof other.id === 'string') {
-            const otherId = other.id.trim()
-            const isAuditNode = otherId.toLowerCase().includes("audit") || 
-                                otherId.toLowerCase().includes("ledger") || 
-                                otherId.toLowerCase().includes("logger") || 
-                                otherId.toLowerCase().includes("log") ||
-                                String(other.name || "").toLowerCase().includes("audit") ||
-                                String(other.name || "").toLowerCase().includes("ledger")
-            
-            if (isAuditNode) {
-              const compConns = comp.connections || []
-              const hasOut = Array.isArray(compConns) && compConns.some((cn: any) => (typeof cn === 'string' ? cn : cn?.target) === otherId)
-              
-              const otherConns = other.connections || []
-              const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => (typeof cn === 'string' ? cn : cn?.target) === compId)
-              
-              if (hasOut || hasIn) {
-                hasAudit = true
-              }
-            }
+          if (other && typeof other.id === 'string' && auditNodeIds.has(other.id.trim())) {
+            const otherConns = other.connections || []
+            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
+              const target = typeof cn === 'string' ? cn : cn?.target
+              return typeof target === 'string' && target.trim() === compId
+            })
+            if (hasIn) hasInFromAudit = true
           }
         })
+        
+        if (hasOutToAudit || hasInFromAudit) {
+          hasAudit = true
+        }
+
         if (!hasAudit) {
           diagnostics.push({
             severity: "info",
@@ -1002,8 +1029,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           conns.forEach((conn: any, connIdx: number) => {
             const target = typeof conn === "string" ? conn : conn?.target
             if (typeof target === "string" && ids.has(target.trim())) {
-              const targetComp = components.find((co: any) => co && typeof co.id === 'string' && co.id.trim() === target.trim())
-              const targetType = String(targetComp?.type || "").toLowerCase()
+              const targetType = typeMap[target.trim()] || ""
               if (targetType === "store") {
                 diagnostics.push({
                   severity: "warning",
@@ -1025,27 +1051,28 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
                            String(comp.name || "").toLowerCase().includes("root")
       if (isPrivileged) {
         let hasVerifyNode = false
+        const compConns = comp.connections || []
+        const hasOutToVerify = Array.isArray(compConns) && compConns.some((cn: any) => {
+          const target = typeof cn === 'string' ? cn : cn?.target
+          return typeof target === 'string' && verifyNodeIds.has(target.trim())
+        })
+        
+        let hasInFromVerify = false
         components.forEach((other: any) => {
-          if (other && typeof other.id === "string") {
-            const otherId = other.id.trim()
-            const isVerifyNode = otherId.toLowerCase().includes("verify") ||
-                                 otherId.toLowerCase().includes("auth") ||
-                                 otherId.toLowerCase().includes("secure") ||
-                                 String(other.name || "").toLowerCase().includes("verify") ||
-                                 String(other.name || "").toLowerCase().includes("auth")
-            if (isVerifyNode) {
-              const compConns = comp.connections || []
-              const hasOut = Array.isArray(compConns) && compConns.some((cn: any) => (typeof cn === 'string' ? cn : cn?.target) === otherId)
-              
-              const otherConns = other.connections || []
-              const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => (typeof cn === 'string' ? cn : cn?.target) === compId)
-              
-              if (hasOut || hasIn) {
-                hasVerifyNode = true
-              }
-            }
+          if (other && typeof other.id === 'string' && verifyNodeIds.has(other.id.trim())) {
+            const otherConns = other.connections || []
+            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
+              const target = typeof cn === 'string' ? cn : cn?.target
+              return typeof target === 'string' && target.trim() === compId
+            })
+            if (hasIn) hasInFromVerify = true
           }
         })
+        
+        if (hasOutToVerify || hasInFromVerify) {
+          hasVerifyNode = true
+        }
+
         if (!hasVerifyNode) {
           diagnostics.push({
             severity: "warning",
