@@ -467,6 +467,8 @@ function FocusTab({
         color: comp.metadata?.color || "zinc",
         version: comp.metadata?.version || "",
         description: comp.metadata?.description || "",
+        latency: comp.metadata?.latency !== undefined ? String(comp.metadata.latency) : "",
+        throughput: comp.metadata?.throughput !== undefined ? String(comp.metadata.throughput) : "",
       })
       setNewConnTarget("")
       setNewConnLabel("")
@@ -504,6 +506,8 @@ function FocusTab({
         if (activeTestId !== "focus-color-select") nextState.color = comp.metadata?.color || "zinc"
         if (activeTestId !== "focus-version-input") nextState.version = comp.metadata?.version || ""
         if (activeTestId !== "focus-description-textarea") nextState.description = comp.metadata?.description || ""
+        if (activeTestId !== "focus-latency-input") nextState.latency = comp.metadata?.latency !== undefined ? String(comp.metadata.latency) : ""
+        if (activeTestId !== "focus-throughput-input") nextState.throughput = comp.metadata?.throughput !== undefined ? String(comp.metadata.throughput) : ""
         return nextState
       })
     }
@@ -585,13 +589,13 @@ function FocusTab({
   }, [parsedSpec, selectedUnit])
 
   // 4. Debounce AST reconciliation / parent state updates
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>(Object.create(null))
 
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
+      Object.values(debounceTimersRef.current).forEach(timer => {
+        if (timer) clearTimeout(timer)
+      })
       if (connectionDebounceTimerRef.current) {
         clearTimeout(connectionDebounceTimerRef.current)
       }
@@ -615,23 +619,36 @@ function FocusTab({
       else if (path === "metadata.color") next.color = value
       else if (path === "metadata.version") next.version = value
       else if (path === "metadata.description") next.description = value
+      else if (path === "metadata.latency") next.latency = value
+      else if (path === "metadata.throughput") next.throughput = value
       return next
     })
 
-    // Debounce the heavier parent AST/Excalidraw updates (200ms)
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
+    // Debounce the heavier parent AST/Excalidraw updates (200ms) per specific path to prevent race conditions
+    if (debounceTimersRef.current[path]) {
+      clearTimeout(debounceTimersRef.current[path])
     }
 
-    debounceTimerRef.current = setTimeout(() => {
+    debounceTimersRef.current[path] = setTimeout(() => {
       if (!selectedUnit) return
-      const updated = reconcileSpec(specText, {
-        type: "update-property",
-        payload: { id: selectedUnit, path, value }
-      })
-      if (updated !== specText) {
-        setSpecText(updated)
+      
+      let reconciledValue = value
+      if (path === "metadata.latency" || path === "metadata.throughput") {
+        const parsed = parseInt(value, 10)
+        if (!isNaN(parsed) && String(parsed) === String(value).trim()) {
+          reconciledValue = parsed
+        } else if (value === "") {
+          reconciledValue = undefined // support removing the property entirely
+        }
       }
+
+      setSpecText(prev => {
+        const updated = reconcileSpec(prev, {
+          type: "update-property",
+          payload: { id: selectedUnit, path, value: reconciledValue }
+        })
+        return updated
+      })
     }, 200)
   }
 
@@ -720,13 +737,12 @@ function FocusTab({
     }
     connectionDebounceTimerRef.current = setTimeout(() => {
       if (!selectedUnit) return
-      const updated = reconcileSpec(specText, {
-        type: "connection-label",
-        payload: { source: selectedUnit, target, label: value }
+      setSpecText(prev => {
+        return reconcileSpec(prev, {
+          type: "connection-label",
+          payload: { source: selectedUnit, target, label: value }
+        })
       })
-      if (updated !== specText) {
-        setSpecText(updated)
-      }
     }, 200)
   }
 
@@ -756,13 +772,12 @@ function FocusTab({
     }
     inboundConnectionDebounceTimerRef.current = setTimeout(() => {
       if (!selectedUnit) return
-      const updated = reconcileSpec(specText, {
-        type: "connection-label",
-        payload: { source, target: selectedUnit, label: value }
+      setSpecText(prev => {
+        return reconcileSpec(prev, {
+          type: "connection-label",
+          payload: { source, target: selectedUnit, label: value }
+        })
       })
-      if (updated !== specText) {
-        setSpecText(updated)
-      }
     }, 200)
   }
 
@@ -1014,6 +1029,32 @@ function FocusTab({
                   onChange={(e) => handleFieldChange("metadata.version", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
                   placeholder="e.g. 1.0.0"
+                />
+              </div>
+
+              {/* Metadata Latency */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Latency (ms)</label>
+                <input
+                  type="text"
+                  data-testid="focus-latency-input"
+                  value={formState.latency || ""}
+                  onChange={(e) => handleFieldChange("metadata.latency", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  placeholder="e.g. 40"
+                />
+              </div>
+
+              {/* Metadata Throughput */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Throughput (req/s)</label>
+                <input
+                  type="text"
+                  data-testid="focus-throughput-input"
+                  value={formState.throughput || ""}
+                  onChange={(e) => handleFieldChange("metadata.throughput", e.target.value)}
+                  className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                  placeholder="e.g. 300"
                 />
               </div>
             </div>
@@ -2528,12 +2569,10 @@ function MetricsTab({
                         <div className="mt-2 pt-2 border-t border-zinc-900/40 flex flex-col gap-1.5 font-sans">
                           <div className="grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
                             <div>
-                              <span className="text-zinc-500">Cumulative Latency: </span>
-                              <span className="font-bold text-zinc-200 font-mono">{pathMetrics.cumulativeLatency}ms</span>
+                              <span className="text-zinc-500">Cumulative Latency: <span className="font-bold text-zinc-200 font-mono">{pathMetrics.cumulativeLatency} ms</span></span>
                             </div>
                             <div>
-                              <span className="text-zinc-500">Bottleneck Capacity: </span>
-                              <span className="font-bold text-zinc-200 font-mono">{pathMetrics.bottleneckCapacity}/s</span>
+                              <span className="text-zinc-500">Bottleneck Capacity: <span className="font-bold text-zinc-200 font-mono">{pathMetrics.bottleneckCapacity} req/s</span></span>
                             </div>
                             <div>
                               <span className="text-zinc-500">Success Rate: </span>

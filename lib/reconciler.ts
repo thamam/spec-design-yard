@@ -302,6 +302,15 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
       if (id === "system") {
         try {
           const parts = parsePath(path)
+          if (parts[0] === "system" && parts[1] === "metadata") {
+            const systemNode = doc.get("system") as any
+            if (systemNode && typeof systemNode.get === "function") {
+              let metadataNode = systemNode.get("metadata")
+              if (!metadataNode || typeof metadataNode.set !== "function") {
+                systemNode.set("metadata", doc.createNode({}))
+              }
+            }
+          }
           const currentVal = doc.getIn(parts)
           if (currentVal !== value) {
             doc.setIn(parts, value)
@@ -317,6 +326,12 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           if (compId === id) {
             try {
               const parts = parsePath(path)
+              if (parts[0] === "metadata") {
+                let metadataNode = compNode.get("metadata")
+                if (!metadataNode || typeof metadataNode.set !== "function") {
+                  compNode.set("metadata", doc.createNode({}))
+                }
+              }
               const currentVal = compNode.getIn(parts)
               if (currentVal !== value) {
                 compNode.setIn(parts, value)
