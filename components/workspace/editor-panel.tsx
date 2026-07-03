@@ -1994,6 +1994,60 @@ function MetricsTab({
     }
   }, [componentsById, diagnosticsByComponent])
 
+  const getBottleneckNode = useCallback((path: string[]) => {
+    let minCap = Infinity
+    let minNode = ""
+    path.forEach((node) => {
+      const entry = componentsById.get(node ? node.trim() : "")
+      if (!entry) return
+      const { comp } = entry
+      const type = String(comp?.type || "").toLowerCase()
+      let cap = 200
+      const metaCap = comp?.metadata?.throughput || comp?.metadata?.rate_limit || comp?.rate_limit || comp?.throughput
+      if (metaCap) {
+        const parsed = parseInt(metaCap, 10)
+        if (!isNaN(parsed)) cap = parsed
+      } else {
+        if (type === "gateway") cap = 1000
+        else if (type === "stage") cap = 150
+        else if (type === "brick") cap = 300
+        else if (type === "store") cap = 100
+      }
+      if (cap < minCap) {
+        minCap = cap
+        minNode = node
+      }
+    })
+    return { node: minNode, capacity: minCap === Infinity ? 200 : minCap }
+  }, [componentsById])
+
+  const getHighestLatencyNode = useCallback((path: string[]) => {
+    let maxLat = -1
+    let maxNode = ""
+    path.forEach((node) => {
+      const entry = componentsById.get(node ? node.trim() : "")
+      if (!entry) return
+      const { comp } = entry
+      const type = String(comp?.type || "").toLowerCase()
+      let lat = 20
+      const metaLatency = comp?.metadata?.latency || comp?.latency
+      if (metaLatency) {
+        const parsed = parseInt(metaLatency, 10)
+        if (!isNaN(parsed)) lat = parsed
+      } else {
+        if (type === "gateway") lat = 5
+        else if (type === "stage") lat = 40
+        else if (type === "brick") lat = 15
+        else if (type === "store") lat = 80
+      }
+      if (lat > maxLat) {
+        maxLat = lat
+        maxNode = node
+      }
+    })
+    return { node: maxNode, latency: maxLat }
+  }, [componentsById])
+
   const handleStartSimulation = (path: string[], pathIdx: number) => {
     if (simulationState === "running") return
 
@@ -2642,6 +2696,68 @@ function MetricsTab({
                                 <span>Packets Transmitted: {simulatedPackets} / {simPacketCount}</span>
                                 <span>Simulated Success Rate: <span className="text-zinc-300 font-bold">{simulatedPackets > 0 ? Math.round((simulatedSuccessful / simulatedPackets) * 100) : 0}%</span></span>
                               </div>
+
+                              {simulationState === "completed" && (
+                                <div
+                                  data-testid="simulation-report"
+                                  className="mt-2 p-2 bg-zinc-900/50 border border-zinc-800/80 rounded flex flex-col gap-1.5 text-[10px]"
+                                >
+                                  <div className="font-bold text-zinc-300 flex items-center gap-1">
+                                    📊 Path Performance Diagnostic Report
+                                  </div>
+                                  
+                                  <div className="flex flex-col gap-1 text-zinc-400">
+                                    <div className="flex justify-between border-b border-zinc-900/30 pb-0.5">
+                                      <span>Transmitted:</span>
+                                      <span className="font-mono text-zinc-300 font-bold">{simulatedPackets} packets</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-zinc-900/30 pb-0.5">
+                                      <span>Successful Delivery:</span>
+                                      <span className="font-mono text-emerald-400 font-bold">{simulatedSuccessful} ({simulatedPackets > 0 ? Math.round((simulatedSuccessful / simulatedPackets) * 100) : 0}%)</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-zinc-900/30 pb-0.5">
+                                      <span>Dropped/Lost:</span>
+                                      <span className={`font-mono font-bold ${simulatedPackets - simulatedSuccessful > 0 ? "text-rose-400" : "text-zinc-500"}`}>{simulatedPackets - simulatedSuccessful} packets</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Dynamic Insights & Actionable Recommendations */}
+                                  <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-zinc-900/40">
+                                    {(() => {
+                                      const bottleneck = getBottleneckNode(path)
+                                      const highestLatency = getHighestLatencyNode(path)
+                                      const recs: string[] = []
+
+                                      if (bottleneck.node) {
+                                        recs.push(`System capacity throttled to ${bottleneck.capacity} req/s by bottleneck ${bottleneck.node}.`)
+                                        if (bottleneck.capacity < 100) {
+                                          recs.push(`Scale throughput of "${bottleneck.node}" to optimize path flow.`)
+                                        }
+                                      }
+                                      if (highestLatency.node) {
+                                        recs.push(`Highest latency node is "${highestLatency.node}" (${highestLatency.latency} ms).`)
+                                        if (pathMetrics.cumulativeLatency > 150) {
+                                          recs.push(`Reduce workload/latency on "${highestLatency.node}" to improve speed.`)
+                                        }
+                                      }
+                                      if (simLossRatio > 0) {
+                                        recs.push(`Packet loss ratio of ${simLossRatio} percent configured; consider secure channels.`)
+                                      }
+
+                                      return (
+                                        <div className="space-y-1">
+                                          <span className="text-zinc-500 font-semibold uppercase text-[8px] tracking-wider">Analysis & Recommendations:</span>
+                                          <ul className="list-disc pl-3 text-zinc-400 space-y-0.5">
+                                            {recs.map((rec, rIdx) => (
+                                              <li key={rIdx}>{rec}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <button
