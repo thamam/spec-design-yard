@@ -1652,7 +1652,17 @@ function MetricsTab({
       })
     }
 
-    const recommendations: { type: "info" | "warning" | "success"; message: string; action: string }[] = []
+    const recommendations: {
+      type: "info" | "warning" | "success";
+      message: string;
+      action: string;
+      fix?: {
+        path: string;
+        fixType: string;
+        extraData?: any;
+        buttonLabel: string;
+      };
+    }[] = []
 
     // 1. Coupling Insight
     if (couplingRating === "Spaghettified" || couplingRating === "Dense") {
@@ -1687,11 +1697,18 @@ function MetricsTab({
       return type === "store" && ids.has(id) && (incomingCountMap[id] || 0) === 0
     })
     if (isolatedStores.length > 0) {
-      const storeIds = isolatedStores.map((s: any) => s.id).join(", ")
-      recommendations.push({
-        type: "warning",
-        message: `Isolated Data Store(s) with no inbound flow: ${storeIds}.`,
-        action: "Ensure these stores receive writes from an active processing stage or ingest gateway."
+      isolatedStores.forEach((s: any) => {
+        const compIdx = components.findIndex((co: any) => co && co.id === s.id)
+        recommendations.push({
+          type: "warning",
+          message: `Isolated Data Store with no inbound flow: "${s.id}".`,
+          action: "Ensure this store receives writes from an active processing stage or ingest gateway.",
+          fix: compIdx !== -1 ? {
+            path: `system.components[${compIdx}]`,
+            fixType: "connect-to-store",
+            buttonLabel: `Connect Stage to ${s.id}`
+          } : undefined
+        })
       })
     }
 
@@ -1704,30 +1721,37 @@ function MetricsTab({
       return ids.has(id) && isSinkType && (outgoingCountMap[id] || 0) === 0 && (incomingCountMap[id] || 0) > 0
     })
     if (sinkComponents.length > 0) {
-      const sinkIds = sinkComponents.map((s: any) => s.id).join(", ")
-      recommendations.push({
-        type: "warning",
-        message: `Processing sink stage/brick with no outbound flow: ${sinkIds}.`,
-        action: "Connect these terminal stages to downstream data stores or subsequent stages to complete the data lifecycle."
+      sinkComponents.forEach((s: any) => {
+        const compIdx = components.findIndex((co: any) => co && co.id === s.id)
+        recommendations.push({
+          type: "warning",
+          message: `Processing sink stage/brick with no outbound flow: "${s.id}".`,
+          action: "Connect this terminal stage to downstream data stores or subsequent stages to complete the data lifecycle.",
+          fix: compIdx !== -1 ? {
+            path: `system.components[${compIdx}]`,
+            fixType: "connect-to-store",
+            buttonLabel: `Connect ${s.id} to Downstream Store`
+          } : undefined
+        })
       })
     }
 
     // 5. Gateway Directly to Store
-    const gatewayBypasses: string[] = []
-    components.forEach((c: any) => {
+    const gatewayBypasses: { gatewayId: string; targetId: string; compIdx: number; connIdx: number }[] = []
+    components.forEach((c: any, compIdx: number) => {
       if (!c || typeof c.id !== 'string') return
       const id = c.id.trim()
       const type = String(c.type || "").toLowerCase()
       if (type === "gateway" && ids.has(id)) {
         const conns = c.connections || []
         if (Array.isArray(conns)) {
-          conns.forEach((conn: any) => {
+          conns.forEach((conn: any, connIdx: number) => {
             const target = typeof conn === "string" ? conn : conn?.target
             if (typeof target === "string" && ids.has(target.trim())) {
               const targetComp = components.find((co: any) => co && typeof co.id === 'string' && co.id.trim() === target.trim())
               const targetType = String(targetComp?.type || "").toLowerCase()
               if (targetType === "store") {
-                gatewayBypasses.push(`${id} → ${target.trim()}`)
+                gatewayBypasses.push({ gatewayId: id, targetId: target.trim(), compIdx, connIdx })
               }
             }
           })
@@ -1735,10 +1759,42 @@ function MetricsTab({
       }
     })
     if (gatewayBypasses.length > 0) {
-      recommendations.push({
-        type: "warning",
-        message: `Direct Gateway-to-Store bypass connection detected: ${gatewayBypasses.join(", ")}.`,
-        action: "Route gateway ingestion traffic through a validation or sanitization Stage before writing to the Store."
+      gatewayBypasses.forEach((b) => {
+        recommendations.push({
+          type: "warning",
+          message: `Direct Gateway-to-Store bypass connection detected: "${b.gatewayId} → ${b.targetId}".`,
+          action: "Route gateway ingestion traffic through a validation or sanitization Stage before writing to the Store.",
+          fix: {
+            path: `system.components[${b.compIdx}].connections[${b.connIdx}]`,
+            fixType: "insert-stage",
+            buttonLabel: `Insert Validation Stage before ${b.targetId}`
+          }
+        })
+      })
+    }
+
+    // 6. STRIDE Security Recommendation Insights
+    if (diagnostics && Array.isArray(diagnostics)) {
+      diagnostics.forEach((d) => {
+        if (d.code && d.code.startsWith("stride-") && d.path) {
+          let buttonLabel = "Apply Security Guard"
+          if (d.code === "stride-spoofing") buttonLabel = "Apply Spoofing Guard (Auth Label)"
+          else if (d.code === "stride-tampering") buttonLabel = "Apply Tampering Guard (TLS Flow)"
+          else if (d.code === "stride-repudiation") buttonLabel = "Inject Central Audit Logger"
+          else if (d.code === "stride-information-disclosure") buttonLabel = "Inject Auth Verifier Stage"
+          else if (d.code === "stride-elevation-of-privilege") buttonLabel = "Apply Elevation Guard"
+
+          recommendations.push({
+            type: "warning",
+            message: `STRIDE Security Threat: ${d.message}`,
+            action: "Mitigate this risk by applying the recommended security guard to secure the architectural boundaries.",
+            fix: {
+              path: d.path,
+              fixType: d.code,
+              buttonLabel
+            }
+          })
+        }
       })
     }
 
@@ -2206,6 +2262,14 @@ function MetricsTab({
                 <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
                   {rec.action}
                 </p>
+                {rec.fix && (
+                  <button
+                    onClick={() => onQuickFix && onQuickFix(rec.fix!.path, rec.fix!.fixType, rec.fix!.extraData)}
+                    className="mt-2 text-[10px] font-bold tracking-wide uppercase px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md active:scale-95 cursor-pointer max-w-max"
+                  >
+                    {rec.fix!.buttonLabel}
+                  </button>
+                )}
               </div>
             );
           })}
