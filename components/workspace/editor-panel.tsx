@@ -1468,6 +1468,8 @@ function MetricsTab({
   const [simulatedPackets, setSimulatedPackets] = useState<number>(0)
   const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
+  const [simPacketCount, setSimPacketCount] = useState<number>(100)
+  const [simLossRatio, setSimLossRatio] = useState<number>(0)
 
   const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -1495,7 +1497,7 @@ function MetricsTab({
       clearInterval(simulationIntervalRef.current)
       simulationIntervalRef.current = null
     }
-  }, [pathSource, pathTarget])
+  }, [pathSource, pathTarget, simPacketCount, simLossRatio])
 
   const systemMetadata = parsedSpec?.system?.metadata
   const hasSystemMetadata = !!systemMetadata && typeof systemMetadata === "object" && !Array.isArray(systemMetadata)
@@ -2009,22 +2011,28 @@ function MetricsTab({
 
     let packets = 0
     let successful = 0
-    const totalPackets = 100
+    const totalPackets = simPacketCount
+    const stepSize = Math.max(1, Math.round(totalPackets / 10))
+    const finalSuccessProb = successProb * (1 - simLossRatio / 100)
 
     simulationIntervalRef.current = setInterval(() => {
-      packets += 10
-      if (packets > totalPackets) {
+      let nextPackets = packets + stepSize
+      if (nextPackets >= totalPackets) {
+        nextPackets = totalPackets
         if (simulationIntervalRef.current) {
           clearInterval(simulationIntervalRef.current)
           simulationIntervalRef.current = null
         }
         setSimulationState("completed")
-      } else {
-        const batchSuccess = Math.round(10 * successProb)
-        successful += batchSuccess
-        setSimulatedSuccessful(successful)
-        setSimulatedPackets(packets)
       }
+      
+      const added = nextPackets - packets
+      const batchSuccess = Math.round(added * finalSuccessProb)
+      successful += batchSuccess
+      packets = nextPackets
+
+      setSimulatedSuccessful(successful)
+      setSimulatedPackets(packets)
     }, 50)
   }
 
@@ -2503,6 +2511,44 @@ function MetricsTab({
             </div>
           </div>
 
+          {/* Simulation Configuration */}
+          <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-zinc-900/50">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="sim-packet-select" className="text-[9px] text-zinc-500 uppercase font-bold">Simulated Packets</label>
+              <select
+                id="sim-packet-select"
+                data-testid="sim-packet-select"
+                value={simPacketCount}
+                onChange={(e) => setSimPacketCount(parseInt(e.target.value, 10))}
+                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer font-sans"
+              >
+                <option value={50}>50 Packets</option>
+                <option value={100}>100 Packets (Default)</option>
+                <option value={200}>200 Packets</option>
+                <option value={500}>500 Packets</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-center font-sans">
+                <label htmlFor="sim-loss-slider" className="text-[9px] text-zinc-500 uppercase font-bold">Additional Packet Loss</label>
+                <span className="text-[9px] text-indigo-400 font-bold font-mono">{simLossRatio}%</span>
+              </div>
+              <div className="flex items-center gap-1.5 h-7">
+                <input
+                  id="sim-loss-slider"
+                  data-testid="sim-loss-slider"
+                  type="range"
+                  min="0"
+                  max="90"
+                  step="5"
+                  value={simLossRatio}
+                  onChange={(e) => setSimLossRatio(parseInt(e.target.value, 10))}
+                  className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Tracer Results */}
           {pathSource && pathTarget && (
             <div className="flex flex-col gap-2 border-t border-zinc-900/60 pt-2.5 font-mono">
@@ -2587,13 +2633,13 @@ function MetricsTab({
                                   <span className={`w-1.5 h-1.5 rounded-full ${simulationState === "running" ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
                                   {simulationState === "running" ? "Simulation Active" : "Simulation Completed"}
                                 </span>
-                                <span className="font-mono text-zinc-400">{simulatedPackets}%</span>
+                                <span className="font-mono text-zinc-400">{Math.round((simulatedPackets / simPacketCount) * 100)}%</span>
                               </div>
                               <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                                <div className={`h-full transition-all duration-100 ${simulationState === "running" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${simulatedPackets}%` }} />
+                                <div className={`h-full transition-all duration-100 ${simulationState === "running" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.round((simulatedPackets / simPacketCount) * 100)}%` }} />
                               </div>
                               <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1 font-mono">
-                                <span>Packets Transmitted: {simulatedPackets}</span>
+                                <span>Packets Transmitted: {simulatedPackets} / {simPacketCount}</span>
                                 <span>Simulated Success Rate: <span className="text-zinc-300 font-bold">{simulatedPackets > 0 ? Math.round((simulatedSuccessful / simulatedPackets) * 100) : 0}%</span></span>
                               </div>
                             </div>
