@@ -1423,6 +1423,11 @@ function MetricsTab({
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
 
+  const [simulationState, setSimulationState] = useState<"idle" | "running" | "completed">("idle")
+  const [simulatedPackets, setSimulatedPackets] = useState<number>(0)
+  const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
+  const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
+
   const [localPathSource, setLocalPathSource] = useState<string>("")
   const [localPathTarget, setLocalPathTarget] = useState<string>("")
   const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
@@ -1853,6 +1858,93 @@ function MetricsTab({
     allIds,
     recommendations
   } = metrics
+
+  const computePathMetrics = (path: string[]) => {
+    let cumulativeLatency = 0
+    let bottleneckCapacity = Infinity
+    let minSuccessRate = 1.0
+
+    path.forEach((nodeId) => {
+      const compIdx = (components as any[]).findIndex((c: any) => c && c.id === nodeId)
+      const comp = compIdx !== -1 ? (components as any[])[compIdx] : null
+      const type = String(comp?.type || "").toLowerCase()
+
+      // 1. Latency
+      let lat = 20
+      const metaLatency = comp?.metadata?.latency || comp?.latency
+      if (metaLatency) {
+        const parsed = parseInt(metaLatency, 10)
+        if (!isNaN(parsed)) lat = parsed
+      } else {
+        if (type === "gateway") lat = 5
+        else if (type === "stage") lat = 40
+        else if (type === "brick") lat = 15
+        else if (type === "store") lat = 80
+      }
+      cumulativeLatency += lat
+
+      // 2. Capacity/Throughput
+      let cap = 200
+      const metaCap = comp?.metadata?.throughput || comp?.metadata?.rate_limit || comp?.rate_limit || comp?.throughput
+      if (metaCap) {
+        const parsed = parseInt(metaCap, 10)
+        if (!isNaN(parsed)) cap = parsed
+      } else {
+        if (type === "gateway") cap = 1000
+        else if (type === "stage") cap = 150
+        else if (type === "brick") cap = 300
+        else if (type === "store") cap = 100
+      }
+      if (cap < bottleneckCapacity) {
+        bottleneckCapacity = cap
+      }
+
+      // 3. Success rate based on diagnostics
+      if (compIdx !== -1) {
+        const compDiags = diagnosticsByComponent.get(compIdx) || []
+        compDiags.forEach((d) => {
+          if (d.severity === "error") minSuccessRate -= 0.20
+          else if (d.severity === "warning") minSuccessRate -= 0.05
+        })
+      }
+    })
+
+    const finalSuccessRate = Math.max(0.50, Math.min(1.0, minSuccessRate))
+    return {
+      cumulativeLatency,
+      bottleneckCapacity: bottleneckCapacity === Infinity ? 200 : bottleneckCapacity,
+      successRate: finalSuccessRate
+    }
+  }
+
+  const handleStartSimulation = (path: string[], pathIdx: number) => {
+    if (simulationState === "running") return
+    setSimulationState("running")
+    setSimulatingPathIndex(pathIdx)
+    setSimulatedPackets(0)
+    setSimulatedSuccessful(0)
+
+    const pathMetrics = computePathMetrics(path)
+    const successProb = pathMetrics.successRate
+
+    let packets = 0
+    let successful = 0
+    const totalPackets = 100
+
+    const interval = setInterval(() => {
+      packets += 10
+      if (packets > totalPackets) {
+        packets = totalPackets
+        clearInterval(interval)
+        setSimulationState("completed")
+      } else {
+        const batchSuccess = Math.round(10 * successProb)
+        successful += batchSuccess
+        setSimulatedSuccessful(successful)
+        setSimulatedPackets(packets)
+      }
+    }, 50)
+  }
 
   // Pre-computed O(1) type and label lookup maps for the path tracer to avoid nested linear scans on renders
   const { componentTypeMap, edgeLabelMap } = useMemo(() => {
@@ -2336,53 +2428,101 @@ function MetricsTab({
                     <span>Found {tracedPaths.length} Path{tracedPaths.length > 1 ? "s" : ""}</span>
                     <span>Max depth: 8 hops</span>
                   </div>
-                  {tracedPaths.slice(0, 5).map((path, pIdx) => (
-                    <div key={`path-${pIdx}`} className="p-2 rounded bg-zinc-950/30 border border-zinc-900 flex flex-col gap-1.5">
-                      <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
-                      <div className="flex flex-wrap items-center gap-1 leading-relaxed">
-                        {path.map((node, nIdx) => {
-                          const isLast = nIdx === path.length - 1;
-                          const type = componentTypeMap.get(node) || "Stage";
-                          
-                          // Determine color coding based on type
-                          let typeColor = "text-zinc-400";
-                          if (type.toLowerCase() === "gateway") typeColor = "text-amber-400 font-bold";
-                          else if (type.toLowerCase() === "store") typeColor = "text-indigo-400 font-bold";
-                          else if (type.toLowerCase() === "brick") typeColor = "text-emerald-400";
-                          else if (type.toLowerCase() === "stage") typeColor = "text-purple-400";
+                  {tracedPaths.slice(0, 5).map((path, pIdx) => {
+                    const pathMetrics = computePathMetrics(path);
+                    return (
+                      <div key={`path-${pIdx}`} className="p-2 rounded bg-zinc-950/30 border border-zinc-900 flex flex-col gap-1.5">
+                        <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
+                        <div className="flex flex-wrap items-center gap-1 leading-relaxed">
+                          {path.map((node, nIdx) => {
+                            const isLast = nIdx === path.length - 1;
+                            const type = componentTypeMap.get(node) || "Stage";
+                            
+                            // Determine color coding based on type
+                            let typeColor = "text-zinc-400";
+                            if (type.toLowerCase() === "gateway") typeColor = "text-amber-400 font-bold";
+                            else if (type.toLowerCase() === "store") typeColor = "text-indigo-400 font-bold";
+                            else if (type.toLowerCase() === "brick") typeColor = "text-emerald-400";
+                            else if (type.toLowerCase() === "stage") typeColor = "text-purple-400";
 
-                          const nextNode = isLast ? null : path[nIdx + 1];
-                          const connLabel = !isLast && nextNode ? edgeLabelMap.get(`${node}->${nextNode}`) : null;
+                            const nextNode = isLast ? null : path[nIdx + 1];
+                            const connLabel = !isLast && nextNode ? edgeLabelMap.get(`${node}->${nextNode}`) : null;
 
-                          return (
-                            <Fragment key={`${node}-${nIdx}`}>
-                              {/* Node interactive button */}
-                              <button
-                                type="button"
-                                onClick={() => setSelectedUnit && setSelectedUnit(node)}
-                                aria-label={`Trace Path Node ${node}`}
-                                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 hover:text-white transition-all text-left text-[11px] shrink-0 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer active:scale-95 text-zinc-100"
-                              >
-                                <span className="hover:underline text-zinc-100">{node}</span>
-                                <span className={`text-[9px] font-sans scale-[0.85] shrink-0 ${typeColor}`}>({type})</span>
-                              </button>
+                            return (
+                              <Fragment key={`${node}-${nIdx}`}>
+                                {/* Node interactive button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedUnit && setSelectedUnit(node)}
+                                  aria-label={`Trace Path Node ${node}`}
+                                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 hover:text-white transition-all text-left text-[11px] shrink-0 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer active:scale-95 text-zinc-100"
+                                >
+                                  <span className="hover:underline text-zinc-100">{node}</span>
+                                  <span className={`text-[9px] font-sans scale-[0.85] shrink-0 ${typeColor}`}>({type})</span>
+                                </button>
 
-                              {!isLast && (
-                                <div className="flex flex-col items-center justify-center px-0.5 text-zinc-500 shrink-0 select-none">
-                                  <span className="text-xs">→</span>
-                                  {connLabel && (
-                                    <span className="text-[8px] font-sans text-zinc-600 max-w-[80px] truncate" title={connLabel}>
-                                      {connLabel}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </Fragment>
-                          );
-                        })}
+                                {!isLast && (
+                                  <div className="flex flex-col items-center justify-center px-0.5 text-zinc-500 shrink-0 select-none">
+                                    <span className="text-xs">→</span>
+                                    {connLabel && (
+                                      <span className="text-[8px] font-sans text-zinc-600 max-w-[80px] truncate" title={connLabel}>
+                                        {connLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </div>
+
+                        {/* Interactive Simulation and Metrics Section */}
+                        <div className="mt-2 pt-2 border-t border-zinc-900/40 flex flex-col gap-1.5 font-sans">
+                          <div className="grid grid-cols-3 gap-2 text-[10px] text-zinc-400">
+                            <div>
+                              <span className="text-zinc-500">Cumulative Latency: </span>
+                              <span className="font-bold text-zinc-200 font-mono">{pathMetrics.cumulativeLatency}ms</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500">Bottleneck Capacity: </span>
+                              <span className="font-bold text-zinc-200 font-mono">{pathMetrics.bottleneckCapacity}/s</span>
+                            </div>
+                            <div>
+                              <span className="text-zinc-500">Success Rate: </span>
+                              <span className={`font-bold font-mono ${pathMetrics.successRate === 1 ? "text-emerald-400" : pathMetrics.successRate >= 0.8 ? "text-amber-400" : "text-rose-400"}`}>{Math.round(pathMetrics.successRate * 100)}%</span>
+                            </div>
+                          </div>
+
+                          {simulatingPathIndex === pIdx ? (
+                            <div className="flex flex-col gap-1 bg-zinc-950/60 p-2 rounded border border-zinc-900/60">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-bold flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${simulationState === "running" ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                                  {simulationState === "running" ? "Simulation Active" : "Simulation Completed"}
+                                </span>
+                                <span className="font-mono text-zinc-400">{simulatedPackets}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
+                                <div className={`h-full transition-all duration-100 ${simulationState === "running" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${simulatedPackets}%` }} />
+                              </div>
+                              <div className="flex justify-between items-center text-[9px] text-zinc-500 mt-1 font-mono">
+                                <span>Packets Transmitted: {simulatedPackets}</span>
+                                <span>Simulated Success Rate: <span className="text-zinc-300 font-bold">{simulatedPackets > 0 ? Math.round((simulatedSuccessful / simulatedPackets) * 100) : 0}%</span></span>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleStartSimulation(path, pIdx)}
+                              className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors active:scale-95 text-center cursor-pointer max-w-max"
+                            >
+                              Run Performance Simulation
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {tracedPaths.length > 5 && (
                     <p className="text-[10px] text-zinc-500 italic text-center mt-1">Showing first 5 paths.</p>
                   )}

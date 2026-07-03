@@ -340,5 +340,44 @@ describe('Workspace Metrics Tab Feature', () => {
       expect(textarea.value).toContain('type: Stage')
     })
   })
+
+  test('Interactive Flow Simulation simulates path performance and displays cumulative latency, throughput bottlenecks, and success rate', async () => {
+    render(<Workspace />)
+
+    const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabButton)
+
+    // Select start and end nodes
+    const startSelect = screen.getByLabelText("Trace Path Start") as HTMLSelectElement
+    const endSelect = screen.getByLabelText("Trace Path End") as HTMLSelectElement
+
+    fireEvent.change(startSelect, { target: { value: 'inbox' } })
+    fireEvent.change(endSelect, { target: { value: 'review_stage' } })
+
+    // Wait for the path to trace
+    await waitFor(() => {
+      expect(screen.getByText(/Path 1/i)).toBeInTheDocument()
+    })
+
+    // Check that there is a simulation section or button "Run Performance Simulation"
+    const simulateBtn = screen.getByRole('button', { name: /Run Performance Simulation/i })
+    expect(simulateBtn).toBeInTheDocument()
+
+    // Click "Run Performance Simulation"
+    fireEvent.click(simulateBtn)
+
+    // The HUD should display simulation results
+    expect(screen.getByText(/Cumulative Latency/i)).toBeInTheDocument()
+    expect(screen.getByText(/Bottleneck Capacity/i)).toBeInTheDocument()
+    expect(screen.getByText(/Simulation Active/i)).toBeInTheDocument()
+
+    // Wait for simulation to finish
+    await waitFor(() => {
+      expect(screen.getByText(/Simulation Completed/i)).toBeInTheDocument()
+    }, { timeout: 4000 })
+
+    expect(screen.getByText(/Packets Transmitted/i)).toBeInTheDocument()
+    expect(screen.getByText(/Simulated Success Rate/i)).toBeInTheDocument()
+  })
 })
 
