@@ -1473,6 +1473,34 @@ function MetricsTab({
   const [simPacketCount, setSimPacketCount] = useState<number>(100)
   const [simLossRatio, setSimLossRatio] = useState<number>(0)
 
+  const derivedPreset = useMemo(() => {
+    if (simPacketCount === 100 && simLossRatio === 0) return "default"
+    if (simPacketCount === 500 && simLossRatio === 5) return "load"
+    if (simPacketCount === 200 && simLossRatio === 20) return "flaky"
+    if (simPacketCount === 500 && simLossRatio === 50) return "stress"
+    if (simPacketCount === 50 && simLossRatio === 0) return "sanity"
+    return "custom"
+  }, [simPacketCount, simLossRatio])
+
+  const handlePresetChange = (preset: string) => {
+    if (preset === "default") {
+      setSimPacketCount(100)
+      setSimLossRatio(0)
+    } else if (preset === "load") {
+      setSimPacketCount(500)
+      setSimLossRatio(5)
+    } else if (preset === "flaky") {
+      setSimPacketCount(200)
+      setSimLossRatio(20)
+    } else if (preset === "stress") {
+      setSimPacketCount(500)
+      setSimLossRatio(50)
+    } else if (preset === "sanity") {
+      setSimPacketCount(50)
+      setSimLossRatio(0)
+    }
+  }
+
   const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -2568,39 +2596,59 @@ function MetricsTab({
           </div>
 
           {/* Simulation Configuration */}
-          <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-zinc-900/50">
+          <div className="mt-2 pt-2 border-t border-zinc-900/50 flex flex-col gap-2">
             <div className="flex flex-col gap-1">
-              <label htmlFor="sim-packet-select" className="text-[9px] text-zinc-500 uppercase font-bold">Simulated Packets</label>
+              <label htmlFor="sim-preset-select" className="text-[9px] text-zinc-500 uppercase font-bold">Simulation Environment Preset</label>
               <select
-                id="sim-packet-select"
-                data-testid="sim-packet-select"
-                value={simPacketCount}
-                onChange={(e) => setSimPacketCount(parseInt(e.target.value, 10))}
+                id="sim-preset-select"
+                data-testid="sim-preset-select"
+                value={derivedPreset}
+                onChange={(e) => handlePresetChange(e.target.value)}
                 className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer font-sans"
               >
-                <option value={50}>50 Packets</option>
-                <option value={100}>100 Packets (Default)</option>
-                <option value={200}>200 Packets</option>
-                <option value={500}>500 Packets</option>
+                <option value="default">Standard Dev (Default)</option>
+                <option value="load">High Traffic / Load Test</option>
+                <option value="flaky">Flaky Wireless Link</option>
+                <option value="stress">Extreme Stress Test</option>
+                <option value="sanity">Sanity Check</option>
+                <option value="custom" disabled>Custom / Manual Adjustments</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between items-center font-sans">
-                <label htmlFor="sim-loss-slider" className="text-[9px] text-zinc-500 uppercase font-bold">Additional Packet Loss</label>
-                <span className="text-[9px] text-indigo-400 font-bold font-mono">{simLossRatio}%</span>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="sim-packet-select" className="text-[9px] text-zinc-500 uppercase font-bold">Simulated Packets</label>
+                <select
+                  id="sim-packet-select"
+                  data-testid="sim-packet-select"
+                  value={simPacketCount}
+                  onChange={(e) => setSimPacketCount(parseInt(e.target.value, 10))}
+                  className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer font-sans"
+                >
+                  <option value={50}>50 Packets</option>
+                  <option value={100}>100 Packets (Default)</option>
+                  <option value={200}>200 Packets</option>
+                  <option value={500}>500 Packets</option>
+                </select>
               </div>
-              <div className="flex items-center gap-1.5 h-7">
-                <input
-                  id="sim-loss-slider"
-                  data-testid="sim-loss-slider"
-                  type="range"
-                  min="0"
-                  max="90"
-                  step="5"
-                  value={simLossRatio}
-                  onChange={(e) => setSimLossRatio(parseInt(e.target.value, 10))}
-                  className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center font-sans">
+                  <label htmlFor="sim-loss-slider" className="text-[9px] text-zinc-500 uppercase font-bold">Additional Packet Loss</label>
+                  <span className="text-[9px] text-indigo-400 font-bold font-mono">{simLossRatio}%</span>
+                </div>
+                <div className="flex items-center gap-1.5 h-7">
+                  <input
+                    id="sim-loss-slider"
+                    data-testid="sim-loss-slider"
+                    type="range"
+                    min="0"
+                    max="90"
+                    step="5"
+                    value={simLossRatio}
+                    onChange={(e) => setSimLossRatio(parseInt(e.target.value, 10))}
+                    className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
             </div>
           </div>
