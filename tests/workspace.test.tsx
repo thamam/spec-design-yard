@@ -380,4 +380,24 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(arrowBC.strokeColor).toBe('#818cf8')
     expect(arrowBC.strokeWidth).toBe(3.5)
   })
+
+  test('selecting a component from GridView switches to Focus Tab and updates selectedUnit', async () => {
+    render(<Workspace />)
+
+    // Switch to Grid view on the CanvasPanel
+    const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
+    fireEvent.click(gridViewBtn)
+
+    // In grid view, find and click the 'inbox' component button/card
+    const gatewayCard = screen.getByRole('button', { name: /Select component inbox/i })
+    expect(gatewayCard).toBeInTheDocument()
+    fireEvent.click(gatewayCard)
+
+    // Verify Focus Tab is now active and displays the properties of inbox
+    const focusTab = screen.getByRole('tab', { name: /Focus/i })
+    expect(focusTab).toHaveAttribute('aria-selected', 'true')
+
+    const nameInput = screen.getByTestId('focus-name-input') as HTMLInputElement
+    expect(nameInput.value).toBe('inbox/')
+  })
 })

@@ -69,6 +69,7 @@ export function CanvasPanel({
   onCanvasChange,
   pathSource,
   pathTarget,
+  setActiveTab,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -76,6 +77,7 @@ export function CanvasPanel({
   onCanvasChange?: (change: any[] | CanvasChange) => void
   pathSource?: string
   pathTarget?: string
+  setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
@@ -210,15 +212,34 @@ export function CanvasPanel({
             pathTarget={pathTarget}
           />
         )}
-        {view === "grid" && <GridView parsedSpec={parsedSpec} />}
+        {view === "grid" && (
+          <GridView
+            parsedSpec={parsedSpec}
+            selectedUnit={selectedUnit}
+            setSelectedUnit={setSelectedUnit}
+            setActiveTab={setActiveTab}
+          />
+        )}
         {view === "layers" && <LayersView parsedSpec={parsedSpec} />}
       </div>
     </section>
   )
 }
 
+interface GridViewProps {
+  parsedSpec: any
+  selectedUnit?: string | null
+  setSelectedUnit?: (val: string | null) => void
+  setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
+}
+
 /* ── Grid view ── */
-function GridView({ parsedSpec }: { parsedSpec: any }) {
+function GridView({
+  parsedSpec,
+  selectedUnit,
+  setSelectedUnit,
+  setActiveTab,
+}: GridViewProps) {
   const components = parsedSpec?.system?.components || []
   
   const cards = components.map((comp: any) => {
@@ -257,37 +278,63 @@ function GridView({ parsedSpec }: { parsedSpec: any }) {
         <rect width="100%" height="100%" fill="url(#canvas-dots)" />
       </svg>
       <div className="relative grid grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl">
-        {cards.map((c: any) => (
-          <div
-            key={c.label}
-            className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150"
-            style={{
-              background: "var(--surface-elevated)",
-              border: `1px solid var(--border)`,
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = c.color + "55")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)")}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                style={{
-                  background: c.color + "18",
-                  color: c.color,
-                  border: `1px solid ${c.color}30`,
-                }}
-              >
-                {c.method}
-              </span>
+        {cards.map((c: any) => {
+          const isSelected = selectedUnit === c.label
+          return (
+            <div
+              key={c.label}
+              onClick={() => {
+                if (setSelectedUnit) setSelectedUnit(c.label)
+                if (setActiveTab) setActiveTab("focus")
+              }}
+              aria-label={`Select component ${c.label}`}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  if (setSelectedUnit) setSelectedUnit(c.label)
+                  if (setActiveTab) setActiveTab("focus")
+                }
+              }}
+              className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150 focus:outline-none"
+              style={{
+                background: isSelected ? "var(--surface-overlay)" : "var(--surface-elevated)",
+                border: isSelected ? `1px solid ${c.color}` : `1px solid var(--border)`,
+                boxShadow: isSelected ? `0 0 12px ${c.color}22` : "none",
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.borderColor = c.color + "55"
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected) {
+                  e.currentTarget.style.borderColor = "var(--border)"
+                }
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                  style={{
+                    background: c.color + "18",
+                    color: c.color,
+                    border: `1px solid ${c.color}30`,
+                  }}
+                >
+                  {c.method}
+                </span>
+              </div>
+              <p className="text-[12px] font-medium leading-tight" style={{ color: isSelected ? c.color : "var(--foreground)" }}>
+                {c.label}
+              </p>
+              <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
+                {c.desc}
+              </p>
             </div>
-            <p className="text-[12px] font-medium leading-tight" style={{ color: "var(--foreground)" }}>
-              {c.label}
-            </p>
-            <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
-              {c.desc}
-            </p>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

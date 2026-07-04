@@ -29,6 +29,8 @@ interface EditorPanelProps {
   setPathSource?: (val: string) => void
   pathTarget?: string
   setPathTarget?: (val: string) => void
+  activeTab?: TabId
+  setActiveTab?: (tab: TabId) => void
 }
 
 /* ── Code Tab ── */
@@ -2995,8 +2997,23 @@ export function EditorPanel({
   setPathSource: propSetPathSource,
   pathTarget: propPathTarget,
   setPathTarget: propSetPathTarget,
+  activeTab: propActiveTab,
+  setActiveTab: propSetActiveTab,
 }: EditorPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("code")
+  const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
+  const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
+  const setSelectedUnit = propSetSelectedUnit || setLocalSelectedUnit
+
+  const [localActiveTab, setLocalActiveTab] = useState<TabId>("code")
+  const activeTab = propActiveTab !== undefined ? propActiveTab : localActiveTab
+  const setActiveTab = propSetActiveTab || setLocalActiveTab
+
+  // Automatically switch to Focus tab when a component is selected
+  useEffect(() => {
+    if (selectedUnit) {
+      setActiveTab("focus")
+    }
+  }, [selectedUnit, setActiveTab])
   
   const [localPathSource, setLocalPathSource] = useState<string>("")
   const [localPathTarget, setLocalPathTarget] = useState<string>("")
@@ -3045,10 +3062,6 @@ export function EditorPanel({
     if (yamlSyntaxError) return []
     return lintSpec(parsedSpec)
   }, [parsedSpec, yamlSyntaxError])
-
-  const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
-  const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
-  const setSelectedUnit = propSetSelectedUnit || setLocalSelectedUnit
 
   const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
     const updated = reconcileSpec(specText, {
