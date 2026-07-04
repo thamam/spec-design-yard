@@ -186,6 +186,9 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
     components: true,
   })
 
+  const [treeSearch, setTreeSearch] = useState("")
+  const [treeType, setTreeType] = useState("all")
+
   const toggleNode = (nodeId: string) => {
     setExpandedNodes((prev) => ({
       ...prev,
@@ -204,12 +207,89 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 
   const components = Array.isArray(parsedSpec.system.components) ? parsedSpec.system.components : []
 
+  const filteredComponents = components.filter((comp: any) => {
+    if (!comp || typeof comp !== "object") return false
+    
+    const id = String(comp.id || "").toLowerCase()
+    const name = String(comp.name || "").toLowerCase()
+    const type = String(comp.type || "").toLowerCase()
+    
+    const matchesSearch = 
+      id.includes(treeSearch.toLowerCase()) || 
+      name.includes(treeSearch.toLowerCase()) || 
+      type.includes(treeSearch.toLowerCase())
+      
+    const matchesType = 
+      treeType === "all" || 
+      type === treeType.toLowerCase()
+      
+    return matchesSearch && matchesType
+  })
+
+  const isFiltered = treeSearch.trim() !== "" || treeType !== "all"
+
   return (
-    <div className="flex-1 overflow-auto py-3 px-4 text-sm select-none">
-      <div className="mb-2">
+    <div className="flex-1 overflow-auto py-3 px-4 text-sm select-none flex flex-col h-full" data-testid="tree-tab-container">
+      <div className="mb-2 shrink-0">
         <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-mono">System Directory Structure</span>
       </div>
-      <div className="space-y-2 mt-2">
+
+      {/* Interactive Controls */}
+      <div className="mb-3 shrink-0 flex flex-col gap-2 p-2.5 rounded-lg border border-zinc-900 bg-zinc-950/40">
+        <div className="relative flex items-center">
+          <span className="absolute left-2 text-zinc-500 pointer-events-none">
+            <SearchIcon size={12} />
+          </span>
+          <input
+            type="text"
+            data-testid="tree-search-input"
+            placeholder="Search directory..."
+            aria-label="Search components by ID or name"
+            value={treeSearch}
+            onChange={(e) => setTreeSearch(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 pl-7 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+          {treeSearch && (
+            <button
+              type="button"
+              onClick={() => setTreeSearch("")}
+              aria-label="Clear search"
+              className="absolute right-2 text-zinc-500 hover:text-zinc-300 text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="tree-type-filter" className="text-[10px] text-zinc-500 font-bold uppercase">Filter by Type</label>
+          <select
+            id="tree-type-filter"
+            data-testid="tree-type-select"
+            aria-label="Filter by Type"
+            value={treeType}
+            onChange={(e) => setTreeType(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="all">All Types</option>
+            <option value="gateway">Gateways</option>
+            <option value="stage">Stages</option>
+            <option value="brick">Bricks</option>
+            <option value="store">Stores</option>
+          </select>
+        </div>
+
+        {isFiltered && (
+          <div
+            data-testid="tree-match-stats"
+            className="text-[10px] font-mono text-indigo-400 mt-1 bg-indigo-950/20 px-2 py-0.5 rounded border border-indigo-950/40 text-center"
+          >
+            Matched: {filteredComponents.length} of {components.length}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto space-y-2">
         <div className="flex items-center gap-1.5 text-zinc-200 cursor-pointer" onClick={() => toggleNode("system")}>
           {expandedNodes.system ? <ChevronDownIcon size={14} className="text-zinc-500" /> : <ChevronRightIcon size={14} className="text-zinc-500" />}
           <FolderIcon size={14} className="text-indigo-400" />
@@ -226,51 +306,57 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 
             {expandedNodes.components && (
               <div className="pl-4 space-y-2 border-l border-zinc-900 ml-1.5">
-                {components.map((comp: any) => {
-                  const isExpanded = !!expandedNodes[comp.id]
-                  return (
-                    <div key={comp.id} className="space-y-1.5">
-                      <div
-                        data-component-id={comp.id}
-                        onClick={() => {
-                          toggleNode(comp.id)
-                          setSelectedUnit(comp.id)
-                        }}
-                        className={`flex items-center justify-between py-1 px-2.5 rounded border transition-all cursor-pointer ${
-                          selectedUnit === comp.id
-                            ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
-                            : "bg-zinc-900/50 border-zinc-900 hover:border-zinc-800 text-zinc-300"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="text-indigo-400">📄</span>
-                          <span className="font-mono text-xs">{comp.id}</span>
-                        </span>
-                        <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded uppercase">
-                          {comp.type}
-                        </span>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-900">
-                          <div>
-                            <span className="text-zinc-500">name:</span> {comp.name || comp.id}
-                          </div>
-                          {comp.connections && comp.connections.length > 0 && (
-                            <div>
-                              <span className="text-zinc-500">connections:</span>
-                              {comp.connections.map((conn: any, idx: number) => (
-                                <div key={idx} className="pl-3 text-emerald-400/80">
-                                  → {conn.target}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                {filteredComponents.length === 0 ? (
+                  <div className="text-zinc-500 text-xs py-4 text-center font-mono border border-dashed border-zinc-900 rounded bg-zinc-950/10">
+                    No components match search criteria
+                  </div>
+                ) : (
+                  filteredComponents.map((comp: any) => {
+                    const isExpanded = !!expandedNodes[comp.id]
+                    return (
+                      <div key={comp.id} className="space-y-1.5">
+                        <div
+                          data-component-id={comp.id}
+                          onClick={() => {
+                            toggleNode(comp.id)
+                            setSelectedUnit(comp.id)
+                          }}
+                          className={`flex items-center justify-between py-1 px-2.5 rounded border transition-all cursor-pointer ${
+                            selectedUnit === comp.id
+                              ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
+                              : "bg-zinc-900/50 border-zinc-900 hover:border-zinc-800 text-zinc-300"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="text-indigo-400">📄</span>
+                            <span className="font-mono text-xs">{comp.id}</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded uppercase">
+                            {comp.type}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
+
+                        {isExpanded && (
+                          <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-900">
+                            <div>
+                              <span className="text-zinc-500">name:</span> {comp.name || comp.id}
+                            </div>
+                            {comp.connections && comp.connections.length > 0 && (
+                              <div>
+                                <span className="text-zinc-500">connections:</span>
+                                {comp.connections.map((conn: any, idx: number) => (
+                                  <div key={idx} className="pl-3 text-emerald-400/80">
+                                    → {conn.target}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
               </div>
             )}
           </div>
