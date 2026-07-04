@@ -1575,17 +1575,29 @@ function MetricsTab({
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
   const [simPacketCount, setSimPacketCount] = useState<number>(100)
   const [simLossRatio, setSimLossRatio] = useState<number>(0)
+  const [customPresets, setCustomPresets] = useState<{ name: string; packets: number; loss: number }[]>([])
+  const [customPresetName, setCustomPresetName] = useState("")
 
   const derivedPreset = useMemo(() => {
+    const matchingCustom = customPresets.find(p => p.packets === simPacketCount && p.loss === simLossRatio)
+    if (matchingCustom) return matchingCustom.name
+
     if (simPacketCount === 100 && simLossRatio === 0) return "default"
     if (simPacketCount === 500 && simLossRatio === 5) return "load"
     if (simPacketCount === 200 && simLossRatio === 20) return "flaky"
     if (simPacketCount === 500 && simLossRatio === 50) return "stress"
     if (simPacketCount === 50 && simLossRatio === 0) return "sanity"
     return "custom"
-  }, [simPacketCount, simLossRatio])
+  }, [simPacketCount, simLossRatio, customPresets])
 
   const handlePresetChange = (preset: string) => {
+    const custom = customPresets.find(p => p.name === preset)
+    if (custom) {
+      setSimPacketCount(custom.packets)
+      setSimLossRatio(custom.loss)
+      return
+    }
+
     if (preset === "default") {
       setSimPacketCount(100)
       setSimLossRatio(0)
@@ -2714,6 +2726,11 @@ function MetricsTab({
                 <option value="flaky">Flaky Wireless Link</option>
                 <option value="stress">Extreme Stress Test</option>
                 <option value="sanity">Sanity Check</option>
+                {customPresets.map((p) => (
+                  <option key={`custom-preset-${p.name}`} value={p.name}>
+                    {p.name} (Custom)
+                  </option>
+                ))}
                 <option value="custom" disabled>Custom / Manual Adjustments</option>
               </select>
             </div>
@@ -2753,6 +2770,65 @@ function MetricsTab({
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Custom Presets Section */}
+            <div className="mt-1 pt-1 bg-zinc-950/20 p-2 rounded-lg border border-zinc-900/40 flex flex-col gap-2 font-sans">
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  data-testid="custom-preset-name-input"
+                  aria-label="Custom Preset Name"
+                  placeholder="Custom Preset Name..."
+                  value={customPresetName}
+                  onChange={(e) => setCustomPresetName(e.target.value)}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  data-testid="save-custom-preset-btn"
+                  onClick={() => {
+                    const trimmed = customPresetName.trim();
+                    if (!trimmed) return;
+                    setCustomPresets(prev => {
+                      const filtered = prev.filter(p => p.name !== trimmed);
+                      return [...filtered, { name: trimmed, packets: simPacketCount, loss: simLossRatio }];
+                    });
+                    setCustomPresetName("");
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] px-2.5 py-1 rounded transition-colors"
+                >
+                  Save Preset
+                </button>
+              </div>
+
+              {customPresets.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t border-zinc-900/50 pt-2">
+                  <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Saved Custom Presets</div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {customPresets.map((preset) => (
+                      <div
+                        key={`custom-preset-tag-${preset.name}`}
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300"
+                      >
+                        <span className="font-mono">{preset.name}</span>
+                        <span className="text-zinc-500">({preset.packets}p, {preset.loss}%)</span>
+                        <button
+                          type="button"
+                          data-testid={`delete-custom-preset-${preset.name}`}
+                          onClick={() => {
+                            setCustomPresets(prev => prev.filter(p => p.name !== preset.name));
+                          }}
+                          className="text-zinc-500 hover:text-red-400 font-bold ml-0.5 text-[9px]"
+                          aria-label={`Delete custom preset ${preset.name}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
