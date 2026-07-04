@@ -199,7 +199,7 @@ function HeaderButton({ icon, label, onClick, active, accent, disabled }: Header
         }
       }}
       onMouseLeave={(e) => {
-        if (!accent && !disabled) {
+        if (!accent) {
           ;(e.currentTarget as HTMLButtonElement).style.background =
             active ? "var(--surface-overlay)" : "transparent"
           ;(e.currentTarget as HTMLButtonElement).style.color = active

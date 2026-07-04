@@ -78,13 +78,19 @@ export function useUndoRedo(initialText: string, maxHistory = 100) {
       // Commit immediately
       commitToHistory(nextText)
     } else {
+      // Prune history stack after pointer immediately on typing to clear redo states visually and disable Redo button
+      if (pointerRef.current < historyRef.current.length - 1) {
+        historyRef.current = historyRef.current.slice(0, pointerRef.current + 1)
+        updateStatus()
+      }
+
       // Debounce the commit to history (800ms)
       debounceTimerRef.current = setTimeout(() => {
         commitToHistory(nextText)
         debounceTimerRef.current = null
       }, 800)
     }
-  }, [commitToHistory])
+  }, [commitToHistory, updateStatus])
 
   const undo = useCallback(() => {
     // If there is a pending debounce timer, commit its text before performing undo

@@ -107,6 +107,14 @@ export function WorkspaceLayout() {
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const isInputOrTextarea = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      const isSpecTextarea = target && target.getAttribute("data-testid") === "spec-textarea"
+
+      if (isInputOrTextarea && !isSpecTextarea) {
+        return
+      }
+
       const isCmdOrCtrl = e.metaKey || e.ctrlKey
       if (isCmdOrCtrl) {
         if (e.key.toLowerCase() === "z") {
