@@ -263,11 +263,12 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           "rate_limit", "rate_limiting", "rateLimit", "rateLimiting", "rate-limit", "rate-limiting",
           "throttled", "throttling", "buffer"
         ])
+        const sortedAllowedKeys = Array.from(allowedMetaKeys).sort().join(", ")
         Object.keys(meta).forEach((k) => {
           if (!allowedMetaKeys.has(k)) {
             diagnostics.push({
               severity: "info",
-              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version, color, rate_limit, throttled.`,
+              message: `Unrecognized metadata key "${k}". Valid metadata keys are: ${sortedAllowedKeys}.`,
               path: `${pathPrefix}.metadata.${k}`,
               code: "unrecognized-metadata-key",
             })
@@ -929,7 +930,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           const target = typeof conn === 'string' ? conn : conn?.target
           if (typeof target === 'string' && target.trim() !== "") {
             const trimmedTarget = target.trim()
-            if (!seenTargetsForOther.has(trimmedTarget)) {
+            if (ids.has(trimmedTarget) && !seenTargetsForOther.has(trimmedTarget)) {
               seenTargetsForOther.add(trimmedTarget)
               incomingCount[trimmedTarget] = (incomingCount[trimmedTarget] || 0) + 1
             }
@@ -1111,7 +1112,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         if (typeof val === 'boolean') return val;
         if (typeof val === 'string') {
           const norm = val.trim().toLowerCase();
-          return norm === 'true' || norm === 'yes' || (norm !== 'false' && norm !== 'no' && norm !== '');
+          const isFalsyStr = norm === 'false' || norm === 'no' || norm === '' || norm === '0' || norm === 'none' || norm === 'disabled' || norm === 'off';
+          return !isFalsyStr;
         }
         if (typeof val === 'number') return val > 0;
         return !!val;

@@ -1214,5 +1214,47 @@ describe('Advanced Linter Features', () => {
       const unrecognizedMeta = diagnostics.filter(d => d.code === 'unrecognized-metadata-key')
       expect(unrecognizedMeta).toHaveLength(0) // No warnings about metadata key being unrecognized!
     })
+
+    test('treats explicit falsy/disabled rate limiting values as disabled and flags vulnerability', () => {
+      const spec = {
+        system: {
+          name: 'DoS Test Disabled',
+          components: [
+            { id: 'api_gw1', type: 'Gateway', connections: [{ target: 'processor1' }] },
+            { id: 'api_gw2', type: 'Gateway', connections: [{ target: 'processor1' }] },
+            { id: 'api_gw3', type: 'Gateway', connections: [{ target: 'processor1' }] },
+            {
+              id: 'processor1',
+              type: 'Stage',
+              metadata: {
+                rateLimit: 'none' // explicit disabled string
+              }
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const dosDiag = diagnostics.find(d => d.code === 'stride-denial-of-service')
+      expect(dosDiag).toBeDefined()
+      expect(dosDiag?.severity).toBe('warning')
+    })
+
+    test('ignores connections to non-existent phantom targets from inbound count', () => {
+      const spec = {
+        system: {
+          name: 'DoS Test Phantom',
+          components: [
+            { id: 'api_gw1', type: 'Gateway', connections: [{ target: 'non_existent_target' }] },
+            { id: 'api_gw2', type: 'Gateway', connections: [{ target: 'non_existent_target' }] },
+            { id: 'api_gw3', type: 'Gateway', connections: [{ target: 'non_existent_target' }] }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const dosDiag = diagnostics.filter(d => d.code === 'stride-denial-of-service')
+      expect(dosDiag).toHaveLength(0) // No warning since non_existent_target is not in ids Set
+    })
   })
 })
