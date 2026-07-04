@@ -1168,5 +1168,51 @@ describe('Advanced Linter Features', () => {
       expect(dosDiag?.message).toContain('heavy_processor')
       expect(dosDiag?.message).toContain('vulnerable to Denial of Service')
     })
+
+    test('accepts robust/loose types and key casing for rate limiting without warnings', () => {
+      const spec = {
+        system: {
+          name: 'DoS Test Robust',
+          components: [
+            {
+              id: 'api_gw1',
+              type: 'Gateway',
+              connections: [{ target: 'processor1' }, { target: 'processor2' }]
+            },
+            {
+              id: 'api_gw2',
+              type: 'Gateway',
+              connections: [{ target: 'processor1' }, { target: 'processor2' }]
+            },
+            {
+              id: 'api_gw3',
+              type: 'Gateway',
+              connections: [{ target: 'processor1' }, { target: 'processor2' }]
+            },
+            {
+              id: 'processor1',
+              type: 'Stage',
+              metadata: {
+                rateLimit: '100 rps' // string-based, camelCase
+              }
+            },
+            {
+              id: 'processor2',
+              type: 'Stage',
+              metadata: {
+                'rate-limiting': 'active' // string-based, kebab-case
+              }
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const dosDiag = diagnostics.filter(d => d.code === 'stride-denial-of-service')
+      expect(dosDiag).toHaveLength(0) // Both should be recognized as mitigated!
+
+      const unrecognizedMeta = diagnostics.filter(d => d.code === 'unrecognized-metadata-key')
+      expect(unrecognizedMeta).toHaveLength(0) // No warnings about metadata key being unrecognized!
+    })
   })
 })

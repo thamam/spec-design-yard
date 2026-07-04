@@ -258,12 +258,16 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "invalid-metadata-object",
         })
       } else {
-        const allowedMetaKeys = new Set(["owner", "description", "status", "version", "color"])
+        const allowedMetaKeys = new Set([
+          "owner", "description", "status", "version", "color",
+          "rate_limit", "rate_limiting", "rateLimit", "rateLimiting", "rate-limit", "rate-limiting",
+          "throttled", "throttling", "buffer"
+        ])
         Object.keys(meta).forEach((k) => {
           if (!allowedMetaKeys.has(k)) {
             diagnostics.push({
               severity: "info",
-              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version, color.`,
+              message: `Unrecognized metadata key "${k}". Valid metadata keys are: owner, description, status, version, color, rate_limit, throttled.`,
               path: `${pathPrefix}.metadata.${k}`,
               code: "unrecognized-metadata-key",
             })
@@ -1103,11 +1107,27 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 6. Denial of Service Check (high fan-in / bottleneck components)
       const inboundCount = incomingCount[compId] || 0
-      const hasRateLimit = comp.metadata?.rate_limit === true || 
-                           comp.metadata?.rate_limiting === true ||
-                           comp.metadata?.throttled === true ||
-                           comp.metadata?.throttling === true ||
-                           comp.metadata?.buffer === true
+      const isLimitEnabled = (val: any) => {
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'string') {
+          const norm = val.trim().toLowerCase();
+          return norm === 'true' || norm === 'yes' || (norm !== 'false' && norm !== 'no' && norm !== '');
+        }
+        if (typeof val === 'number') return val > 0;
+        return !!val;
+      };
+
+      const hasRateLimit = 
+        isLimitEnabled(comp.metadata?.rate_limit) ||
+        isLimitEnabled(comp.metadata?.rate_limiting) ||
+        isLimitEnabled(comp.metadata?.rateLimit) ||
+        isLimitEnabled(comp.metadata?.rateLimiting) ||
+        isLimitEnabled(comp.metadata?.["rate-limit"]) ||
+        isLimitEnabled(comp.metadata?.["rate-limiting"]) ||
+        isLimitEnabled(comp.metadata?.throttled) ||
+        isLimitEnabled(comp.metadata?.throttling) ||
+        isLimitEnabled(comp.metadata?.buffer);
+
       if (inboundCount >= 3 && !hasRateLimit) {
         diagnostics.push({
           severity: "warning",
