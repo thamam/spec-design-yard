@@ -1998,6 +1998,7 @@ function MetricsTab({
           else if (d.code === "stride-repudiation") buttonLabel = "Inject Central Audit Logger"
           else if (d.code === "stride-information-disclosure") buttonLabel = "Inject Auth Verifier Stage"
           else if (d.code === "stride-elevation-of-privilege") buttonLabel = "Apply Elevation Guard"
+          else if (d.code === "stride-denial-of-service") buttonLabel = "Apply Rate Limiting Guard"
 
           recommendations.push({
             type: "warning",
@@ -2754,7 +2755,7 @@ function MetricsTab({
               <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-center font-sans">
                   <label htmlFor="sim-loss-slider" className="text-[9px] text-zinc-500 uppercase font-bold">Additional Packet Loss</label>
-                  <span className="text-[9px] text-indigo-400 font-bold font-mono">{simLossRatio}%</span>
+                  <span className="text-[9px] text-indigo-400 font-bold font-mono" data-testid="sim-loss-val">{simLossRatio}%</span>
                 </div>
                 <div className="flex items-center gap-1.5 h-7">
                   <input

@@ -1211,6 +1211,19 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
+      } else if (fixType === "stride-denial-of-service") {
+        const compNode = doc.getIn(parts) as any
+        if (compNode && typeof compNode.get === "function") {
+          let metadata = compNode.get("metadata")
+          if (!metadata || typeof metadata.get !== "function") {
+            compNode.set("metadata", doc.createNode({}))
+            metadata = compNode.get("metadata")
+          }
+          if (metadata && typeof metadata.set === "function") {
+            metadata.set("rate_limit", true)
+            modified = true
+          }
+        }
       }
         })
       }

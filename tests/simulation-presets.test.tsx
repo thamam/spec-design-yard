@@ -40,21 +40,21 @@ describe('Simulation Configuration Presets', () => {
     expect(presetSelect.value).toBe('flaky')
     expect(packetSelect.value).toBe('200')
     expect(lossSlider.value).toBe('20')
-    expect(screen.getByText('20%')).toBeInTheDocument()
+    expect(screen.getByTestId('sim-loss-val').textContent).toBe('20%')
 
     // 2. Choose "Extreme Stress Test" (Packets: 500, Loss: 50%)
     fireEvent.change(presetSelect, { target: { value: 'stress' } })
     expect(presetSelect.value).toBe('stress')
     expect(packetSelect.value).toBe('500')
     expect(lossSlider.value).toBe('50')
-    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.getByTestId('sim-loss-val').textContent).toBe('50%')
 
     // 3. Choose "Sanity Check" (Packets: 50, Loss: 0%)
     fireEvent.change(presetSelect, { target: { value: 'sanity' } })
     expect(presetSelect.value).toBe('sanity')
     expect(packetSelect.value).toBe('50')
     expect(lossSlider.value).toBe('0')
-    expect(screen.getByText('0%')).toBeInTheDocument()
+    expect(screen.getByTestId('sim-loss-val').textContent).toBe('0%')
   })
 
   test('manually modifying values changes the selected preset to custom', () => {

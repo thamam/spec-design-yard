@@ -379,5 +379,19 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
     expect(updated).toContain('id: auth_verifier')
     expect(updated).toContain('target: auth_verifier')
   })
+
+  test('reconciles stride-denial-of-service by adding rate_limit to component metadata', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: heavy_processor
+      type: Stage
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-denial-of-service' }
+    })
+    expect(updated).toContain('rate_limit: true')
+  })
 })
 

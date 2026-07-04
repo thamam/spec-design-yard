@@ -20,7 +20,7 @@ describe('Dynamic Simulation Configuration Settings', () => {
     const lossSlider = screen.getByTestId('sim-loss-slider') as HTMLInputElement
     expect(lossSlider).toBeInTheDocument()
     expect(lossSlider.value).toBe('0')
-    expect(screen.getByText('0%')).toBeInTheDocument()
+    expect(screen.getByTestId('sim-loss-val').textContent).toBe('0%')
   })
 
   test('allows changing simulated packet count and packet loss', async () => {
@@ -39,7 +39,7 @@ describe('Dynamic Simulation Configuration Settings', () => {
     const lossSlider = screen.getByTestId('sim-loss-slider') as HTMLInputElement
     fireEvent.change(lossSlider, { target: { value: '20' } })
     expect(lossSlider.value).toBe('20')
-    expect(screen.getByText('20%')).toBeInTheDocument()
+    expect(screen.getByTestId('sim-loss-val').textContent).toBe('20%')
   })
 
   test('resets simulation state when config changes', async () => {

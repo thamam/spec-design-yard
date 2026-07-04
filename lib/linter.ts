@@ -915,6 +915,24 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   if (components && Array.isArray(components)) {
     const auditNodeIds = new Set<string>()
     const verifyNodeIds = new Set<string>()
+    const incomingCount: Record<string, number> = Object.create(null)
+    
+    // Calculate inbound counts
+    components.forEach((other: any) => {
+      if (other && Array.isArray(other.connections)) {
+        const seenTargetsForOther = new Set<string>()
+        other.connections.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string' && target.trim() !== "") {
+            const trimmedTarget = target.trim()
+            if (!seenTargetsForOther.has(trimmedTarget)) {
+              seenTargetsForOther.add(trimmedTarget)
+              incomingCount[trimmedTarget] = (incomingCount[trimmedTarget] || 0) + 1
+            }
+          }
+        })
+      }
+    })
     
     components.forEach((other: any) => {
       if (other && typeof other.id === 'string') {
@@ -1081,6 +1099,22 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             code: "stride-elevation-of-privilege"
           })
         }
+      }
+
+      // 6. Denial of Service Check (high fan-in / bottleneck components)
+      const inboundCount = incomingCount[compId] || 0
+      const hasRateLimit = comp.metadata?.rate_limit === true || 
+                           comp.metadata?.rate_limiting === true ||
+                           comp.metadata?.throttled === true ||
+                           comp.metadata?.throttling === true ||
+                           comp.metadata?.buffer === true
+      if (inboundCount >= 3 && !hasRateLimit) {
+        diagnostics.push({
+          severity: "warning",
+          message: `Component "${compId}" has high incoming traffic fan-in (${inboundCount} inbound connections) and is vulnerable to Denial of Service (DoS). Consider adding "rate_limit: true" or "throttled: true" under component metadata to prevent service degradation.`,
+          path: `system.components[${compIdx}]`,
+          code: "stride-denial-of-service"
+        })
       }
     })
   }

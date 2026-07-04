@@ -1132,5 +1132,41 @@ describe('Advanced Linter Features', () => {
       expect(eopDiag?.severity).toBe('warning')
       expect(eopDiag?.message).toContain('Privileged component "admin_panel" lacks verification guards')
     })
+
+    test('flags STRIDE Denial of Service threat on high fan-in components lacking rate limiters', () => {
+      const spec = {
+        system: {
+          name: 'DoS Test',
+          components: [
+            {
+              id: 'api_gw1',
+              type: 'Gateway',
+              connections: [{ target: 'heavy_processor' }]
+            },
+            {
+              id: 'api_gw2',
+              type: 'Gateway',
+              connections: [{ target: 'heavy_processor' }]
+            },
+            {
+              id: 'api_gw3',
+              type: 'Gateway',
+              connections: [{ target: 'heavy_processor' }]
+            },
+            {
+              id: 'heavy_processor',
+              type: 'Stage' // Lacks rate_limit or other metadata buffer keys
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const dosDiag = diagnostics.find(d => d.code === 'stride-denial-of-service')
+      expect(dosDiag).toBeDefined()
+      expect(dosDiag?.severity).toBe('warning')
+      expect(dosDiag?.message).toContain('heavy_processor')
+      expect(dosDiag?.message).toContain('vulnerable to Denial of Service')
+    })
   })
 })
