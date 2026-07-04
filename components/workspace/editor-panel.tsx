@@ -196,6 +196,34 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
     }))
   }
 
+  const components = useMemo(() => {
+    return Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
+  }, [parsedSpec])
+
+  const filteredComponents = useMemo(() => {
+    const query = treeSearch.toLowerCase().trim()
+    const filterType = treeType.toLowerCase()
+
+    return components.filter((comp: any) => {
+      if (!comp || typeof comp !== "object") return false
+      
+      const id = String(comp.id || "").toLowerCase()
+      const name = String(comp.name || "").toLowerCase()
+      const type = String(comp.type || "").toLowerCase()
+      
+      const matchesSearch = 
+        id.includes(query) || 
+        name.includes(query) || 
+        type.includes(query)
+        
+      const matchesType = 
+        filterType === "all" || 
+        type === filterType
+        
+      return matchesSearch && matchesType
+    })
+  }, [components, treeSearch, treeType])
+
   if (!parsedSpec?.system) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs min-h-[250px]">
@@ -204,27 +232,6 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
       </div>
     )
   }
-
-  const components = Array.isArray(parsedSpec.system.components) ? parsedSpec.system.components : []
-
-  const filteredComponents = components.filter((comp: any) => {
-    if (!comp || typeof comp !== "object") return false
-    
-    const id = String(comp.id || "").toLowerCase()
-    const name = String(comp.name || "").toLowerCase()
-    const type = String(comp.type || "").toLowerCase()
-    
-    const matchesSearch = 
-      id.includes(treeSearch.toLowerCase()) || 
-      name.includes(treeSearch.toLowerCase()) || 
-      type.includes(treeSearch.toLowerCase())
-      
-    const matchesType = 
-      treeType === "all" || 
-      type === treeType.toLowerCase()
-      
-    return matchesSearch && matchesType
-  })
 
   const isFiltered = treeSearch.trim() !== "" || treeType !== "all"
 
@@ -306,20 +313,27 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 
             {expandedNodes.components && (
               <div className="pl-4 space-y-2 border-l border-zinc-900 ml-1.5">
-                {filteredComponents.length === 0 ? (
+                {components.length === 0 ? (
+                  <div className="text-zinc-500 text-xs py-4 text-center font-mono border border-dashed border-zinc-900 rounded bg-zinc-950/10">
+                    No components in system
+                  </div>
+                ) : filteredComponents.length === 0 ? (
                   <div className="text-zinc-500 text-xs py-4 text-center font-mono border border-dashed border-zinc-900 rounded bg-zinc-950/10">
                     No components match search criteria
                   </div>
                 ) : (
-                  filteredComponents.map((comp: any) => {
+                  filteredComponents.map((comp: any, compIdx: number) => {
                     const isExpanded = !!expandedNodes[comp.id]
+                    const compKey = comp.id ? `${comp.id}-${compIdx}` : `unnamed-${compIdx}`
                     return (
-                      <div key={comp.id} className="space-y-1.5">
+                      <div key={compKey} className="space-y-1.5">
                         <div
                           data-component-id={comp.id}
                           onClick={() => {
-                            toggleNode(comp.id)
-                            setSelectedUnit(comp.id)
+                            if (comp.id) {
+                              toggleNode(comp.id)
+                              setSelectedUnit(comp.id)
+                            }
                           }}
                           className={`flex items-center justify-between py-1 px-2.5 rounded border transition-all cursor-pointer ${
                             selectedUnit === comp.id
@@ -329,26 +343,29 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
                         >
                           <span className="flex items-center gap-2">
                             <span className="text-indigo-400">📄</span>
-                            <span className="font-mono text-xs">{comp.id}</span>
+                            <span className="font-mono text-xs">{comp.id || "unnamed"}</span>
                           </span>
                           <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950 px-1.5 py-0.5 rounded uppercase">
-                            {comp.type}
+                            {comp.type || "unknown"}
                           </span>
                         </div>
 
-                        {isExpanded && (
+                        {isExpanded && comp.id && (
                           <div className="pl-4 py-1.5 text-[11px] text-zinc-400 font-mono space-y-1 bg-zinc-900/20 rounded-md p-2 border border-zinc-900">
                             <div>
                               <span className="text-zinc-500">name:</span> {comp.name || comp.id}
                             </div>
-                            {comp.connections && comp.connections.length > 0 && (
+                            {Array.isArray(comp.connections) && comp.connections.length > 0 && (
                               <div>
                                 <span className="text-zinc-500">connections:</span>
-                                {comp.connections.map((conn: any, idx: number) => (
-                                  <div key={idx} className="pl-3 text-emerald-400/80">
-                                    → {conn.target}
-                                  </div>
-                                ))}
+                                {comp.connections.map((conn: any, idx: number) => {
+                                  if (!conn || typeof conn !== "object") return null
+                                  return (
+                                    <div key={idx} className="pl-3 text-emerald-400/80">
+                                      → {conn.target || "unknown"}
+                                    </div>
+                                  )
+                                })}
                               </div>
                             )}
                           </div>
