@@ -96,6 +96,7 @@ export function WorkspaceLayout() {
   const [specText, setSpecText] = useState(INITIAL_SPEC)
   const [parsedSpec, setParsedSpec] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"code" | "tree" | "focus" | "metrics">("code")
   const [pathSource, setPathSource] = useState<string>("")
   const [pathTarget, setPathTarget] = useState<string>("")
 
@@ -238,6 +239,8 @@ export function WorkspaceLayout() {
             setPathSource={setPathSource}
             pathTarget={pathTarget}
             setPathTarget={setPathTarget}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
           />
         </div>
 
@@ -289,6 +292,7 @@ export function WorkspaceLayout() {
             onCanvasChange={handleCanvasChange}
             pathSource={pathSource}
             pathTarget={pathTarget}
+            setActiveTab={setActiveTab}
           />
         </div>
       </div>
