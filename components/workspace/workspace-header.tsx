@@ -8,6 +8,8 @@ import {
   SettingsIcon,
   ShareIcon,
   TerminalIcon,
+  Undo,
+  Redo,
 } from "lucide-react"
 import { AuthPanel, UserSession } from "./auth-panel"
 
@@ -15,10 +17,18 @@ export function WorkspaceHeader({
   session,
   onLogin,
   onLogout,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
 }: {
   session: UserSession
   onLogin: (email: string, name: string) => void
   onLogout: () => void
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
 }) {
   const [saved, setSaved] = useState(true)
 
@@ -101,6 +111,18 @@ export function WorkspaceHeader({
           active={!saved}
         />
         <HeaderButton
+          icon={<Undo size={13} />}
+          label="Undo"
+          onClick={onUndo || (() => {})}
+          disabled={!canUndo}
+        />
+        <HeaderButton
+          icon={<Redo size={13} />}
+          label="Redo"
+          onClick={onRedo || (() => {})}
+          disabled={!canRedo}
+        />
+        <HeaderButton
           icon={<ShareIcon size={13} />}
           label="Share"
           onClick={() => {}}
@@ -142,15 +164,19 @@ interface HeaderButtonProps {
   onClick: () => void
   active?: boolean
   accent?: boolean
+  disabled?: boolean
 }
 
-function HeaderButton({ icon, label, onClick, active, accent }: HeaderButtonProps) {
+function HeaderButton({ icon, label, onClick, active, accent, disabled }: HeaderButtonProps) {
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors duration-100"
+      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors duration-100 ${
+        disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+      }`}
       style={{
         background: accent
           ? "var(--accent)"
@@ -165,7 +191,7 @@ function HeaderButton({ icon, label, onClick, active, accent }: HeaderButtonProp
         border: accent ? "none" : "1px solid transparent",
       }}
       onMouseEnter={(e) => {
-        if (!accent) {
+        if (!accent && !disabled) {
           ;(e.currentTarget as HTMLButtonElement).style.background =
             "var(--surface-overlay)"
           ;(e.currentTarget as HTMLButtonElement).style.color =
