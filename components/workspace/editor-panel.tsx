@@ -21,7 +21,7 @@ import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 
 interface EditorPanelProps {
   specText?: string
-  setSpecText?: (val: string | ((prev: string) => string)) => void
+  setSpecText?: (val: string | ((prev: string) => string), options?: { isTyping?: boolean; immediate?: boolean }) => void
   parsedSpec?: any
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
@@ -386,7 +386,7 @@ function TreeTab({ parsedSpec, selectedUnit, setSelectedUnit }: TreeTabProps) {
 /* ── Focus Tab ── */
 interface FocusTabProps {
   specText: string
-  setSpecText: (val: string | ((prev: string) => string)) => void
+  setSpecText: (val: string | ((prev: string) => string), options?: { isTyping?: boolean; immediate?: boolean }) => void
   parsedSpec: any
   selectedUnit: string | null
   setSelectedUnit: (val: string | null) => void
@@ -3475,7 +3475,7 @@ export function EditorPanel({
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
         style={{ background: "var(--background)" }}
       >
-        <CodeTab value={specText} onChange={setSpecText} />
+        <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} />
       </div>
 
       <div

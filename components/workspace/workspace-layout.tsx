@@ -8,6 +8,7 @@ import yaml from "yaml"
 import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
+import { useUndoRedo } from "./use-undo-redo"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -93,7 +94,38 @@ export function WorkspaceLayout() {
   const dragStartSplit = useRef(DEFAULT_SPLIT)
 
   // Shared application states
-  const [specText, setSpecText] = useState(INITIAL_SPEC)
+  const {
+    specText,
+    updateSpecText: setSpecText,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    resetHistory,
+  } = useUndoRedo(INITIAL_SPEC)
+
+  // Sync keyboard shortcuts and track user keystroke grouping
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey
+      if (isCmdOrCtrl) {
+        if (e.key.toLowerCase() === "z") {
+          e.preventDefault()
+          if (e.shiftKey) {
+            redo()
+          } else {
+            undo()
+          }
+        } else if (e.key.toLowerCase() === "y") {
+          e.preventDefault()
+          redo()
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [undo, redo])
+
   const [parsedSpec, setParsedSpec] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"code" | "tree" | "focus" | "metrics">("code")
@@ -112,16 +144,17 @@ export function WorkspaceLayout() {
       const savedDoc = db.getSpec("main")
       if (savedDoc && savedDoc.yamlContent) {
         lastLoadedSpecRef.current = savedDoc.yamlContent
-        setSpecText(savedDoc.yamlContent)
+        resetHistory(savedDoc.yamlContent)
       } else {
         lastLoadedSpecRef.current = INITIAL_SPEC
+        resetHistory(INITIAL_SPEC)
       }
       setIsHydrated(true)
     } else {
       setIsHydrated(false)
       lastLoadedSpecRef.current = null
     }
-  }, [session.user])
+  }, [session.user, resetHistory])
 
   // Save current spec to DB on modification (if signed in and hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
@@ -152,15 +185,15 @@ export function WorkspaceLayout() {
     if (Array.isArray(change)) {
       const updated = reconcileSpec(specText, { type: "coords", payload: change })
       if (updated !== specText) {
-        setSpecText(updated)
+        setSpecText(updated, { immediate: true })
       }
     } else if (change && typeof change === "object" && change.type) {
       const updated = reconcileSpec(specText, { type: change.type as any, payload: change.payload })
       if (updated !== specText) {
-        setSpecText(updated)
+        setSpecText(updated, { immediate: true })
       }
     }
-  }, [specText])
+  }, [specText, setSpecText])
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
@@ -216,6 +249,10 @@ export function WorkspaceLayout() {
         session={session}
         onLogin={handleLogin}
         onLogout={handleLogout}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
       />
 
       {/* Split pane body */}
