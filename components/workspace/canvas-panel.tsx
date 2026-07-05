@@ -384,7 +384,7 @@ function GridView({
 
   const cards = useMemo(() => {
     return components.map((comp: any, idx: number) => {
-      const type = String(comp.type || "").toLowerCase()
+      const type = String(comp.type || "Unit").toLowerCase()
       let color = "#6366f1" // Store/default: Indigo
       if (type === "stage") color = "#c084fc" // Stage: Purple
       else if (type === "brick") color = "#34d399" // Brick: Emerald
@@ -795,11 +795,12 @@ interface LayersViewProps {
 function LayersView({ parsedSpec, hiddenTypes, setHiddenTypes }: LayersViewProps) {
   const components = parsedSpec?.system?.components || []
   
-  // Count types
+  // Count types normalizing to Title Case for robust case-insensitivity
   const counts: Record<string, number> = {}
   components.forEach((comp: any) => {
-    const t = comp.type || "Unit"
-    counts[t] = (counts[t] || 0) + 1
+    const rawType = (comp.type ? String(comp.type).trim() : "") || "Unit"
+    const normalized = rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase()
+    counts[normalized] = (counts[normalized] || 0) + 1
   })
 
   const typeColors: Record<string, string> = {

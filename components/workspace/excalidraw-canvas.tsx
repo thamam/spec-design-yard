@@ -54,6 +54,16 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const hiddenTypesSet = new Set((hiddenTypes || []).map(t => String(t).toLowerCase()))
+  
+  // Pre-compute an ID-to-Type map in O(N) to avoid quadratic connection lookup bottlenecks
+  const componentTypeMap = new Map<string, string>()
+  parsedSpec.system.components.forEach((c: any) => {
+    if (c && c.id) {
+      const type = String(c.type || "Unit").toLowerCase()
+      componentTypeMap.set(String(c.id).trim(), type)
+    }
+  })
+
   const components = parsedSpec.system.components.filter((comp: any) => {
     if (!comp || !comp.id) return false
     const type = String(comp.type || "Unit").toLowerCase()
@@ -311,15 +321,11 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     comp.connections.forEach((conn: any) => {
       if (!conn || typeof conn !== "object" || !conn.target) return
       
-      // Check if target is hidden
-      const originalComponents = parsedSpec?.system?.components || []
-      const targetInOriginal = originalComponents.find((c: any) => c && typeof c.id === 'string' && c.id.trim() === String(conn.target).trim())
-      if (targetInOriginal) {
-        const targetType = String(targetInOriginal.type || "Unit").toLowerCase()
-        if (hiddenTypesSet.has(targetType)) {
-          // Skip arrow completely because target is hidden
-          return
-        }
+      // Check if target is hidden in O(1) constant-time using our pre-computed Map
+      const targetType = componentTypeMap.get(String(conn.target).trim())
+      if (targetType && hiddenTypesSet.has(targetType)) {
+        // Skip arrow completely because target is hidden
+        return
       }
       
       let posTarget = positions[conn.target]

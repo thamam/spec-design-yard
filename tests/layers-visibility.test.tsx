@@ -85,4 +85,29 @@ describe('Layer Visibility System', () => {
     fireEvent.click(gridViewBtn)
     expect(screen.getByRole('button', { name: /Select component inbox/i })).toBeInTheDocument()
   })
+
+  test('compileSpecToExcalidrawElements handles mixed-case type layer groupings and untyped units robustly', () => {
+    const mockSpec = {
+      system: {
+        name: 'Mixed Spec',
+        components: [
+          { id: 'c1', type: 'gateway', x: 10, y: 10 },
+          { id: 'c2', type: 'Gateway', x: 100, y: 10 },
+          { id: 'c3', x: 200, y: 10 } // Untyped -> defaults to Unit
+        ]
+      }
+    }
+
+    // Hide Gateway (using lowercase in search, but should match both Gateway and gateway)
+    const elements1 = compileSpecToExcalidrawElements(mockSpec, undefined, undefined, ['gateway'])
+    expect(elements1.find((el: any) => el.id === 'c1')).toBeUndefined()
+    expect(elements1.find((el: any) => el.id === 'c2')).toBeUndefined()
+    expect(elements1.find((el: any) => el.id === 'c3')).toBeDefined() // Unit is visible
+
+    // Hide Unit layer (defaults)
+    const elements2 = compileSpecToExcalidrawElements(mockSpec, undefined, undefined, ['unit'])
+    expect(elements2.find((el: any) => el.id === 'c1')).toBeDefined()
+    expect(elements2.find((el: any) => el.id === 'c2')).toBeDefined()
+    expect(elements2.find((el: any) => el.id === 'c3')).toBeUndefined() // Hidden!
+  })
 })
