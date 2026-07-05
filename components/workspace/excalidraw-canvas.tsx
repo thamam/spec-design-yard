@@ -50,10 +50,15 @@ function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { sour
   return { source: "", target: "" }
 }
 
-export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string): any[] {
+export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string, hiddenTypes?: string[]): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
-  const components = parsedSpec.system.components
+  const hiddenTypesSet = new Set((hiddenTypes || []).map(t => String(t).toLowerCase()))
+  const components = parsedSpec.system.components.filter((comp: any) => {
+    if (!comp || !comp.id) return false
+    const type = String(comp.type || "Unit").toLowerCase()
+    return !hiddenTypesSet.has(type)
+  })
   const diagnostics = lintSpec(parsedSpec)
 
   // Calculate directed paths up to 8 hops for trace path highlighting
@@ -306,6 +311,17 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     comp.connections.forEach((conn: any) => {
       if (!conn || typeof conn !== "object" || !conn.target) return
       
+      // Check if target is hidden
+      const originalComponents = parsedSpec?.system?.components || []
+      const targetInOriginal = originalComponents.find((c: any) => c && typeof c.id === 'string' && c.id.trim() === String(conn.target).trim())
+      if (targetInOriginal) {
+        const targetType = String(targetInOriginal.type || "Unit").toLowerCase()
+        if (hiddenTypesSet.has(targetType)) {
+          // Skip arrow completely because target is hidden
+          return
+        }
+      }
+      
       let posTarget = positions[conn.target]
       let isOrphan = false
       if (!posTarget) {
@@ -471,6 +487,7 @@ export function ExcalidrawCanvas({
   onCanvasChange,
   pathSource,
   pathTarget,
+  hiddenTypes = [],
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -478,6 +495,7 @@ export function ExcalidrawCanvas({
   onCanvasChange?: (change: any[] | CanvasChange) => void
   pathSource?: string
   pathTarget?: string
+  hiddenTypes?: string[]
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -503,7 +521,7 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget), [parsedSpec, pathSource, pathTarget])
+  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes), [parsedSpec, pathSource, pathTarget, hiddenTypes])
 
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)

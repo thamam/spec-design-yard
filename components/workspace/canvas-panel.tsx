@@ -134,6 +134,7 @@ export function CanvasPanel({
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
+  const [hiddenTypes, setHiddenTypes] = useState<string[]>([])
 
   const handleAutoLayout = () => {
     if (!onCanvasChange || !parsedSpec) return
@@ -263,6 +264,7 @@ export function CanvasPanel({
             onCanvasChange={onCanvasChange}
             pathSource={pathSource}
             pathTarget={pathTarget}
+            hiddenTypes={hiddenTypes}
           />
         )}
         {view === "grid" && (
@@ -273,9 +275,16 @@ export function CanvasPanel({
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
             onCanvasChange={onCanvasChange}
+            hiddenTypes={hiddenTypes}
           />
         )}
-        {view === "layers" && <LayersView parsedSpec={parsedSpec} />}
+        {view === "layers" && (
+          <LayersView
+            parsedSpec={parsedSpec}
+            hiddenTypes={hiddenTypes}
+            setHiddenTypes={setHiddenTypes}
+          />
+        )}
       </div>
     </section>
   )
@@ -288,6 +297,7 @@ interface GridViewProps {
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
   diagnostics?: Diagnostic[]
   onCanvasChange?: (change: any[] | CanvasChange) => void
+  hiddenTypes?: string[]
 }
 
 /* ── Grid view ── */
@@ -298,8 +308,10 @@ function GridView({
   setActiveTab,
   diagnostics = [],
   onCanvasChange,
+  hiddenTypes = [],
 }: GridViewProps) {
   const components = parsedSpec?.system?.components || []
+  const hiddenTypesSet = useMemo(() => new Set((hiddenTypes || []).map(t => String(t).toLowerCase())), [hiddenTypes])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
@@ -405,6 +417,11 @@ function GridView({
   // Filter cards
   const filteredCards = useMemo(() => {
     return cards.filter((c: any) => {
+      // 0. Filter by hidden types
+      if (hiddenTypesSet.has(c.type.toLowerCase())) {
+        return false
+      }
+
       // 1. Search filter
       if (searchTerm) {
         const term = searchTerm.toLowerCase()
@@ -428,7 +445,7 @@ function GridView({
 
       return true
     })
-  }, [cards, searchTerm, typeFilter, issueFilter])
+  }, [cards, searchTerm, typeFilter, issueFilter, hiddenTypesSet])
 
   // Sort cards
   const sortedCards = useMemo(() => {
@@ -768,8 +785,14 @@ function GridView({
   )
 }
 
+interface LayersViewProps {
+  parsedSpec: any
+  hiddenTypes: string[]
+  setHiddenTypes: (val: string[] | ((prev: string[]) => string[])) => void
+}
+
 /* ── Layers view ── */
-function LayersView({ parsedSpec }: { parsedSpec: any }) {
+function LayersView({ parsedSpec, hiddenTypes, setHiddenTypes }: LayersViewProps) {
   const components = parsedSpec?.system?.components || []
   
   // Count types
@@ -786,16 +809,25 @@ function LayersView({ parsedSpec }: { parsedSpec: any }) {
     Brick: "#34d399",
   }
 
-  const layers = Object.entries(counts).map(([name, count]) => ({
-    name,
-    count,
-    color: typeColors[name] || "var(--foreground-muted)",
-    visible: true,
-  }))
+  const layers = Object.entries(counts).map(([name, count]) => {
+    const isHidden = hiddenTypes.includes(name)
+    return {
+      name,
+      count,
+      color: typeColors[name] || "var(--foreground-muted)",
+      visible: !isHidden,
+    }
+  })
 
-  const [vis, setVis] = useState<Record<string, boolean>>(
-    Object.fromEntries(layers.map((l) => [l.name, l.visible]))
-  )
+  const toggleLayer = (layerName: string) => {
+    setHiddenTypes((prev) => {
+      if (prev.includes(layerName)) {
+        return prev.filter((t) => t !== layerName)
+      } else {
+        return [...prev, layerName]
+      }
+    })
+  }
 
   if (layers.length === 0) {
     return (
@@ -819,7 +851,7 @@ function LayersView({ parsedSpec }: { parsedSpec: any }) {
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              opacity: vis[layer.name] ? 1 : 0.45,
+              opacity: layer.visible ? 1 : 0.45,
             }}
           >
             <span
@@ -837,10 +869,10 @@ function LayersView({ parsedSpec }: { parsedSpec: any }) {
               {layer.count}
             </span>
             <button
-              onClick={() => setVis((v) => ({ ...v, [layer.name]: !v[layer.name] }))}
-              aria-label={`${vis[layer.name] ? "Hide" : "Show"} ${layer.name} layer`}
+              onClick={() => toggleLayer(layer.name)}
+              aria-label={`${layer.visible ? "Hide" : "Show"} ${layer.name} layer`}
               className="flex items-center justify-center w-6 h-6 rounded transition-colors"
-              style={{ color: vis[layer.name] ? "var(--accent)" : "var(--foreground-dim)" }}
+              style={{ color: layer.visible ? "var(--accent)" : "var(--foreground-dim)" }}
             >
               <EyeIcon size={11} />
             </button>
