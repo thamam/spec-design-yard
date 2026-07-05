@@ -50,7 +50,15 @@ function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { sour
   return { source: "", target: "" }
 }
 
-export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string, hiddenTypes?: string[]): any[] {
+export function compileSpecToExcalidrawElements(
+  parsedSpec: any,
+  pathSource?: string,
+  pathTarget?: string,
+  hiddenTypes?: string[],
+  simulationState?: "idle" | "running" | "completed",
+  simulatedPackets?: number,
+  simPacketCount?: number
+): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const hiddenTypesSet = new Set((hiddenTypes || []).map(t => String(t).toLowerCase()))
@@ -205,9 +213,15 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       strokeColor = '#ef4444' // Error Red
       backgroundColor = 'rgba(239, 68, 68, 0.15)'
     } else if (isOnPath) {
-      strokeColor = '#818cf8' // Neon Indigo/bright purple-blue for active path lineage
-      backgroundColor = 'rgba(129, 140, 248, 0.25)' // Brighter neon glow
-      strokeWidth = 3 // Thicker outline
+      if (simulationState === "running") {
+        strokeColor = '#34d399' // Emerald/Neon Green when actively simulated
+        backgroundColor = 'rgba(52, 211, 153, 0.25)' // Bright active green glow
+        strokeWidth = 3
+      } else {
+        strokeColor = '#818cf8' // Neon Indigo/bright purple-blue for active path lineage
+        backgroundColor = 'rgba(129, 140, 248, 0.25)' // Brighter neon glow
+        strokeWidth = 3 // Thicker outline
+      }
     } else if (hasWarning) {
       strokeColor = '#f59e0b' // Warning Amber
       backgroundColor = 'rgba(245, 158, 11, 0.15)'
@@ -446,6 +460,42 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
         locked: false,
       })
 
+      if (simulationState === "running" && isOnEdge) {
+        const particleCount = 3
+        for (let i = 0; i < particleCount; i++) {
+          const phase = (((simulatedPackets || 0) / 15) + (i / particleCount)) % 1.0
+          const px = sx + dx * phase
+          const py = sy + dy * phase
+
+          const particleId = `particle-${comp.id}-${conn.target}-${i}`
+          const particleVersion = getDeterministicSeed(`${particleId}-${Math.round(px)}-${Math.round(py)}`)
+
+          elements.push({
+            type: 'ellipse',
+            id: particleId,
+            x: px - 6,
+            y: py - 6,
+            width: 12,
+            height: 12,
+            strokeColor: '#34d399', // Emerald/Neon Green
+            backgroundColor: '#10b981', // Solid Emerald
+            fillStyle: 'solid',
+            strokeWidth: 1.5,
+            roughness: 0.5,
+            seed: getDeterministicSeed(particleId),
+            version: particleVersion,
+            versionNonce: particleVersion,
+            isDeleted: false,
+            groupIds: [],
+            frameId: null,
+            boundElements: [],
+            updated: particleVersion,
+            link: null,
+            locked: false,
+          })
+        }
+      }
+
       if (hasLabel) {
         const lx = sx + dx / 2 - 40
         const ly = sy + dy / 2 - 10
@@ -494,6 +544,9 @@ export function ExcalidrawCanvas({
   pathSource,
   pathTarget,
   hiddenTypes = [],
+  simulationState,
+  simulatedPackets,
+  simPacketCount,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -502,6 +555,11 @@ export function ExcalidrawCanvas({
   pathSource?: string
   pathTarget?: string
   hiddenTypes?: string[]
+  simulationState?: "idle" | "running" | "completed"
+  simulatedPackets?: number
+  simulatedSuccessful?: number
+  simPacketCount?: number
+  simLossRatio?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -527,7 +585,23 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes), [parsedSpec, pathSource, pathTarget, hiddenTypes])
+  const elements = useMemo(() => compileSpecToExcalidrawElements(
+    parsedSpec,
+    pathSource,
+    pathTarget,
+    hiddenTypes,
+    simulationState,
+    simulatedPackets,
+    simPacketCount
+  ), [
+    parsedSpec,
+    pathSource,
+    pathTarget,
+    hiddenTypes,
+    simulationState,
+    simulatedPackets,
+    simPacketCount
+  ])
 
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)

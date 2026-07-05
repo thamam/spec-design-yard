@@ -141,6 +141,13 @@ export function WorkspaceLayout() {
   const [pathSource, setPathSource] = useState<string>("")
   const [pathTarget, setPathTarget] = useState<string>("")
 
+  // Lifted simulation states for real-time canvas visualization
+  const [simulationState, setSimulationState] = useState<"idle" | "running" | "completed">("idle")
+  const [simulatedPackets, setSimulatedPackets] = useState<number>(0)
+  const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
+  const [simPacketCount, setSimPacketCount] = useState<number>(100)
+  const [simLossRatio, setSimLossRatio] = useState<number>(0)
+
   // User Session & DB storage states
   const [session, setSession] = useState<UserSession>({ user: null })
   const [isHydrated, setIsHydrated] = useState(false)
@@ -291,6 +298,16 @@ export function WorkspaceLayout() {
             setPathTarget={setPathTarget}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            simulationState={simulationState}
+            setSimulationState={setSimulationState}
+            simulatedPackets={simulatedPackets}
+            setSimulatedPackets={setSimulatedPackets}
+            simulatedSuccessful={simulatedSuccessful}
+            setSimulatedSuccessful={setSimulatedSuccessful}
+            simPacketCount={simPacketCount}
+            setSimPacketCount={setSimPacketCount}
+            simLossRatio={simLossRatio}
+            setSimLossRatio={setSimLossRatio}
           />
         </div>
 
@@ -344,6 +361,11 @@ export function WorkspaceLayout() {
             pathTarget={pathTarget}
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
+            simulationState={simulationState}
+            simulatedPackets={simulatedPackets}
+            simulatedSuccessful={simulatedSuccessful}
+            simPacketCount={simPacketCount}
+            simLossRatio={simLossRatio}
           />
         </div>
       </div>

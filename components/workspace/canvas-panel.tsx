@@ -122,6 +122,11 @@ export function CanvasPanel({
   pathTarget,
   setActiveTab,
   diagnostics = [],
+  simulationState,
+  simulatedPackets,
+  simulatedSuccessful,
+  simPacketCount,
+  simLossRatio,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -131,6 +136,11 @@ export function CanvasPanel({
   pathTarget?: string
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
   diagnostics?: Diagnostic[]
+  simulationState?: "idle" | "running" | "completed"
+  simulatedPackets?: number
+  simulatedSuccessful?: number
+  simPacketCount?: number
+  simLossRatio?: number
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
@@ -265,6 +275,11 @@ export function CanvasPanel({
             pathSource={pathSource}
             pathTarget={pathTarget}
             hiddenTypes={hiddenTypes}
+            simulationState={simulationState}
+            simulatedPackets={simulatedPackets}
+            simulatedSuccessful={simulatedSuccessful}
+            simPacketCount={simPacketCount}
+            simLossRatio={simLossRatio}
           />
         )}
         {view === "grid" && (

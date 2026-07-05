@@ -31,6 +31,16 @@ interface EditorPanelProps {
   setPathTarget?: (val: string) => void
   activeTab?: TabId
   setActiveTab?: (tab: TabId) => void
+  simulationState?: "idle" | "running" | "completed"
+  setSimulationState?: (val: "idle" | "running" | "completed" | ((prev: "idle" | "running" | "completed") => "idle" | "running" | "completed")) => void
+  simulatedPackets?: number
+  setSimulatedPackets?: (val: number | ((prev: number) => number)) => void
+  simulatedSuccessful?: number
+  setSimulatedSuccessful?: (val: number | ((prev: number) => number)) => void
+  simPacketCount?: number
+  setSimPacketCount?: (val: number | ((prev: number) => number)) => void
+  simLossRatio?: number
+  setSimLossRatio?: (val: number | ((prev: number) => number)) => void
 }
 
 /* ── Code Tab ── */
@@ -1542,6 +1552,16 @@ interface MetricsTabProps {
   setPathSource?: (val: string) => void
   pathTarget?: string
   setPathTarget?: (val: string) => void
+  simulationState?: "idle" | "running" | "completed"
+  setSimulationState?: (val: "idle" | "running" | "completed" | ((prev: "idle" | "running" | "completed") => "idle" | "running" | "completed")) => void
+  simulatedPackets?: number
+  setSimulatedPackets?: (val: number | ((prev: number) => number)) => void
+  simulatedSuccessful?: number
+  setSimulatedSuccessful?: (val: number | ((prev: number) => number)) => void
+  simPacketCount?: number
+  setSimPacketCount?: (val: number | ((prev: number) => number)) => void
+  simLossRatio?: number
+  setSimLossRatio?: (val: number | ((prev: number) => number)) => void
 }
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
@@ -1566,17 +1586,39 @@ function MetricsTab({
   setPathSource: propSetPathSource,
   pathTarget: propPathTarget,
   setPathTarget: propSetPathTarget,
+  simulationState: propSimulationState,
+  setSimulationState: propSetSimulationState,
+  simulatedPackets: propSimulatedPackets,
+  setSimulatedPackets: propSetSimulatedPackets,
+  simulatedSuccessful: propSimulatedSuccessful,
+  setSimulatedSuccessful: propSetSimulatedSuccessful,
+  simPacketCount: propSimPacketCount,
+  setSimPacketCount: propSetSimPacketCount,
+  simLossRatio: propSimLossRatio,
+  setSimLossRatio: propSetSimLossRatio,
 }: MetricsTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
 
-  const [simulationState, setSimulationState] = useState<"idle" | "running" | "completed">("idle")
-  const [simulatedPackets, setSimulatedPackets] = useState<number>(0)
-  const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
+  const [localSimulationState, localSetSimulationState] = useState<"idle" | "running" | "completed">("idle")
+  const [localSimulatedPackets, localSetSimulatedPackets] = useState<number>(0)
+  const [localSimulatedSuccessful, localSetSimulatedSuccessful] = useState<number>(0)
+  const [localSimPacketCount, localSetSimPacketCount] = useState<number>(100)
+  const [localSimLossRatio, localSetSimLossRatio] = useState<number>(0)
+
+  const simulationState = propSimulationState !== undefined ? propSimulationState : localSimulationState
+  const setSimulationState = propSetSimulationState || localSetSimulationState
+  const simulatedPackets = propSimulatedPackets !== undefined ? propSimulatedPackets : localSimulatedPackets
+  const setSimulatedPackets = propSetSimulatedPackets || localSetSimulatedPackets
+  const simulatedSuccessful = propSimulatedSuccessful !== undefined ? propSimulatedSuccessful : localSimulatedSuccessful
+  const setSimulatedSuccessful = propSetSimulatedSuccessful || localSetSimulatedSuccessful
+  const simPacketCount = propSimPacketCount !== undefined ? propSimPacketCount : localSimPacketCount
+  const setSimPacketCount = propSetSimPacketCount || localSetSimPacketCount
+  const simLossRatio = propSimLossRatio !== undefined ? propSimLossRatio : localSimLossRatio
+  const setSimLossRatio = propSetSimLossRatio || localSetSimLossRatio
+
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
-  const [simPacketCount, setSimPacketCount] = useState<number>(100)
-  const [simLossRatio, setSimLossRatio] = useState<number>(0)
   const [customPresets, setCustomPresets] = useState<{ name: string; packets: number; loss: number }[]>([])
   const [customPresetName, setCustomPresetName] = useState("")
 
@@ -3233,6 +3275,16 @@ export function EditorPanel({
   setPathTarget: propSetPathTarget,
   activeTab: propActiveTab,
   setActiveTab: propSetActiveTab,
+  simulationState,
+  setSimulationState,
+  simulatedPackets,
+  setSimulatedPackets,
+  simulatedSuccessful,
+  setSimulatedSuccessful,
+  simPacketCount,
+  setSimPacketCount,
+  simLossRatio,
+  setSimLossRatio,
 }: EditorPanelProps) {
   const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
@@ -3529,6 +3581,16 @@ export function EditorPanel({
           setPathSource={setPathSource}
           pathTarget={pathTarget}
           setPathTarget={setPathTarget}
+          simulationState={simulationState}
+          setSimulationState={setSimulationState}
+          simulatedPackets={simulatedPackets}
+          setSimulatedPackets={setSimulatedPackets}
+          simulatedSuccessful={simulatedSuccessful}
+          setSimulatedSuccessful={setSimulatedSuccessful}
+          simPacketCount={simPacketCount}
+          setSimPacketCount={setSimPacketCount}
+          simLossRatio={simLossRatio}
+          setSimLossRatio={setSimLossRatio}
         />
       </div>
 
