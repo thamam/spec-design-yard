@@ -10,6 +10,8 @@ import {
   MousePointerIcon,
   RefreshCwIcon,
   SparklesIcon,
+  Copy,
+  Trash2,
 } from "lucide-react"
 import { useState, useMemo } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
@@ -62,6 +64,54 @@ const CANVAS_VIEWS: { id: CanvasView; icon: React.ReactNode; label: string }[] =
   { id: "grid",    icon: <GridIcon size={12} />,          label: "Grid"    },
   { id: "layers",  icon: <LayersIcon size={12} />,        label: "Layers"  },
 ]
+
+const FIXABLE_DIAGNOSTIC_CODES = new Set([
+  "missing-system-name",
+  "empty-system-name",
+  "missing-component-id",
+  "missing-component-type",
+  "invalid-metadata-object",
+  "invalid-connections-array",
+  "invalid-connection-object",
+  "unrecognized-metadata-key",
+  "unrecognized-component-key",
+  "unrecognized-system-key",
+  "unrecognized-connection-key",
+  "connection-case-mismatch",
+  "invalid-metadata-status",
+  "component-overlap",
+  "missing-metadata-description",
+  "missing-metadata-owner",
+  "invalid-metadata-version",
+  "unrecognized-type",
+  "self-connection",
+  "empty-connection-target",
+  "duplicate-connection",
+  "invalid-id-format",
+  "duplicate-id",
+  "orphan-connection",
+  "disconnected-component",
+  "unreachable-component",
+  "gateway-to-store",
+  "store-to-store",
+  "sink-stage-brick",
+  "empty-gateway",
+  "circular-dependency",
+  "invalid-metadata-color",
+  "invalid-connection-label",
+  "unused-store",
+  "missing-system-metadata",
+  "invalid-system-metadata-object",
+  "invalid-system-metadata-status",
+  "invalid-system-metadata-version",
+  "placeholder-system-metadata-description",
+  "missing-system-metadata-description",
+  "placeholder-system-metadata-owner",
+  "missing-system-metadata-owner",
+  "unrecognized-system-metadata-key",
+  "missing-connection-label",
+  "duplicate-connection-label"
+])
 
 export function CanvasPanel({
   parsedSpec,
@@ -534,20 +584,72 @@ function GridView({
                       {c.method}
                     </span>
 
-                    {/* Diagnostics Badge */}
-                    {c.totalIssues > 0 && (
-                      <div
-                        data-testid="issue-badge"
-                        className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0 ${
-                          c.errorsCount > 0
-                            ? "bg-red-500/10 text-red-500 border border-red-500/20"
-                            : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                        }`}
-                        title={c.diagnostics.map((d: any) => d.message).join("\n")}
-                      >
-                        {c.totalIssues}
+                    {/* Hover Actions & Diagnostics Container */}
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {/* Hover Actions */}
+                      <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1">
+                        <button
+                          type="button"
+                          data-testid={`grid-duplicate-${c.label}`}
+                          title="Duplicate component"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onCanvasChange) {
+                              let suffix = 1
+                              let newId = `${c.label}_${suffix}`
+                              const componentsList = parsedSpec?.system?.components || []
+                              const existingIds = new Set(componentsList.map((comp: any) => comp?.id).filter(Boolean))
+                              while (existingIds.has(newId)) {
+                                suffix++
+                                newId = `${c.label}_${suffix}`
+                              }
+                              onCanvasChange({
+                                type: "duplicate",
+                                payload: { id: c.label, newId }
+                              })
+                            }
+                          }}
+                          className="flex items-center justify-center w-5 h-5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                        >
+                          <Copy size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`grid-delete-${c.label}`}
+                          title="Delete component"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onCanvasChange) {
+                              onCanvasChange({
+                                type: "delete",
+                                payload: { ids: [c.label] }
+                              })
+                              if (selectedUnit === c.label && setSelectedUnit) {
+                                setSelectedUnit(null)
+                              }
+                            }
+                          }}
+                          className="flex items-center justify-center w-5 h-5 rounded hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
-                    )}
+
+                      {/* Diagnostics Badge */}
+                      {c.totalIssues > 0 && (
+                        <div
+                          data-testid="issue-badge"
+                          className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0 ${
+                            c.errorsCount > 0
+                              ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                              : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                          }`}
+                          title={c.diagnostics.map((d: any) => d.message).join("\n")}
+                        >
+                          {c.totalIssues}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {renamingId === c.label ? (
                     <div
@@ -618,6 +720,42 @@ function GridView({
                       <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
                         {c.desc}
                       </p>
+
+                      {/* Inline Diagnostics & Quick-Fixes */}
+                      {c.totalIssues > 0 && (
+                        <div className="flex flex-col gap-1 mt-1.5 pt-1.5 border-t border-border-subtle" onClick={(e) => e.stopPropagation()}>
+                          {c.diagnostics.map((d: any, dIdx: number) => {
+                            const isFixable = d.code && d.path && (FIXABLE_DIAGNOSTIC_CODES.has(d.code) || d.code.startsWith("stride-"))
+                            const textClass = d.severity === "error" ? "text-red-400" : "text-amber-400/90"
+                            return (
+                              <div key={dIdx} className="flex items-start justify-between gap-1.5 text-[10px] leading-snug font-sans bg-zinc-900/40 p-1.5 rounded border border-zinc-800/45">
+                                <span className={`flex-1 ${textClass}`}>
+                                  {d.message}
+                                </span>
+                                {isFixable && (
+                                  <button
+                                    type="button"
+                                    data-testid={`grid-quick-fix-${d.code}-${c.label}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (onCanvasChange) {
+                                        onCanvasChange({
+                                          type: "quick-fix",
+                                          payload: { path: d.path, fixType: d.code }
+                                        })
+                                      }
+                                    }}
+                                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 text-[9px] font-medium transition-all shrink-0 cursor-pointer"
+                                  >
+                                    <SparklesIcon size={8} />
+                                    <span>Fix</span>
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
