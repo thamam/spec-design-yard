@@ -249,6 +249,8 @@ function GridView({
   diagnostics = [],
   onCanvasChange,
 }: GridViewProps) {
+  const components = parsedSpec?.system?.components || []
+
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [issueFilter, setIssueFilter] = useState("all")
@@ -279,7 +281,7 @@ function GridView({
       setRenamingError("ID must be alphanumeric, hyphen, or underscore.")
       return
     }
-    const idExists = components.some((comp: any) => comp && comp.id && comp.id.toLowerCase() === cleaned.toLowerCase() && comp.id !== oldId)
+    const idExists = components.some((comp: any) => comp && comp.id && String(comp.id).toLowerCase() === cleaned.toLowerCase() && String(comp.id) !== oldId)
     if (idExists) {
       setRenamingError(`Component ID "${cleaned}" already exists.`)
       return
@@ -302,8 +304,6 @@ function GridView({
     setRenamingId(null)
     setRenamingError(null)
   }
-
-  const components = parsedSpec?.system?.components || []
 
   // Pre-group diagnostics by component index in O(D) time
   const diagnosticsByComponent = useMemo(() => {
@@ -487,6 +487,9 @@ function GridView({
                   onClick={() => {
                     if (setSelectedUnit) setSelectedUnit(c.label)
                     if (setActiveTab) setActiveTab("focus")
+                    if (renamingId && renamingId !== c.label) {
+                      handleCancelRename()
+                    }
                   }}
                   onDoubleClick={() => handleStartRename(c.label)}
                   aria-label={`Select component ${c.label}`}
@@ -497,6 +500,9 @@ function GridView({
                       e.preventDefault()
                       if (setSelectedUnit) setSelectedUnit(c.label)
                       if (setActiveTab) setActiveTab("focus")
+                      if (renamingId && renamingId !== c.label) {
+                        handleCancelRename()
+                      }
                     }
                   }}
                   className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150 focus:outline-none relative group"
@@ -548,6 +554,7 @@ function GridView({
                       className="flex flex-col gap-1.5 mt-1"
                       onClick={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
                     >
                       <input
                         type="text"
@@ -563,7 +570,12 @@ function GridView({
                             handleCancelRename()
                           }
                         }}
-                        className="w-full h-7 px-1.5 rounded text-[11px] bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full h-7 px-1.5 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-accent"
+                        style={{
+                          background: "var(--surface-elevated)",
+                          color: "var(--foreground)",
+                          border: "1px solid var(--border)",
+                        }}
                         autoFocus
                       />
                       {renamingError && (
@@ -576,7 +588,10 @@ function GridView({
                           type="button"
                           data-testid={`grid-rename-save-${c.label}`}
                           onClick={() => handleCommitRename(c.label)}
-                          className="px-2 py-0.5 rounded text-[10px] bg-indigo-600 text-white hover:bg-indigo-500 font-medium transition-colors"
+                          className="px-2 py-0.5 rounded text-[10px] text-white hover:opacity-95 font-medium transition-all"
+                          style={{
+                            background: "var(--accent)",
+                          }}
                         >
                           Save
                         </button>
@@ -584,7 +599,12 @@ function GridView({
                           type="button"
                           data-testid={`grid-rename-cancel-${c.label}`}
                           onClick={handleCancelRename}
-                          className="px-2 py-0.5 rounded text-[10px] bg-zinc-700 text-zinc-200 hover:bg-zinc-600 border border-zinc-600 font-medium transition-colors"
+                          className="px-2 py-0.5 rounded text-[10px] font-medium transition-all"
+                          style={{
+                            background: "var(--surface)",
+                            color: "var(--foreground-muted)",
+                            border: "1px solid var(--border)",
+                          }}
                         >
                           Cancel
                         </button>
