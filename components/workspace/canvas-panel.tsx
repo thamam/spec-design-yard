@@ -11,8 +11,9 @@ import {
   RefreshCwIcon,
   SparklesIcon,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
+import { Diagnostic } from "../../lib/linter"
 
 /* Client-only Excalidraw */
 const ExcalidrawCanvas = dynamic(
@@ -70,6 +71,7 @@ export function CanvasPanel({
   pathSource,
   pathTarget,
   setActiveTab,
+  diagnostics = [],
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -78,6 +80,7 @@ export function CanvasPanel({
   pathSource?: string
   pathTarget?: string
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
+  diagnostics?: Diagnostic[]
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
@@ -218,6 +221,7 @@ export function CanvasPanel({
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
             setActiveTab={setActiveTab}
+            diagnostics={diagnostics}
           />
         )}
         {view === "layers" && <LayersView parsedSpec={parsedSpec} />}
@@ -231,6 +235,7 @@ interface GridViewProps {
   selectedUnit?: string | null
   setSelectedUnit?: (val: string | null) => void
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
+  diagnostics?: Diagnostic[]
 }
 
 /* ── Grid view ── */
@@ -239,25 +244,101 @@ function GridView({
   selectedUnit,
   setSelectedUnit,
   setActiveTab,
+  diagnostics = [],
 }: GridViewProps) {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [issueFilter, setIssueFilter] = useState("all")
+  const [sortBy, setSortBy] = useState("id-asc")
+
   const components = parsedSpec?.system?.components || []
-  
-  const cards = components.map((comp: any) => {
-    const type = String(comp.type).toLowerCase()
-    let color = "#6366f1" // Store/default: Indigo
-    if (type === "stage") color = "#c084fc" // Stage: Purple
-    else if (type === "brick") color = "#34d399" // Brick: Emerald
-    else if (type === "gateway") color = "#f59e0b" // Gateway: Amber
 
-    return {
-      label: comp.id,
-      method: String(comp.type).toUpperCase(),
-      color,
-      desc: comp.name || comp.id,
+  // Pre-group diagnostics by component index in O(D) time
+  const diagnosticsByComponent = useMemo(() => {
+    const map = new Map<number, Diagnostic[]>()
+    diagnostics.forEach((d) => {
+      if (!d.path) return
+      const match = d.path.match(/^system\.components\[(\d+)\](?:\.|$)/)
+      if (match) {
+        const idx = parseInt(match[1], 10)
+        if (!map.has(idx)) map.set(idx, [])
+        map.get(idx)!.push(d)
+      }
+    })
+    return map
+  }, [diagnostics])
+
+  const cards = useMemo(() => {
+    return components.map((comp: any, idx: number) => {
+      const type = String(comp.type || "").toLowerCase()
+      let color = "#6366f1" // Store/default: Indigo
+      if (type === "stage") color = "#c084fc" // Stage: Purple
+      else if (type === "brick") color = "#34d399" // Brick: Emerald
+      else if (type === "gateway") color = "#f59e0b" // Gateway: Amber
+
+      const compDiags = diagnosticsByComponent.get(idx) || []
+      const errorsCount = compDiags.filter(d => d.severity === "error").length
+      const warningsCount = compDiags.filter(d => d.severity === "warning" || d.severity === "info").length
+
+      return {
+        idx,
+        label: comp.id || "",
+        type,
+        method: String(comp.type || "").toUpperCase(),
+        color,
+        desc: comp.name || comp.id || "",
+        x: typeof comp.x === "number" ? comp.x : 0,
+        y: typeof comp.y === "number" ? comp.y : 0,
+        errorsCount,
+        warningsCount,
+        totalIssues: errorsCount + warningsCount,
+        diagnostics: compDiags,
+      }
+    })
+  }, [components, diagnosticsByComponent])
+
+  // Filter cards
+  const filteredCards = useMemo(() => {
+    return cards.filter((c: any) => {
+      // 1. Search filter
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        const matchesLabel = c.label.toLowerCase().includes(term)
+        const matchesDesc = c.desc.toLowerCase().includes(term)
+        const matchesType = c.type.toLowerCase().includes(term)
+        if (!matchesLabel && !matchesDesc && !matchesType) {
+          return false
+        }
+      }
+
+      // 2. Type filter
+      if (typeFilter !== "all" && c.type !== typeFilter) {
+        return false
+      }
+
+      // 3. Issue filter
+      if (issueFilter === "issues" && c.errorsCount === 0 && c.warningsCount === 0) {
+        return false
+      }
+
+      return true
+    })
+  }, [cards, searchTerm, typeFilter, issueFilter])
+
+  // Sort cards
+  const sortedCards = useMemo(() => {
+    const list = [...filteredCards]
+    if (sortBy === "id-asc") {
+      list.sort((a, b) => a.label.localeCompare(b.label))
+    } else if (sortBy === "id-desc") {
+      list.sort((a, b) => b.label.localeCompare(a.label))
+    } else if (sortBy === "type") {
+      list.sort((a, b) => a.type.localeCompare(b.type) || a.label.localeCompare(b.label))
     }
-  })
+    return list
+  }, [filteredCards, sortBy])
 
-  if (cards.length === 0) {
+  if (components.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 text-xs p-6 min-h-[250px]">
         <GridIcon size={24} className="text-zinc-600 mb-2 animate-pulse" />
@@ -267,74 +348,156 @@ function GridView({
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6">
-      {/* Dot grid overlay */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30" aria-hidden="true">
-        <defs>
-          <pattern id="canvas-dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-            <circle cx="1" cy="1" r="0.7" fill="rgba(255,255,255,0.05)" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#canvas-dots)" />
-      </svg>
-      <div className="relative grid grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl">
-        {cards.map((c: any) => {
-          const isSelected = selectedUnit === c.label
-          return (
-            <div
-              key={c.label}
-              onClick={() => {
-                if (setSelectedUnit) setSelectedUnit(c.label)
-                if (setActiveTab) setActiveTab("focus")
-              }}
-              aria-label={`Select component ${c.label}`}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  if (setSelectedUnit) setSelectedUnit(c.label)
-                  if (setActiveTab) setActiveTab("focus")
-                }
-              }}
-              className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150 focus:outline-none"
-              style={{
-                background: isSelected ? "var(--surface-overlay)" : "var(--surface-elevated)",
-                border: isSelected ? `1px solid ${c.color}` : `1px solid var(--border)`,
-                boxShadow: isSelected ? `0 0 12px ${c.color}22` : "none",
-              }}
-              onMouseEnter={(e) => {
-                if (!isSelected) {
-                  e.currentTarget.style.borderColor = c.color + "55"
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isSelected) {
-                  e.currentTarget.style.borderColor = "var(--border)"
-                }
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+    <div className="flex flex-col flex-1 overflow-hidden h-full relative">
+      {/* Controls HUD Panel */}
+      <div
+        className="flex flex-wrap items-center gap-2 px-6 py-2.5 shrink-0 border-b border-border-subtle"
+        style={{ background: "var(--surface)", borderBottom: "1px solid var(--border-subtle)" }}
+      >
+        {/* Search */}
+        <div className="relative flex-1 min-w-[150px]">
+          <input
+            type="text"
+            data-testid="grid-search-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search components..."
+            className="w-full h-8 px-2.5 rounded-lg text-xs font-sans bg-surface-elevated text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-accent"
+            style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+          />
+        </div>
+
+        {/* Type Filter */}
+        <select
+          data-testid="grid-type-select"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="h-8 px-2 rounded-lg text-xs font-sans bg-surface-elevated text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-accent"
+          style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+        >
+          <option value="all">All Types</option>
+          <option value="store">Store</option>
+          <option value="stage">Stage</option>
+          <option value="brick">Brick</option>
+          <option value="gateway">Gateway</option>
+        </select>
+
+        {/* Issue Filter */}
+        <select
+          data-testid="grid-issue-select"
+          value={issueFilter}
+          onChange={(e) => setIssueFilter(e.target.value)}
+          className="h-8 px-2 rounded-lg text-xs font-sans bg-surface-elevated text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-accent"
+          style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+        >
+          <option value="all">All Components</option>
+          <option value="issues">Only Components with Issues</option>
+        </select>
+
+        {/* Sort Select */}
+        <select
+          data-testid="grid-sort-select"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="h-8 px-2 rounded-lg text-xs font-sans bg-surface-elevated text-foreground border border-border focus:outline-none focus:ring-1 focus:ring-accent"
+          style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+        >
+          <option value="id-asc">Alphabetical (A-Z)</option>
+          <option style={{ color: "black" }} value="id-desc">Alphabetical (Z-A)</option>
+        </select>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6 relative">
+        {/* Dot grid overlay */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30" aria-hidden="true">
+          <defs>
+            <pattern id="canvas-dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="0.7" fill="rgba(255,255,255,0.05)" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#canvas-dots)" />
+        </svg>
+
+        {sortedCards.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-zinc-500 text-xs p-6 min-h-[150px]">
+            <p>No components match the active search and filter criteria.</p>
+          </div>
+        ) : (
+          <div className="relative grid grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl">
+            {sortedCards.map((c: any) => {
+              const isSelected = selectedUnit === c.label
+              return (
+                <div
+                  key={c.label}
+                  onClick={() => {
+                    if (setSelectedUnit) setSelectedUnit(c.label)
+                    if (setActiveTab) setActiveTab("focus")
+                  }}
+                  aria-label={`Select component ${c.label}`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      if (setSelectedUnit) setSelectedUnit(c.label)
+                      if (setActiveTab) setActiveTab("focus")
+                    }
+                  }}
+                  className="flex flex-col gap-2 p-3 rounded-xl cursor-pointer transition-all duration-150 focus:outline-none relative group"
                   style={{
-                    background: c.color + "18",
-                    color: c.color,
-                    border: `1px solid ${c.color}30`,
+                    background: isSelected ? "var(--surface-overlay)" : "var(--surface-elevated)",
+                    border: isSelected ? `1px solid ${c.color}` : `1px solid var(--border)`,
+                    boxShadow: isSelected ? `0 0 12px ${c.color}22` : "none",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = c.color + "55"
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = "var(--border)"
+                    }
                   }}
                 >
-                  {c.method}
-                </span>
-              </div>
-              <p className="text-[12px] font-medium leading-tight" style={{ color: isSelected ? c.color : "var(--foreground)" }}>
-                {c.label}
-              </p>
-              <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
-                {c.desc}
-              </p>
-            </div>
-          )
-        })}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        background: c.color + "18",
+                        color: c.color,
+                        border: `1px solid ${c.color}30`,
+                      }}
+                    >
+                      {c.method}
+                    </span>
+
+                    {/* Diagnostics Badge */}
+                    {c.totalIssues > 0 && (
+                      <div
+                        data-testid="issue-badge"
+                        className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0 ${
+                          c.errorsCount > 0
+                            ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                            : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        }`}
+                        title={c.diagnostics.map((d: any) => d.message).join("\n")}
+                      >
+                        {c.totalIssues}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[12px] font-medium leading-tight" style={{ color: isSelected ? c.color : "var(--foreground)" }}>
+                    {c.label}
+                  </p>
+                  <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
+                    {c.desc}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

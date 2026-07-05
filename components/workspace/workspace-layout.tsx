@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
@@ -9,6 +9,7 @@ import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
+import { lintSpec } from "../../lib/linter"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -215,6 +216,10 @@ export function WorkspaceLayout() {
     }
   }, [specText])
 
+  const diagnostics = useMemo(() => {
+    return lintSpec(parsedSpec)
+  }, [parsedSpec])
+
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -338,6 +343,7 @@ export function WorkspaceLayout() {
             pathSource={pathSource}
             pathTarget={pathTarget}
             setActiveTab={setActiveTab}
+            diagnostics={diagnostics}
           />
         </div>
       </div>
