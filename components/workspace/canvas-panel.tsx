@@ -280,13 +280,16 @@ function GridView({
       const errorsCount = compDiags.filter(d => d.severity === "error").length
       const warningsCount = compDiags.filter(d => d.severity === "warning" || d.severity === "info").length
 
+      const label = String(comp.id || "")
+      const desc = String(comp.name || comp.id || "")
+
       return {
         idx,
-        label: comp.id || "",
+        label,
         type,
         method: String(comp.type || "").toUpperCase(),
         color,
-        desc: comp.name || comp.id || "",
+        desc,
         x: typeof comp.x === "number" ? comp.x : 0,
         y: typeof comp.y === "number" ? comp.y : 0,
         errorsCount,
@@ -403,7 +406,7 @@ function GridView({
           style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)", color: "var(--foreground)" }}
         >
           <option value="id-asc">Alphabetical (A-Z)</option>
-          <option style={{ color: "black" }} value="id-desc">Alphabetical (Z-A)</option>
+          <option value="id-desc">Alphabetical (Z-A)</option>
         </select>
       </div>
 
@@ -428,7 +431,7 @@ function GridView({
               const isSelected = selectedUnit === c.label
               return (
                 <div
-                  key={c.label}
+                  key={`${c.idx}-${c.label}`}
                   onClick={() => {
                     if (setSelectedUnit) setSelectedUnit(c.label)
                     if (setActiveTab) setActiveTab("focus")
