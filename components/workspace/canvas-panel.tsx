@@ -222,6 +222,7 @@ export function CanvasPanel({
             setSelectedUnit={setSelectedUnit}
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
+            onCanvasChange={onCanvasChange}
           />
         )}
         {view === "layers" && <LayersView parsedSpec={parsedSpec} />}
@@ -236,6 +237,7 @@ interface GridViewProps {
   setSelectedUnit?: (val: string | null) => void
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
   diagnostics?: Diagnostic[]
+  onCanvasChange?: (change: any[] | CanvasChange) => void
 }
 
 /* ── Grid view ── */
@@ -245,11 +247,61 @@ function GridView({
   setSelectedUnit,
   setActiveTab,
   diagnostics = [],
+  onCanvasChange,
 }: GridViewProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [issueFilter, setIssueFilter] = useState("all")
   const [sortBy, setSortBy] = useState("id-asc")
+
+  // State for inline renaming in GridView
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [newIdVal, setNewIdVal] = useState("")
+  const [renamingError, setRenamingError] = useState<string | null>(null)
+
+  const handleStartRename = (id: string) => {
+    setRenamingId(id)
+    setNewIdVal(id)
+    setRenamingError(null)
+  }
+
+  const handleCommitRename = (oldId: string) => {
+    const cleaned = newIdVal.trim()
+    if (cleaned === oldId) {
+      handleCancelRename()
+      return
+    }
+    if (cleaned === "") {
+      setRenamingError("ID cannot be empty.")
+      return
+    }
+    if (!/^[a-zA-Z0-9_\-]+$/.test(cleaned)) {
+      setRenamingError("ID must be alphanumeric, hyphen, or underscore.")
+      return
+    }
+    const idExists = components.some((comp: any) => comp && comp.id && comp.id.toLowerCase() === cleaned.toLowerCase() && comp.id !== oldId)
+    if (idExists) {
+      setRenamingError(`Component ID "${cleaned}" already exists.`)
+      return
+    }
+
+    if (onCanvasChange) {
+      onCanvasChange({
+        type: "rename-id",
+        payload: { id: oldId, newId: cleaned }
+      })
+      if (selectedUnit === oldId && setSelectedUnit) {
+        setSelectedUnit(cleaned)
+      }
+    }
+    setRenamingId(null)
+    setRenamingError(null)
+  }
+
+  const handleCancelRename = () => {
+    setRenamingId(null)
+    setRenamingError(null)
+  }
 
   const components = parsedSpec?.system?.components || []
 
@@ -436,6 +488,7 @@ function GridView({
                     if (setSelectedUnit) setSelectedUnit(c.label)
                     if (setActiveTab) setActiveTab("focus")
                   }}
+                  onDoubleClick={() => handleStartRename(c.label)}
                   aria-label={`Select component ${c.label}`}
                   role="button"
                   tabIndex={0}
@@ -490,12 +543,63 @@ function GridView({
                       </div>
                     )}
                   </div>
-                  <p className="text-[12px] font-medium leading-tight" style={{ color: isSelected ? c.color : "var(--foreground)" }}>
-                    {c.label}
-                  </p>
-                  <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
-                    {c.desc}
-                  </p>
+                  {renamingId === c.label ? (
+                    <div
+                      className="flex flex-col gap-1.5 mt-1"
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        data-testid={`grid-rename-input-${c.label}`}
+                        value={newIdVal}
+                        onChange={(e) => setNewIdVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleCommitRename(c.label)
+                          } else if (e.key === "Escape") {
+                            e.preventDefault()
+                            handleCancelRename()
+                          }
+                        }}
+                        className="w-full h-7 px-1.5 rounded text-[11px] bg-zinc-800 text-white border border-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                      {renamingError && (
+                        <p data-testid="grid-rename-error" className="text-[10px] text-red-500 font-medium leading-tight">
+                          {renamingError}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <button
+                          type="button"
+                          data-testid={`grid-rename-save-${c.label}`}
+                          onClick={() => handleCommitRename(c.label)}
+                          className="px-2 py-0.5 rounded text-[10px] bg-indigo-600 text-white hover:bg-indigo-500 font-medium transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`grid-rename-cancel-${c.label}`}
+                          onClick={handleCancelRename}
+                          className="px-2 py-0.5 rounded text-[10px] bg-zinc-700 text-zinc-200 hover:bg-zinc-600 border border-zinc-600 font-medium transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[12px] font-medium leading-tight" style={{ color: isSelected ? c.color : "var(--foreground)" }}>
+                        {c.label}
+                      </p>
+                      <p className="text-[11px] font-mono" style={{ color: "var(--foreground-muted)" }}>
+                        {c.desc}
+                      </p>
+                    </>
+                  )}
                 </div>
               )
             })}
