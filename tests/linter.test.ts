@@ -1257,4 +1257,57 @@ describe('Advanced Linter Features', () => {
       expect(dosDiag).toHaveLength(0) // No warning since non_existent_target is not in ids Set
     })
   })
+
+  describe('Sentinel Custom Guardrails', () => {
+    test('flags brick-to-brick direct connections as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Brick to Brick System',
+          components: [
+            {
+              id: 'b1_schema',
+              type: 'Brick',
+              connections: [{ target: 'b2_ledger' }]
+            },
+            {
+              id: 'b2_ledger',
+              type: 'Brick'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const b2bDiag = diagnostics.find(d => d.code === 'brick-to-brick')
+      expect(b2bDiag).toBeDefined()
+      expect(b2bDiag?.severity).toBe('warning')
+      expect(b2bDiag?.message).toContain('Brick component "b1_schema" connects directly to Brick "b2_ledger"')
+    })
+
+    test('flags gateway-to-gateway direct connections as warnings', () => {
+      const spec = {
+        system: {
+          name: 'Gateway to Gateway System',
+          components: [
+            {
+              id: 'gate_in_1',
+              type: 'Gateway',
+              connections: [{ target: 'gate_in_2' }]
+            },
+            {
+              id: 'gate_in_2',
+              type: 'Gateway'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const g2gDiag = diagnostics.find(d => d.code === 'gateway-to-gateway')
+      expect(g2gDiag).toBeDefined()
+      expect(g2gDiag?.severity).toBe('warning')
+      expect(g2gDiag?.message).toContain('Gateway component "gate_in_1" connects directly to Gateway "gate_in_2"')
+    })
+  })
 })
+

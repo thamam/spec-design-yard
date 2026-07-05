@@ -399,6 +399,8 @@ function getConnectionBadgeLabel(d: Diagnostic): string {
   if (d.code === "gateway-to-store") return "Gateway to Store"
   if (d.code === "store-to-store") return "Store to Store"
   if (d.code === "stage-brick-to-gateway") return "Stage/Brick to Gateway"
+  if (d.code === "brick-to-brick") return "Brick to Brick"
+  if (d.code === "gateway-to-gateway") return "Gateway to Gateway"
   if (d.code === "self-connection") return "Self Connection"
   if (d.code === "duplicate-connection") return "Duplicate Connection"
   if (d.code === "connection-case-mismatch") return "Case Mismatch"

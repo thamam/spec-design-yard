@@ -528,6 +528,24 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "stage-brick-to-gateway",
         })
       }
+
+      if (compType === "brick" && targetType === "brick") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Brick component "${compId}" connects directly to Brick "${target}". Bricks are auxiliary components and should only attach to core components (Gateways, Stages, or Stores).`,
+          path: `${connPath}.target`,
+          code: "brick-to-brick",
+        })
+      }
+
+      if (compType === "gateway" && targetType === "gateway") {
+        diagnostics.push({
+          severity: "warning",
+          message: `Gateway component "${compId}" connects directly to Gateway "${target}". Gateways are external ingestion points and should route to internal processing or storage nodes.`,
+          path: `${connPath}.target`,
+          code: "gateway-to-gateway",
+        })
+      }
     })
   })
 

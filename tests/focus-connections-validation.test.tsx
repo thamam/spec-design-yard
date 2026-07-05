@@ -63,4 +63,55 @@ describe('Focus Tab Connections Inline Validation', () => {
     const storeToStoreBadge = screen.getByText("Store to Store")
     expect(storeToStoreBadge).toBeInTheDocument()
   })
+
+  test('displays warning badges for brick-to-brick and gateway-to-gateway connections in FocusTab', async () => {
+    render(<Workspace />)
+
+    // 1. Switch to Code Tab and set spec
+    const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
+    fireEvent.click(codeTabBtn)
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const specText = `system:
+  name: Custom Guardrails Test System
+  components:
+    - id: b1_schema
+      type: Brick
+      connections:
+        - target: b2_ledger
+    - id: b2_ledger
+      type: Brick
+    - id: gate_1
+      type: Gateway
+      connections:
+        - target: gate_2
+    - id: gate_2
+      type: Gateway
+`
+    fireEvent.change(textarea, { target: { value: specText } })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 2. Select b1_schema
+    const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
+    fireEvent.click(metricsTabBtn)
+
+    const b1Btn = screen.getByRole('button', { name: /b1_schema/i })
+    fireEvent.click(b1Btn)
+
+    // 3. Switch to Focus tab
+    const focusTabBtn = screen.getByRole('tab', { name: /Focus/i })
+    fireEvent.click(focusTabBtn)
+
+    // 4. Verify Brick to Brick badge is displayed
+    expect(screen.getByText("Brick to Brick")).toBeInTheDocument()
+
+    // 5. Select gate_1
+    fireEvent.click(metricsTabBtn)
+    const gate1Btn = screen.getByRole('button', { name: /gate_1/i })
+    fireEvent.click(gate1Btn)
+    fireEvent.click(focusTabBtn)
+
+    // 6. Verify Gateway to Gateway badge is displayed
+    expect(screen.getByText("Gateway to Gateway")).toBeInTheDocument()
+  })
 })

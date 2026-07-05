@@ -719,7 +719,7 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
             }
           }
         }
-      } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection" || fixType === "circular-dependency") {
+      } else if (fixType === "self-connection" || fixType === "empty-connection-target" || fixType === "duplicate-connection" || fixType === "circular-dependency" || fixType === "brick-to-brick" || fixType === "gateway-to-gateway") {
         const resolvedParts = parts[parts.length - 1] === "target" ? parts.slice(0, -1) : parts
         if (resolvedParts.length >= 2 && resolvedParts[resolvedParts.length - 2] === "connections") {
           const connIdx = resolvedParts[resolvedParts.length - 1] as number

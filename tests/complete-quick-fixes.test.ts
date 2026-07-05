@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { lintSpec } from '../lib/linter'
 import { reconcileSpec } from '../lib/reconciler'
+import yaml from 'yaml'
 
 describe('Comprehensive Diagnostics and Quick-Fixes', () => {
   test('flags missing system name with code and path', () => {
@@ -392,6 +393,46 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
       payload: { path: 'system.components[0]', fixType: 'stride-denial-of-service' }
     })
     expect(updated).toContain('rate_limit: true')
+  })
+
+  describe('Sentinel Custom Guardrails Reconciler', () => {
+    test('reconciles brick-to-brick by removing the connection', () => {
+      const initial = `system:
+  name: Test System
+  components:
+    - id: b1_schema
+      type: Brick
+      connections:
+        - target: b2_ledger
+    - id: b2_ledger
+      type: Brick
+`
+      const updated = reconcileSpec(initial, {
+        type: 'quick-fix',
+        payload: { path: 'system.components[0].connections[0].target', fixType: 'brick-to-brick' }
+      })
+      const parsed = yaml.parse(updated)
+      expect(parsed.system.components[0].connections).toBeUndefined()
+    })
+
+    test('reconciles gateway-to-gateway by removing the connection', () => {
+      const initial = `system:
+  name: Test System
+  components:
+    - id: gate_1
+      type: Gateway
+      connections:
+        - target: gate_2
+    - id: gate_2
+      type: Gateway
+`
+      const updated = reconcileSpec(initial, {
+        type: 'quick-fix',
+        payload: { path: 'system.components[0].connections[0].target', fixType: 'gateway-to-gateway' }
+      })
+      const parsed = yaml.parse(updated)
+      expect(parsed.system.components[0].connections).toBeUndefined()
+    })
   })
 })
 
