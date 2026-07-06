@@ -1568,6 +1568,13 @@ function MetricsTab({
   pathTarget: propPathTarget,
   setPathTarget: propSetPathTarget,
 }: MetricsTabProps) {
+  const [localPathSource, setLocalPathSource] = useState<string>("")
+  const [localPathTarget, setLocalPathTarget] = useState<string>("")
+  const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
+  const setPathSource = propSetPathSource || setLocalPathSource
+  const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
+  const setPathTarget = propSetPathTarget || setLocalPathTarget
+
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [severityFilter, setSeverityFilter] = useState("all")
@@ -1585,7 +1592,7 @@ function MetricsTab({
 
   useEffect(() => {
     setComparedPathIndices([])
-  }, [propPathSource, propPathTarget])
+  }, [pathSource, pathTarget])
 
   const derivedPreset = useMemo(() => {
     const matchingCustom = customPresets.find(p => p.packets === simPacketCount && p.loss === simLossRatio)
@@ -1634,13 +1641,6 @@ function MetricsTab({
       }
     }
   }, [])
-
-  const [localPathSource, setLocalPathSource] = useState<string>("")
-  const [localPathTarget, setLocalPathTarget] = useState<string>("")
-  const pathSource = propPathSource !== undefined ? propPathSource : localPathSource
-  const setPathSource = propSetPathSource || setLocalPathSource
-  const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
-  const setPathTarget = propSetPathTarget || setLocalPathTarget
 
   useEffect(() => {
     setSimulationState("idle")
@@ -3046,7 +3046,7 @@ function MetricsTab({
           )}
 
           {/* Comparison Panel */}
-          {pathSource && pathTarget && comparedPathIndices.length === 2 && (
+          {pathSource && pathTarget && comparedPathIndices.length === 2 && comparedPathIndices.every(idx => idx < tracedPathsWithMetrics.length) && (
             <div
               data-testid="path-comparison-panel"
               className="border border-indigo-900/50 bg-indigo-950/15 p-4 rounded-xl flex flex-col gap-3 font-sans mt-3 shrink-0"
@@ -3076,8 +3076,9 @@ function MetricsTab({
                   // Throughput Winner
                   const capDiff = Math.abs(metricsA.bottleneckCapacity - metricsB.bottleneckCapacity)
                   const capWinner = metricsA.bottleneckCapacity > metricsB.bottleneckCapacity ? "A" : metricsA.bottleneckCapacity < metricsB.bottleneckCapacity ? "B" : "Tie"
-                  const capacityPercent = capWinner !== "Tie"
-                    ? Math.round((capDiff / Math.min(metricsA.bottleneckCapacity, metricsB.bottleneckCapacity)) * 100)
+                  const minCap = Math.min(metricsA.bottleneckCapacity, metricsB.bottleneckCapacity)
+                  const capacityPercent = capWinner !== "Tie" && minCap > 0
+                    ? Math.round((capDiff / minCap) * 100)
                     : 0
 
                   // Success Winner
