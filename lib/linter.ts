@@ -1156,6 +1156,33 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "stride-denial-of-service"
         })
       }
+
+      // 7. Information Disclosure: Hardcoded Secret/Token Leakage Check in Component Metadata
+      if (comp.metadata && typeof comp.metadata === "object" && !Array.isArray(comp.metadata)) {
+        const sensitiveRegex = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
+        const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\]|none|disabled|null|false)$/i
+        
+        Object.keys(comp.metadata).forEach((k) => {
+          if (sensitiveRegex.test(k)) {
+            const val = comp.metadata[k]
+            if (val !== undefined && val !== null) {
+              const valStr = String(val).trim()
+              if (
+                valStr !== "" &&
+                !valStr.startsWith("${") &&
+                !placeholderRegex.test(valStr)
+              ) {
+                diagnostics.push({
+                  severity: "warning",
+                  message: `Potential hardcoded secret or token detected in metadata key "${k}". Storing raw credentials in system blueprints is an Information Disclosure vulnerability (STRIDE).`,
+                  path: `system.components[${compIdx}].metadata.${k}`,
+                  code: "stride-secret-leak",
+                })
+              }
+            }
+          }
+        })
+      }
     })
   }
 

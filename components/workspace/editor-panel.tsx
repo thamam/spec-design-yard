@@ -3752,7 +3752,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "missing-system-metadata-owner",
   "unrecognized-system-metadata-key",
   "missing-connection-label",
-  "duplicate-connection-label"
+  "duplicate-connection-label",
+  "stride-secret-leak"
 ])
 
 export function EditorPanel({
@@ -4443,6 +4444,14 @@ export function EditorPanel({
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
                         >
                           Set to Stage
+                        </button>
+                      )}
+                      {d.code === "stride-secret-leak" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "stride-secret-leak")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Use Environment Variable
                         </button>
                       )}
                       {d.code === "invalid-metadata-object" && (
