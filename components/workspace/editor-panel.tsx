@@ -2261,6 +2261,95 @@ function MetricsTab({
     downloadAnchor.remove()
   }
 
+  const handleExportMarkdownReport = () => {
+    const hasSpoofingThreat = diagnostics.some(d => d.code === 'stride-spoofing')
+    const hasTamperingThreat = diagnostics.some(d => d.code === 'stride-tampering')
+    const hasRepudiationThreat = diagnostics.some(d => d.code === 'stride-repudiation')
+    const hasInfoDisclosureThreat = diagnostics.some(d => d.code === 'stride-information-disclosure')
+    const hasElevationThreat = diagnostics.some(d => d.code === 'stride-elevation-of-privilege')
+    const hasDoSThreat = diagnostics.some(d => d.code === 'stride-denial-of-service')
+
+    const dateStr = new Date().toLocaleString()
+
+    const md = `# System Architecture Audit & Blueprint Report
+
+Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
+
+## 1. System Overview
+- **System Name:** ${systemName}
+- **System Health:** ${healthPct}%
+- **Coupling Rating:** ${couplingRating}
+- **Connection Density:** ${connectionDensity}
+- **Subgraphs Count:** ${subgraphsCount}
+
+## 2. Component Inventory
+- **Gateways (Ingestion points):** ${gatewayCount}
+- **Stages (Processing units):** ${stageCount}
+- **Bricks (Auxiliary sidecars):** ${brickCount}
+- **Stores (Data persistence):** ${storeCount}
+- **Total Components:** ${totalComponents}
+- **Total Connections:** ${totalConnections}
+
+## 3. Real-Time Linting Diagnostics
+- **Errors Count:** ${errorsCount}
+- **Warnings Count:** ${warningsCount}
+- **Info Count:** ${infoCount}
+
+### Detailed Active Diagnostics:
+${diagnostics.length === 0 
+  ? "✅ No architectural violations or lint warnings detected! Perfect design standard." 
+  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\n")}
+
+## 4. STRIDE Threat Modeling & Recommendations
+The system analysis evaluates six STRIDE threat boundaries across the design blueprint:
+
+### Spoofing (S):
+- Gateway elements must carry validation/auth labels.
+- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
+
+### Tampering (T):
+- Connection channels must specify secure communication.
+- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
+
+### Repudiation (R):
+- Key data Stores must attach to an audited event ledger or logging neighbor.
+- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
+
+### Information Disclosure (I):
+- Direct Gateway-to-Store flows bypassing stages.
+- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
+
+### Elevation of Privilege (E):
+- Administrative/privileged blocks must require verification.
+- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect administrative or privileged nodes to verification modules.
+
+### Denial of Service (DoS):
+- High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
+- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      const p = navigator.clipboard.writeText(md)
+      if (p && typeof p.catch === "function") {
+        p.catch((e) => console.error("Clipboard copy failed:", e))
+      }
+    }
+
+    const dataStr = "data:text/markdown;charset=utf-8," + encodeURIComponent(md)
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    const sanitizedName = systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    downloadAnchor.setAttribute("download", `architecture-audit-${sanitizedName}-${Date.now()}.md`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
+
   const getBottleneckNode = useCallback((path: string[]) => {
     let minCap = Infinity
     let minNode = ""
@@ -2616,6 +2705,17 @@ function MetricsTab({
             </span>
           </div>
         </div>
+        <button
+          type="button"
+          data-testid="export-markdown-report-btn"
+          onClick={handleExportMarkdownReport}
+          className="mt-1.5 w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600/15 hover:bg-indigo-600/35 border border-indigo-500/25 hover:border-indigo-500/50 rounded-lg text-[11px] font-semibold text-indigo-300 font-sans tracking-wide transition-all active:scale-[0.98] cursor-pointer"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export Markdown Report
+        </button>
       </div>
 
       {/* System Metadata Card */}
