@@ -1591,6 +1591,23 @@ function MetricsTab({
   const [customPresetName, setCustomPresetName] = useState("")
 
   const [comparedPathIndices, setComparedPathIndices] = useState<number[]>([])
+  const [simulationHistory, setSimulationHistory] = useState<any[]>([])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("simulation_history")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          if (Array.isArray(parsed)) {
+            setSimulationHistory(parsed)
+          }
+        } catch (e) {
+          console.error("Failed to parse simulation history from localStorage", e)
+        }
+      }
+    }
+  }, [])
 
   useEffect(() => {
     setComparedPathIndices([])
@@ -2152,6 +2169,97 @@ function MetricsTab({
       successRate: finalSuccessRate
     }
   }, [componentsById, diagnosticsByComponent])
+
+  useEffect(() => {
+    if (simulationState === "completed") {
+      const path = simPathRef.current
+      if (path && path.length > 0) {
+        const pathMetrics = computePathMetrics(path)
+        const totalPackets = simPacketCount
+        const finalSuccess = simSuccessfulRef.current
+        const pathStr = path.join(" ➔ ")
+        const newRun = {
+          id: `sim-run-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          timestamp: new Date().toLocaleString(),
+          path: pathStr,
+          packetCount: totalPackets,
+          successful: finalSuccess,
+          dropped: totalPackets - finalSuccess,
+          lossRatio: simLossRatio,
+          latency: pathMetrics.cumulativeLatency,
+          bottleneck: pathMetrics.bottleneckCapacity
+        }
+        
+        setSimulationHistory(prev => {
+          const duplicate = prev.some(r => r.path === pathStr && r.packetCount === totalPackets && r.lossRatio === simLossRatio && (Date.now() - new Date(r.timestamp).getTime()) < 1000)
+          if (duplicate) return prev
+          const next = [newRun, ...prev]
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("simulation_history", JSON.stringify(next))
+            } catch (e) {
+              console.error("Failed to save simulation history to localStorage", e)
+            }
+          }
+          return next
+        })
+      }
+    }
+  }, [simulationState, simPacketCount, simLossRatio, computePathMetrics])
+
+  const handleExportJSON = (run: any) => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(run, null, 2))
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    downloadAnchor.setAttribute("download", `simulation-run-${run.id}.json`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
+
+  const handleExportCSV = (run: any) => {
+    const headers = ["ID", "Timestamp", "Path", "Packets", "Successful", "Dropped", "Loss Ratio (%)", "Latency (ms)", "Bottleneck (req/s)"]
+    const row = [run.id, run.timestamp, run.path, run.packetCount, run.successful, run.dropped, run.lossRatio, run.latency, run.bottleneck]
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), row.join(",")].join("\n")
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", encodeURI(csvContent))
+    downloadAnchor.setAttribute("download", `simulation-run-${run.id}.csv`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
+
+  const handleExportAllJSON = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(simulationHistory, null, 2))
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    downloadAnchor.setAttribute("download", `simulation-history-${Date.now()}.json`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
+
+  const handleExportAllCSV = () => {
+    const headers = ["ID", "Timestamp", "Path", "Packets", "Successful", "Dropped", "Loss Ratio (%)", "Latency (ms)", "Bottleneck (req/s)"]
+    const rows = simulationHistory.map(run => [
+      run.id,
+      run.timestamp,
+      `"${run.path.replace(/"/g, '""')}"`,
+      run.packetCount,
+      run.successful,
+      run.dropped,
+      run.lossRatio,
+      run.latency,
+      run.bottleneck
+    ])
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n")
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", encodeURI(csvContent))
+    downloadAnchor.setAttribute("download", `simulation-history-${Date.now()}.csv`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
 
   const getBottleneckNode = useCallback((path: string[]) => {
     let minCap = Infinity
@@ -3338,6 +3446,106 @@ function MetricsTab({
                     </div>
                   )
                 })()}
+              </div>
+            </div>
+          )}
+
+          {/* Simulation History Section */}
+          {simulationHistory.length > 0 && (
+            <div
+              data-testid="simulation-history-panel"
+              className="mt-4 p-3 bg-zinc-900/50 border border-zinc-800/80 rounded-xl flex flex-col gap-2 text-[11px]"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2 mb-1">
+                <span className="font-bold text-zinc-300 flex items-center gap-1.5">
+                  ⏱️ Past Simulation Runs History ({simulationHistory.length})
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="export-all-json-btn"
+                    onClick={handleExportAllJSON}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-zinc-950 hover:bg-zinc-900 text-zinc-300 border border-zinc-800 transition-all cursor-pointer active:scale-95"
+                  >
+                    Export All JSON
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="export-all-csv-btn"
+                    onClick={handleExportAllCSV}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-zinc-950 hover:bg-zinc-900 text-zinc-300 border border-zinc-800 transition-all cursor-pointer active:scale-95"
+                  >
+                    Export All CSV
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="clear-history-btn"
+                    onClick={() => {
+                      setSimulationHistory([])
+                      if (typeof window !== "undefined") {
+                        try {
+                          localStorage.setItem("simulation_history", "[]")
+                        } catch (e) {
+                          console.error("Failed to clear simulation history in localStorage", e)
+                        }
+                      }
+                    }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-950 hover:bg-red-900 text-red-200 border border-red-900/40 transition-all cursor-pointer active:scale-95 ml-1"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-40 overflow-y-auto flex flex-col gap-1.5 pr-1">
+                {simulationHistory.map((run) => (
+                  <div
+                    key={run.id}
+                    data-testid={`sim-history-item-${run.id}`}
+                    className="p-2 rounded border border-zinc-800/60 bg-zinc-950/40 hover:bg-zinc-950/80 flex flex-col gap-1 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 text-[9px] font-mono">{run.timestamp}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          data-testid={`export-run-json-${run.id}`}
+                          onClick={() => handleExportJSON(run)}
+                          className="px-1 py-0.5 rounded text-[8px] font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-all cursor-pointer"
+                        >
+                          JSON
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`export-run-csv-${run.id}`}
+                          onClick={() => handleExportCSV(run)}
+                          className="px-1 py-0.5 rounded text-[8px] font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-all cursor-pointer"
+                        >
+                          CSV
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="font-medium text-zinc-300 truncate max-w-full" title={run.path}>
+                      {run.path}
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1 text-[10px] text-zinc-400 font-mono mt-0.5">
+                      <div>
+                        Packets: <span className="text-zinc-300 font-bold">{run.packetCount}</span>
+                      </div>
+                      <div>
+                        Success: <span className="text-emerald-400 font-bold">{run.successful} ({Math.round((run.successful / run.packetCount) * 100)}%)</span>
+                      </div>
+                      <div>
+                        Latency: <span className="text-zinc-300">{run.latency}ms</span>
+                      </div>
+                      <div>
+                        B-neck: <span className="text-zinc-300">{run.bottleneck} r/s</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
