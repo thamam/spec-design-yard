@@ -50,7 +50,10 @@ describe('STRIDE Secret Leakage Linter Rule & Quick Fix', () => {
               token: 'TBD',
               session_secret: 'placeholder',
               db_pass: '',
-              owner: 'security-team'
+              owner: 'security-team',
+              api_key_enabled: true,
+              api_key_config: { env: 'API_KEY' },
+              passwd_list: [1, 2, 3]
             }
           }
         ]

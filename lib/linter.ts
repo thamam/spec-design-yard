@@ -1,4 +1,6 @@
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
+const SENSITIVE_METADATA_REGEX = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
+const SECRET_PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\]|none|disabled|null|false)$/i
 
 export interface Diagnostic {
   severity: "error" | "warning" | "info"
@@ -1159,18 +1161,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 7. Information Disclosure: Hardcoded Secret/Token Leakage Check in Component Metadata
       if (comp.metadata && typeof comp.metadata === "object" && !Array.isArray(comp.metadata)) {
-        const sensitiveRegex = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
-        const placeholderRegex = /^(todo|tbd|placeholder|\[add description\]|\[add owner\]|none|disabled|null|false)$/i
-        
         Object.keys(comp.metadata).forEach((k) => {
-          if (sensitiveRegex.test(k)) {
+          if (SENSITIVE_METADATA_REGEX.test(k)) {
             const val = comp.metadata[k]
-            if (val !== undefined && val !== null) {
+            if (val !== undefined && val !== null && typeof val !== "boolean" && typeof val !== "object") {
               const valStr = String(val).trim()
               if (
                 valStr !== "" &&
                 !valStr.startsWith("${") &&
-                !placeholderRegex.test(valStr)
+                !SECRET_PLACEHOLDER_REGEX.test(valStr)
               ) {
                 diagnostics.push({
                   severity: "warning",
