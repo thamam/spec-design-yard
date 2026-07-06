@@ -1580,6 +1580,8 @@ function MetricsTab({
   const [severityFilter, setSeverityFilter] = useState("all")
 
   const [simulationState, setSimulationState] = useState<"idle" | "running" | "completed">("idle")
+  const [simSpeed, setSimSpeed] = useState<"0.5x" | "1x" | "2x" | "5x" | "paused">("1x")
+  const [simulationLogs, setSimulationLogs] = useState<string[]>([])
   const [simulatedPackets, setSimulatedPackets] = useState<number>(0)
   const [simulatedSuccessful, setSimulatedSuccessful] = useState<number>(0)
   const [simulatingPathIndex, setSimulatingPathIndex] = useState<number | null>(null)
@@ -1647,6 +1649,8 @@ function MetricsTab({
     setSimulatingPathIndex(null)
     setSimulatedPackets(0)
     setSimulatedSuccessful(0)
+    setSimSpeed("1x")
+    setSimulationLogs([])
     if (simulationIntervalRef.current) {
       clearInterval(simulationIntervalRef.current)
       simulationIntervalRef.current = null
@@ -2203,29 +2207,37 @@ function MetricsTab({
     return { node: maxNode, latency: maxLat }
   }, [componentsById])
 
-  const handleStartSimulation = (path: string[], pathIdx: number) => {
-    if (simulationState === "running") return
+  const simPacketsRef = useRef(0)
+  const simSuccessfulRef = useRef(0)
+  const simPathRef = useRef<string[]>([])
+  const simPathIdxRef = useRef<number | null>(null)
 
+  const startIntervalAtSpeed = (speed: "0.5x" | "1x" | "2x" | "5x") => {
     if (simulationIntervalRef.current) {
       clearInterval(simulationIntervalRef.current)
     }
 
-    setSimulationState("running")
-    setSimulatingPathIndex(pathIdx)
-    setSimulatedPackets(0)
-    setSimulatedSuccessful(0)
-
+    const path = simPathRef.current
     const pathMetrics = computePathMetrics(path)
     const successProb = pathMetrics.successRate
 
-    let packets = 0
-    let successful = 0
     const totalPackets = simPacketCount
-    const stepSize = Math.max(1, Math.round(totalPackets / 10))
+    const baseStepSize = Math.max(1, Math.round(totalPackets / 10))
+    const stepSize = speed === "2x" ? baseStepSize * 2 : speed === "5x" ? baseStepSize * 5 : baseStepSize
     const finalSuccessProb = successProb * (1 - simLossRatio / 100)
 
+    const intervalTime = speed === "0.5x" ? 100 : 50
+
     simulationIntervalRef.current = setInterval(() => {
-      let nextPackets = packets + stepSize
+      let currentPackets = simPacketsRef.current
+      let currentSuccessful = simSuccessfulRef.current
+
+      let nextPackets = currentPackets + stepSize
+      const added = nextPackets >= totalPackets ? (totalPackets - currentPackets) : stepSize
+      const batchSuccess = Math.round(added * finalSuccessProb)
+      const finalSuccess = currentSuccessful + batchSuccess
+      const finalDropped = totalPackets - finalSuccess
+
       if (nextPackets >= totalPackets) {
         nextPackets = totalPackets
         if (simulationIntervalRef.current) {
@@ -2233,16 +2245,128 @@ function MetricsTab({
           simulationIntervalRef.current = null
         }
         setSimulationState("completed")
+        
+        const endNode = path[path.length - 1] || "end"
+        setSimulationLogs(prev => [
+          ...prev,
+          `✅ [Complete] All ${totalPackets} packets processed. Reached final store/sink [${endNode}] successfully.`,
+          `📊 [Report] Transmitted: ${totalPackets}, Success: ${finalSuccess}, Dropped/Lost: ${finalDropped}`
+        ])
+      } else {
+        const currentPct = Math.round((currentPackets / totalPackets) * 100)
+        const nextPct = Math.round((nextPackets / totalPackets) * 100)
+        
+        if (currentPct < 30 && nextPct >= 30) {
+          const midNode = path[Math.floor(path.length / 2)] || "intermediate"
+          setSimulationLogs(prev => [
+            ...prev,
+            `📦 [30%] Routing packets through [${midNode}] (latency accumulated so far: ${Math.round(pathMetrics.cumulativeLatency * 0.3)} ms)...`
+          ])
+        } else if (currentPct < 60 && nextPct >= 60) {
+          const lastNode = path[path.length - 2] || path[0]
+          setSimulationLogs(prev => [
+            ...prev,
+            `⚡ [60%] Flow passing successfully through [${lastNode}]...`
+          ])
+        }
       }
-      
-      const added = nextPackets - packets
-      const batchSuccess = Math.round(added * finalSuccessProb)
-      successful += batchSuccess
-      packets = nextPackets
 
-      setSimulatedSuccessful(successful)
-      setSimulatedPackets(packets)
-    }, 50)
+      simSuccessfulRef.current = finalSuccess
+      simPacketsRef.current = nextPackets
+
+      setSimulatedSuccessful(finalSuccess)
+      setSimulatedPackets(nextPackets)
+    }, intervalTime)
+  }
+
+  const handleStartSimulation = (path: string[], pathIdx: number) => {
+    if (simulationState === "running") return
+
+    simPacketsRef.current = 0
+    simSuccessfulRef.current = 0
+    simPathRef.current = path
+    simPathIdxRef.current = pathIdx
+
+    setSimulationState("running")
+    setSimulatingPathIndex(pathIdx)
+    setSimulatedPackets(0)
+    setSimulatedSuccessful(0)
+    setSimSpeed("1x")
+
+    const startNode = path[0] || "start"
+    const endNode = path[path.length - 1] || "end"
+    setSimulationLogs([
+      `🚀 [Start] Initiating flow tracing from start node [${startNode}] to final destination [${endNode}] with ${simPacketCount} packets.`,
+      `⚙️ [Config] Preset: ${derivedPreset}, Simulated packet loss: ${simLossRatio} percent`
+    ])
+
+    startIntervalAtSpeed("1x")
+  }
+
+  const handleChangeSpeed = (newSpeed: "0.5x" | "1x" | "2x" | "5x" | "paused") => {
+    if (simulationState !== "running") return
+    
+    setSimSpeed(newSpeed)
+
+    if (newSpeed === "paused") {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current)
+        simulationIntervalRef.current = null
+      }
+      setSimulationLogs(prev => [
+        ...prev,
+        `⏸️ [Pause] Simulation paused at ${simPacketsRef.current}/${simPacketCount} packets.`
+      ])
+    } else {
+      setSimulationLogs(prev => [
+        ...prev,
+        `▶️ [Speed] Set speed to ${newSpeed}. Resuming simulation tick...`
+      ])
+      startIntervalAtSpeed(newSpeed)
+    }
+  }
+
+  const handleSingleStep = () => {
+    if (simulationState !== "running" || simSpeed !== "paused") return
+
+    const path = simPathRef.current
+    const pathMetrics = computePathMetrics(path)
+    const successProb = pathMetrics.successRate
+
+    const totalPackets = simPacketCount
+    const stepSize = Math.max(1, Math.round(totalPackets / 10))
+    const finalSuccessProb = successProb * (1 - simLossRatio / 100)
+
+    let currentPackets = simPacketsRef.current
+    let nextPackets = currentPackets + stepSize
+    const added = nextPackets >= totalPackets ? (totalPackets - currentPackets) : stepSize
+    const batchSuccess = Math.round(added * finalSuccessProb)
+    const finalSuccess = simSuccessfulRef.current + batchSuccess
+    const finalDropped = totalPackets - finalSuccess
+
+    if (nextPackets >= totalPackets) {
+      nextPackets = totalPackets
+      setSimulationState("completed")
+      
+      const endNode = path[path.length - 1] || "end"
+      setSimulationLogs(prev => [
+        ...prev,
+        `🦶 [Step] Stepped to ${nextPackets}/${totalPackets} packets.`,
+        `✅ [Complete] All ${totalPackets} packets processed. Reached final store/sink [${endNode}] successfully.`,
+        `📊 [Report] Transmitted: ${totalPackets}, Success: ${finalSuccess}, Dropped/Lost: ${finalDropped}`
+      ])
+    } else {
+      setSimulationLogs(prev => [
+        ...prev,
+        `🦶 [Step] Stepped to ${nextPackets}/${totalPackets} packets.`
+      ])
+    }
+
+    simSuccessfulRef.current = finalSuccess
+    simPacketsRef.current = nextPackets
+
+    setSimulatedSuccessful(finalSuccess)
+    setSimulatedPackets(nextPackets)
   }
 
   // Pre-computed O(1) type and label lookup maps for the path tracer to avoid nested linear scans on renders
@@ -2961,6 +3085,61 @@ function MetricsTab({
                                 <span>Packets Transmitted: {simulatedPackets} / {simPacketCount}</span>
                                 <span>Simulated Success Rate: <span className="text-zinc-300 font-bold">{simulatedPackets > 0 ? Math.round((simulatedSuccessful / simulatedPackets) * 100) : 0}%</span></span>
                               </div>
+
+                              {/* Simulation Speed and Playback Controls */}
+                              {simulationState === "running" && (
+                                <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-900/40 pt-2 text-[10px]">
+                                  <div className="flex justify-between items-center text-zinc-400">
+                                    <span>Playback Control:</span>
+                                    <div className="flex items-center gap-1 font-sans">
+                                      {(["0.5x", "1x", "2x", "5x"] as const).map((speed) => (
+                                        <button
+                                          key={speed}
+                                          type="button"
+                                          data-testid={`sim-speed-btn-${speed}`}
+                                          onClick={() => handleChangeSpeed(speed)}
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${simSpeed === speed ? "bg-indigo-600 border-indigo-500 text-white font-bold" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}
+                                        >
+                                          {speed}
+                                        </button>
+                                      ))}
+                                      <button
+                                        type="button"
+                                        data-testid="sim-speed-btn-paused"
+                                        onClick={() => handleChangeSpeed(simSpeed === "paused" ? "1x" : "paused")}
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${simSpeed === "paused" ? "bg-amber-600 border-amber-500 text-white font-bold" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}
+                                      >
+                                        {simSpeed === "paused" ? "▶️ Resume" : "⏸️ Pause"}
+                                      </button>
+                                      {simSpeed === "paused" && (
+                                        <button
+                                          type="button"
+                                          data-testid="sim-speed-btn-step"
+                                          onClick={handleSingleStep}
+                                          className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-900 border border-indigo-800 hover:bg-indigo-800 text-indigo-200 transition-all cursor-pointer active:scale-95"
+                                        >
+                                          🦶 Step
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Real-time Flow Simulation Log Console */}
+                              {simulationLogs.length > 0 && (
+                                <div className="mt-2 flex flex-col gap-1">
+                                  <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-semibold">Tracing Logs Terminal:</span>
+                                  <div
+                                    data-testid="simulation-logs-console"
+                                    className="max-h-24 overflow-y-auto bg-zinc-950 p-2 rounded text-[9px] border border-zinc-900 leading-normal text-emerald-400 font-mono flex flex-col-reverse gap-0.5"
+                                  >
+                                    {[...simulationLogs].reverse().map((log, lIdx) => (
+                                      <div key={`log-${lIdx}`} className="break-all whitespace-pre-wrap">{log}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
 
                               {simulationState === "completed" && (
                                 <div
