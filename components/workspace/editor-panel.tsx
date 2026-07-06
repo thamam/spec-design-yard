@@ -13,6 +13,7 @@ import {
   FileJsonIcon,
   FolderIcon,
   BarChart2Icon,
+  SparklesIcon,
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
@@ -1580,6 +1581,12 @@ function MetricsTab({
   const [customPresets, setCustomPresets] = useState<{ name: string; packets: number; loss: number }[]>([])
   const [customPresetName, setCustomPresetName] = useState("")
 
+  const [comparedPathIndices, setComparedPathIndices] = useState<number[]>([])
+
+  useEffect(() => {
+    setComparedPathIndices([])
+  }, [propPathSource, propPathTarget])
+
   const derivedPreset = useMemo(() => {
     const matchingCustom = customPresets.find(p => p.packets === simPacketCount && p.loss === simLossRatio)
     if (matchingCustom) return matchingCustom.name
@@ -2857,7 +2864,29 @@ function MetricsTab({
                   {tracedPathsWithMetrics.map(({ path, metrics: pathMetrics }, pIdx) => {
                     return (
                       <div key={`path-${pIdx}`} className="p-2 rounded bg-zinc-950/30 border border-zinc-900 flex flex-col gap-1.5">
-                        <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-zinc-500 font-sans font-bold">Path {pIdx + 1} ({path.length - 1} hop{path.length > 2 ? "s" : ""})</span>
+                          <label className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-sans cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              data-testid={`compare-path-checkbox-${pIdx}`}
+                              checked={comparedPathIndices.includes(pIdx)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (comparedPathIndices.length < 2) {
+                                    setComparedPathIndices(prev => [...prev, pIdx])
+                                  } else {
+                                    setComparedPathIndices(prev => [prev[0], pIdx])
+                                  }
+                                } else {
+                                  setComparedPathIndices(prev => prev.filter(idx => idx !== pIdx))
+                                }
+                              }}
+                              className="rounded border-zinc-800 bg-zinc-950 text-indigo-600 focus:ring-indigo-500 h-3 w-3 cursor-pointer"
+                            />
+                            <span>Compare</span>
+                          </label>
+                        </div>
                         <div className="flex flex-wrap items-center gap-1 leading-relaxed">
                           {path.map((node, nIdx) => {
                             const isLast = nIdx === path.length - 1;
@@ -3013,6 +3042,123 @@ function MetricsTab({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Comparison Panel */}
+          {pathSource && pathTarget && comparedPathIndices.length === 2 && (
+            <div
+              data-testid="path-comparison-panel"
+              className="border border-indigo-900/50 bg-indigo-950/15 p-4 rounded-xl flex flex-col gap-3 font-sans mt-3 shrink-0"
+            >
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 uppercase tracking-wide border-b border-indigo-950/40 pb-2 mb-1">
+                <SparklesIcon size={12} className="text-indigo-400" />
+                <span>Path Comparison: Path {comparedPathIndices[0] + 1} vs Path {comparedPathIndices[1] + 1}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {(() => {
+                  const idxA = comparedPathIndices[0]
+                  const idxB = comparedPathIndices[1]
+                  const pathA = tracedPathsWithMetrics[idxA]?.path
+                  const pathB = tracedPathsWithMetrics[idxB]?.path
+                  const metricsA = tracedPathsWithMetrics[idxA]?.metrics
+                  const metricsB = tracedPathsWithMetrics[idxB]?.metrics
+
+                  if (!pathA || !pathB || !metricsA || !metricsB) return null
+
+                  // Latency Winner
+                  const latDiff = Math.abs(metricsA.cumulativeLatency - metricsB.cumulativeLatency)
+                  const latWinner = metricsA.cumulativeLatency < metricsB.cumulativeLatency ? "A" : metricsA.cumulativeLatency > metricsB.cumulativeLatency ? "B" : "Tie"
+                  const fasterPercent = latWinner !== "Tie"
+                    ? Math.round((latDiff / Math.max(metricsA.cumulativeLatency, metricsB.cumulativeLatency)) * 100)
+                    : 0
+
+                  // Throughput Winner
+                  const capDiff = Math.abs(metricsA.bottleneckCapacity - metricsB.bottleneckCapacity)
+                  const capWinner = metricsA.bottleneckCapacity > metricsB.bottleneckCapacity ? "A" : metricsA.bottleneckCapacity < metricsB.bottleneckCapacity ? "B" : "Tie"
+                  const capacityPercent = capWinner !== "Tie"
+                    ? Math.round((capDiff / Math.min(metricsA.bottleneckCapacity, metricsB.bottleneckCapacity)) * 100)
+                    : 0
+
+                  // Success Winner
+                  const successWinner = metricsA.successRate > metricsB.successRate ? "A" : metricsA.successRate < metricsB.successRate ? "B" : "Tie"
+
+                  return (
+                    <div className="col-span-2 flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        {/* Path A Column */}
+                        <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-zinc-900 bg-zinc-950/40">
+                          <span className="font-bold text-indigo-400">Path {idxA + 1}</span>
+                          <div className="flex flex-col gap-1 text-[11px] text-zinc-400 font-mono">
+                            <div>Latency: <span className="text-zinc-200 font-bold">{metricsA.cumulativeLatency} ms</span></div>
+                            <div>Bottleneck: <span className="text-zinc-200 font-bold">{metricsA.bottleneckCapacity} req/s</span></div>
+                            <div>Reliability: <span className={`${metricsA.successRate === 1 ? "text-emerald-400" : "text-amber-400"} font-bold`}>{Math.round(metricsA.successRate * 100)}%</span></div>
+                          </div>
+                        </div>
+
+                        {/* Path B Column */}
+                        <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-zinc-900 bg-zinc-950/40">
+                          <span className="font-bold text-purple-400">Path {idxB + 1}</span>
+                          <div className="flex flex-col gap-1 text-[11px] text-zinc-400 font-mono">
+                            <div>Latency: <span className="text-zinc-200 font-bold">{metricsB.cumulativeLatency} ms</span></div>
+                            <div>Bottleneck: <span className="text-zinc-200 font-bold">{metricsB.bottleneckCapacity} req/s</span></div>
+                            <div>Reliability: <span className={`${metricsB.successRate === 1 ? "text-emerald-400" : "text-amber-400"} font-bold`}>{Math.round(metricsB.successRate * 100)}%</span></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Routing Recommendation */}
+                      <div className="p-3 bg-zinc-950/60 border border-zinc-900 rounded-lg flex flex-col gap-2 text-[11px] font-sans">
+                        <div className="font-semibold text-zinc-400 uppercase tracking-wider text-[9px]">
+                          ⚡ Smart Routing Analysis
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 leading-relaxed text-zinc-300">
+                          {/* Latency routing option */}
+                          <div className="flex items-start gap-1.5">
+                            <span className="text-emerald-500 shrink-0">✔</span>
+                            <div>
+                              <span className="font-bold text-zinc-200">Low-Latency Option: Route via Path {latWinner === "B" ? idxB + 1 : idxA + 1}</span>
+                              <span className="text-zinc-400">
+                                {latWinner === "Tie" ? (
+                                  " — Both paths offer equal latency."
+                                ) : (
+                                  ` (saves ${latDiff} ms — ${fasterPercent}% faster latency response).`
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Throughput routing option */}
+                          <div className="flex items-start gap-1.5">
+                            <span className="text-sky-500 shrink-0">✔</span>
+                            <div>
+                              <span className="font-bold text-zinc-200">High-Throughput Option: Route via Path {capWinner === "B" ? idxB + 1 : idxA + 1}</span>
+                              <span className="text-zinc-400">
+                                {capWinner === "Tie" ? (
+                                  " — Both paths share the same bottleneck capacity."
+                                ) : (
+                                  ` (handles ${capDiff} req/s more — ${capacityPercent}% higher throughput capacity).`
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Reliability routing option */}
+                          {successWinner !== "Tie" && (
+                            <div className="flex items-start gap-1.5 border-t border-zinc-900/60 pt-1.5 mt-0.5">
+                              <span className="text-amber-500 shrink-0">⚠</span>
+                              <div className="text-zinc-400">
+                                <span className="font-bold text-zinc-200">Reliability Warning:</span> Path {successWinner === "A" ? idxB + 1 : idxA + 1} has a higher risk of packet drops due to unresolved architectural lint warnings.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
             </div>
           )}
         </div>
