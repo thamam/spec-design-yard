@@ -344,6 +344,7 @@ export function WorkspaceLayout() {
             pathTarget={pathTarget}
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
+            activeTab={activeTab}
           />
         </div>
       </div>

@@ -12,8 +12,9 @@ import {
   SparklesIcon,
   Copy,
   Trash2,
+  ShieldAlert,
 } from "lucide-react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
 import { Diagnostic } from "../../lib/linter"
 
@@ -123,6 +124,7 @@ export function CanvasPanel({
   pathTarget,
   setActiveTab,
   diagnostics = [],
+  activeTab,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -132,10 +134,19 @@ export function CanvasPanel({
   pathTarget?: string
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
   diagnostics?: Diagnostic[]
+  activeTab?: string
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
   const [hiddenTypes, setHiddenTypes] = useState<string[]>([])
+  const [showSecurityOverlay, setShowSecurityOverlay] = useState(false)
+
+  // Auto-enable security overlay when on Security Tab
+  useEffect(() => {
+    if (activeTab === "security") {
+      setShowSecurityOverlay(true)
+    }
+  }, [activeTab])
 
   const handleAutoLayout = () => {
     if (!onCanvasChange || !parsedSpec) return
@@ -222,6 +233,12 @@ export function CanvasPanel({
             onClick={handleAutoLayout}
           />
           <CanvasToolButton
+            icon={<ShieldAlert size={12} />}
+            label="Security Threats Overlay"
+            onClick={() => setShowSecurityOverlay(!showSecurityOverlay)}
+            active={showSecurityOverlay}
+          />
+          <CanvasToolButton
             icon={fullscreen ? <MinimizeIcon size={12} /> : <MaximizeIcon size={12} />}
             label={fullscreen ? "Minimize" : "Fullscreen"}
             onClick={() => setFullscreen((f) => !f)}
@@ -266,6 +283,7 @@ export function CanvasPanel({
             pathSource={pathSource}
             pathTarget={pathTarget}
             hiddenTypes={hiddenTypes}
+            showSecurityOverlay={showSecurityOverlay}
           />
         )}
         {view === "grid" && (

@@ -50,7 +50,7 @@ function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { sour
   return { source: "", target: "" }
 }
 
-export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string, hiddenTypes?: string[]): any[] {
+export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string, hiddenTypes?: string[], showSecurityOverlay?: boolean): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
   const elements: any[] = []
   const hiddenTypesSet = new Set((hiddenTypes || []).map(t => String(t).toLowerCase()))
@@ -310,6 +310,82 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       link: null,
       locked: false,
     })
+
+    const strideDiags = diagnosticsForComp.filter((d) => d.code && String(d.code).startsWith("stride-"))
+    if (showSecurityOverlay && strideDiags.length > 0) {
+      const activeThreats = Array.from(new Set(strideDiags.map(d => {
+        const code = String(d.code || "")
+        if (code === "stride-spoofing") return "Spoofing"
+        if (code === "stride-tampering") return "Tampering"
+        if (code === "stride-repudiation") return "Repudiation"
+        if (code === "stride-information-disclosure") return "Disclosure"
+        if (code === "stride-elevation-of-privilege") return "Elevation"
+        if (code === "stride-denial-of-service") return "DoS"
+        if (code === "stride-secret-leak") return "Secret Leak"
+        return ""
+      }).filter(Boolean))).sort().join(", ")
+
+      if (activeThreats) {
+        const threatText = `⚠️ STRIDE: ${activeThreats}`
+        const threatTextId = `threat-text-${comp.id}-${idx}`
+        const threatTextVersion = getDeterministicSeed(`${threatTextId}-${threatText}-${Math.round(pos.x)}-${Math.round(pos.y)}`)
+
+        elements.push({
+          type: 'text',
+          id: threatTextId,
+          x: pos.x,
+          y: pos.y - 20,
+          width: 190,
+          height: 16,
+          text: threatText,
+          fontSize: 11,
+          fontFamily: 1, // Virgil
+          strokeColor: '#f43f5e',
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          originalText: threatText,
+          autoResize: true,
+          seed: getDeterministicSeed(threatTextId),
+          version: threatTextVersion,
+          versionNonce: threatTextVersion,
+          isDeleted: false,
+          groupIds: [],
+          frameId: null,
+          boundElements: [],
+          updated: threatTextVersion,
+          link: null,
+          locked: false,
+        })
+
+        const threatZoneId = `threat-zone-${comp.id}-${idx}`
+        const threatZoneVersion = getDeterministicSeed(`${threatZoneId}-${Math.round(pos.x)}-${Math.round(pos.y)}`)
+        elements.push({
+          type: 'rectangle',
+          id: threatZoneId,
+          x: pos.x - 8,
+          y: pos.y - 8,
+          width: 206,
+          height: 96,
+          strokeColor: '#f43f5e',
+          backgroundColor: 'rgba(244, 63, 94, 0.04)',
+          fillStyle: 'solid',
+          strokeWidth: 1.5,
+          strokeStyle: 'dashed',
+          roughness: 1.5,
+          roundness: { type: 3 },
+          seed: getDeterministicSeed(threatZoneId),
+          version: threatZoneVersion,
+          versionNonce: threatZoneVersion,
+          isDeleted: false,
+          groupIds: [],
+          frameId: null,
+          boundElements: [],
+          updated: threatZoneVersion,
+          link: null,
+          locked: false,
+        })
+      }
+    }
   })
 
   // 3. Generate Arrows for connections
@@ -494,6 +570,7 @@ export function ExcalidrawCanvas({
   pathSource,
   pathTarget,
   hiddenTypes = [],
+  showSecurityOverlay,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -502,6 +579,7 @@ export function ExcalidrawCanvas({
   pathSource?: string
   pathTarget?: string
   hiddenTypes?: string[]
+  showSecurityOverlay?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
@@ -527,7 +605,7 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes), [parsedSpec, pathSource, pathTarget, hiddenTypes])
+  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay), [parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay])
 
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
