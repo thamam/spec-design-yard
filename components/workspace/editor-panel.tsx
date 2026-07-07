@@ -4536,7 +4536,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         role="tabpanel"
         aria-labelledby="tab-code"
         hidden={activeTab !== "code"}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className={activeTab === "code" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
         <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} />
@@ -4547,7 +4547,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         role="tabpanel"
         aria-labelledby="tab-tree"
         hidden={activeTab !== "tree"}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className={activeTab === "tree" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
         <TreeTab parsedSpec={parsedSpec} selectedUnit={selectedUnit} setSelectedUnit={setSelectedUnit} />
@@ -4558,7 +4558,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         role="tabpanel"
         aria-labelledby="tab-focus"
         hidden={activeTab !== "focus"}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className={activeTab === "focus" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
         <FocusTab
@@ -4577,7 +4577,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         role="tabpanel"
         aria-labelledby="tab-metrics"
         hidden={activeTab !== "metrics"}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className={activeTab === "metrics" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
         <MetricsTab
