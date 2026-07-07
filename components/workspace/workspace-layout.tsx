@@ -137,7 +137,7 @@ export function WorkspaceLayout() {
 
   const [parsedSpec, setParsedSpec] = useState<any>(null)
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"code" | "tree" | "focus" | "metrics">("code")
+  const [activeTab, setActiveTab] = useState<"code" | "tree" | "focus" | "metrics" | "security">("code")
   const [pathSource, setPathSource] = useState<string>("")
   const [pathTarget, setPathTarget] = useState<string>("")
 

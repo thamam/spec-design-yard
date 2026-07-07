@@ -54,7 +54,7 @@ describe('System Architecture Visual Report Card / Blueprint Audit', () => {
 
     // 5. Assert anchor download link was created with proper filename and content
     expect(createElementSpy).toHaveBeenCalledWith('a')
-    const callIndex = createElementSpy.mock.calls.findIndex(args => args[0] === 'a')
+    const callIndex = createElementSpy.mock.calls.findIndex((args: any[]) => args[0] === 'a')
     expect(callIndex).toBeGreaterThanOrEqual(0)
     const createdLink = createElementSpy.mock.results[callIndex].value as HTMLAnchorElement
     expect(createdLink.href).toContain('data:text/markdown;charset=utf-8')

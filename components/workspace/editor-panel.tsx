@@ -14,6 +14,7 @@ import {
   FolderIcon,
   BarChart2Icon,
   SparklesIcon,
+  Shield,
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
@@ -1543,6 +1544,231 @@ interface MetricsTabProps {
   setPathSource?: (val: string) => void
   pathTarget?: string
   setPathTarget?: (val: string) => void
+}
+
+interface SecurityTabProps {
+  parsedSpec?: any
+  diagnostics?: Diagnostic[]
+  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
+}
+
+function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix }: SecurityTabProps) {
+  const spoofingDiags = diagnostics.filter(d => d.code === "stride-spoofing")
+  const hasSpoofing = spoofingDiags.length > 0
+
+  const tamperingDiags = diagnostics.filter(d => d.code === "stride-tampering")
+  const hasTampering = tamperingDiags.length > 0
+
+  const repudiationDiags = diagnostics.filter(d => d.code === "stride-repudiation")
+  const hasRepudiation = repudiationDiags.length > 0
+
+  const infoDiags = diagnostics.filter(d => d.code === "stride-information-disclosure")
+  const hasInfo = infoDiags.length > 0
+
+  const elevationDiags = diagnostics.filter(d => d.code === "stride-elevation-of-privilege")
+  const hasElevation = elevationDiags.length > 0
+
+  const dosDiags = diagnostics.filter(d => d.code === "stride-denial-of-service")
+  const hasDos = dosDiags.length > 0
+
+  const secretDiags = diagnostics.filter(d => d.code === "stride-secret-leak")
+  const hasSecrets = secretDiags.length > 0
+
+  let score = 100
+  if (hasSpoofing) score -= 15
+  if (hasTampering) score -= 15
+  if (hasRepudiation) score -= 5
+  if (hasInfo) score -= 15
+  if (hasElevation) score -= 15
+  if (hasDos) score -= 15
+  if (hasSecrets) score -= 15
+  score = Math.max(0, score)
+
+  const threatCategories = [
+    {
+      id: "spoofing",
+      name: "Spoofing (S)",
+      desc: "Gateway elements must use security/auth labels to establish trusted identity.",
+      vulnerable: hasSpoofing,
+      diags: spoofingDiags,
+      recommendation: "Ensure all outgoing connections from Gateways have security/auth labels."
+    },
+    {
+      id: "tampering",
+      name: "Tampering (T)",
+      desc: "Connection channels must specify secure communication explicitly (e.g., TLS/gRPC/HTTPS).",
+      vulnerable: hasTampering,
+      diags: tamperingDiags,
+      recommendation: "Apply TLS, HTTPS, or gRPC communication labels explicitly to connections."
+    },
+    {
+      id: "repudiation",
+      name: "Repudiation (R)",
+      desc: "Key data Stores must attach to an audited event ledger or logging neighbor.",
+      vulnerable: hasRepudiation,
+      diags: repudiationDiags,
+      recommendation: "Connect store nodes to auditing log/ledger bricks (e.g., b2_ledger)."
+    },
+    {
+      id: "information-disclosure",
+      name: "Information Disclosure (I)",
+      desc: "Direct Gateway-to-Store flows bypassing validation checkpoints are prohibited.",
+      vulnerable: hasInfo,
+      diags: infoDiags,
+      recommendation: "Insert an Auth Verifier validation Stage component to protect raw data stores."
+    },
+    {
+      id: "elevation-of-privilege",
+      name: "Elevation of Privilege (E)",
+      desc: "Administrative or privileged nodes must require verification module connections.",
+      vulnerable: hasElevation,
+      diags: elevationDiags,
+      recommendation: "Connect administrative/privileged component nodes to verification modules."
+    },
+    {
+      id: "denial-of-service",
+      name: "Denial of Service (DoS)",
+      desc: "High fan-in bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.",
+      vulnerable: hasDos,
+      diags: dosDiags,
+      recommendation: "Add 'rate_limit: true' or 'throttled: true' under metadata configurations."
+    },
+    {
+      id: "secrets",
+      name: "Hardcoded Secrets Leakage",
+      desc: "Raw credentials, tokens, or private keys must not be stored in system metadata.",
+      vulnerable: hasSecrets,
+      diags: secretDiags,
+      recommendation: "Redact actual secrets with environment variable placeholders like '${API_KEY}'."
+    }
+  ]
+
+  const handleFixThreat = (categoryDiags: Diagnostic[]) => {
+    if (!onQuickFix || categoryDiags.length === 0) return
+    categoryDiags.forEach(d => {
+      if (d.path && d.code) {
+        onQuickFix(d.path, d.code)
+      }
+    })
+  }
+
+  const handleFixAllThreats = () => {
+    if (!onQuickFix) return
+    const allSecurityDiags = [
+      ...spoofingDiags,
+      ...tamperingDiags,
+      ...repudiationDiags,
+      ...infoDiags,
+      ...elevationDiags,
+      ...dosDiags,
+      ...secretDiags
+    ]
+    allSecurityDiags.forEach(d => {
+      if (d.path && d.code) {
+        onQuickFix(d.path, d.code)
+      }
+    })
+  }
+
+  const getScoreColor = (val: number) => {
+    if (val >= 90) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
+    if (val >= 70) return "text-amber-400 border-amber-500/30 bg-amber-500/5"
+    return "text-red-400 border-red-500/30 bg-red-500/5"
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4 font-sans select-none">
+      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-100">STRIDE Threat Modeling Dashboard</h2>
+          <p className="text-[10px] text-zinc-500 mt-0.5">Continuous automated security & vulnerability scanning</p>
+        </div>
+        <button
+          onClick={handleFixAllThreats}
+          disabled={score === 100}
+          className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
+            score === 100
+              ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+              : "bg-indigo-600 hover:bg-indigo-700 text-white shadow"
+          }`}
+        >
+          Fix All Gaps
+        </button>
+      </div>
+
+      <div className={`flex items-center gap-4 p-3 border rounded-lg ${getScoreColor(score)}`}>
+        <div className="text-2xl font-black font-mono tracking-tighter shrink-0">{score}%</div>
+        <div className="min-w-0">
+          <div className="text-xs font-bold">Security Compliance Score</div>
+          <p className="text-[10px] text-zinc-400 leading-normal mt-0.5">
+            {score === 100
+              ? "Excellent! Your system blueprint fully mitigates all analyzed STRIDE threat boundaries."
+              : `System has active security warnings. Compliance score dropped to ${score}%. Apply recommendations below to secure it.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {threatCategories.map(cat => (
+          <div
+            key={cat.id}
+            data-testid={`threat-category-${cat.id}`}
+            className="p-3 border border-zinc-800/80 bg-zinc-900/20 rounded-md space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    cat.vulnerable ? "bg-red-500 animate-pulse" : "bg-emerald-500"
+                  }`}
+                />
+                <span className="font-bold text-[11px] text-zinc-200">{cat.name}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  data-testid={`threat-status-${cat.id}`}
+                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wide ${
+                    cat.vulnerable
+                      ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                      : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  }`}
+                >
+                  {cat.vulnerable ? "Vulnerable" : "Secured"}
+                </span>
+                {cat.vulnerable && (
+                  <button
+                    data-testid={`fix-threat-btn-${cat.id}`}
+                    onClick={() => handleFixThreat(cat.diags)}
+                    className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold transition-all shadow-sm"
+                  >
+                    Auto-Fix
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-zinc-400 leading-relaxed">{cat.desc}</p>
+
+            {cat.vulnerable && (
+              <div className="mt-2 bg-red-950/20 border border-red-500/10 rounded p-2 text-[10px] space-y-1">
+                <div className="font-bold text-red-400 uppercase tracking-wide text-[9px]">Active Vulnerabilities:</div>
+                <ul className="list-disc pl-3.5 space-y-1 text-zinc-400 leading-normal">
+                  {cat.diags.map((d, i) => (
+                    <li key={i}>
+                      {d.message} <span className="font-mono text-zinc-600 text-[9px]">({d.path || "N/A"})</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-[10px] text-indigo-300 font-medium leading-relaxed mt-1">
+                  <span className="font-bold text-indigo-400">Recommendation:</span> {cat.recommendation}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
@@ -3798,13 +4024,14 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
   )
 }
 
-type TabId = "code" | "tree" | "focus" | "metrics"
+type TabId = "code" | "tree" | "focus" | "metrics" | "security"
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "code",  label: "Code",  icon: <CodeIcon size={12} /> },
   { id: "tree",  label: "Tree",  icon: <NetworkIcon size={12} /> },
   { id: "focus", label: "Focus", icon: <FocusIcon size={12} /> },
   { id: "metrics", label: "Metrics", icon: <BarChart2Icon size={12} /> },
+  { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
 const FIXABLE_DIAGNOSTIC_CODES = new Set([
@@ -4164,6 +4391,21 @@ export function EditorPanel({
           setPathSource={setPathSource}
           pathTarget={pathTarget}
           setPathTarget={setPathTarget}
+        />
+      </div>
+
+      <div
+        id="tabpanel-security"
+        role="tabpanel"
+        aria-labelledby="tab-security"
+        hidden={activeTab !== "security"}
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        style={{ background: "var(--background)" }}
+      >
+        <SecurityTab
+          parsedSpec={parsedSpec}
+          diagnostics={diagnostics}
+          onQuickFix={handleQuickFix}
         />
       </div>
 
