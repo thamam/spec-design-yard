@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
@@ -72,5 +72,36 @@ describe('STRIDE Security Dashboard Tab', () => {
     await waitFor(() => {
       expect(screen.getByTestId('threat-status-secrets')).toHaveTextContent(/MITIGATED|SECURE/i)
     })
+  })
+
+  test('renders the Export Security Report button in the Security Tab and triggers export on click', async () => {
+    const writeTextMock = vi.fn().mockImplementation(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      writable: true,
+      configurable: true
+    })
+    const canvasElement = document.createElement('canvas')
+    const drawMock = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      return {} as any
+    })
+
+    const createElementSpy = vi.spyOn(document, 'createElement')
+
+    render(<Workspace />)
+
+    const securityTabBtn = screen.getByRole('tab', { name: /Security/i })
+    fireEvent.click(securityTabBtn)
+
+    const exportBtn = screen.getByTestId('export-security-report-btn')
+    expect(exportBtn).toBeInTheDocument()
+
+    fireEvent.click(exportBtn)
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalled()
+      expect(createElementSpy).toHaveBeenCalledWith('a')
+    })
+    vi.restoreAllMocks()
   })
 })
