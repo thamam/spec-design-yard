@@ -1,0 +1,40 @@
+{
+  "change": "stride-security-tab",
+  "links": [
+    {
+      "requirement": "stride-security/tab-integration",
+      "design": "Decision 1: Centralized Linter Execution with Decoupled STRIDE Categorization",
+      "tasks": [
+        "Task 1: Tab Integration"
+      ]
+    },
+    {
+      "requirement": "stride-security/dashboard-ui",
+      "design": "Decision 2: Quantitative Scoring Model (Security Compliance Score)",
+      "tasks": [
+        "Task 2: Dashboard UI & STRIDE Categorization"
+      ]
+    },
+    {
+      "requirement": "stride-security/interactive-fixes",
+      "design": "Decision 4: Interactive Mitigation Hookups to the AST Reconciler",
+      "tasks": [
+        "Task 3: Interactive Quick-Fix Action Dispatch"
+      ]
+    },
+    {
+      "requirement": "stride-security/report-exporter",
+      "design": "Decision 3: Client-Side Blob-Based Markdown Audit Exporter",
+      "tasks": [
+        "Task 4: Markdown Audit Exporter"
+      ]
+    },
+    {
+      "requirement": "stride-security/automated-tests",
+      "design": "Technical Architecture Overview",
+      "tasks": [
+        "Task 5: Automated Testing and Quality Gate Verification"
+      ]
+    }
+  ]
+}
