@@ -294,7 +294,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       text: labelText,
       fontSize: 14,
       fontFamily: 1, // Virgil
-      strokeColor: '#f4f4f5', // High contrast white
+      strokeColor: '#1e1e1e', // Dark-theme inversion filter renders this near-white
       textAlign: 'center',
       verticalAlign: 'middle',
       originalText: labelText,
@@ -483,7 +483,19 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     })
   })
 
-  return elements
+  // Normalize: Excalidraw 0.18 computes element bounds via Math.cos(element.angle);
+  // a missing `angle` yields Math.cos(undefined) === NaN, which poisons getCommonBounds
+  // and makes scrollToContent/zoom-to-fit set scrollX/scrollY/zoom to NaN (blank canvas).
+  // Guarantee every element carries the baseline geometry/style fields Excalidraw expects.
+  return elements.map((el) => ({
+    angle: 0,
+    opacity: 100,
+    strokeStyle: 'solid',
+    // Text glyph layout multiplies fontSize by lineHeight; if it is missing the
+    // y-coordinates come out NaN and the label is silently never drawn.
+    ...(el.type === 'text' ? { lineHeight: 1.25 } : {}),
+    ...el,
+  }))
 }
 
 export function ExcalidrawCanvas({
@@ -534,6 +546,31 @@ export function ExcalidrawCanvas({
 
   const deletedIdsRef = useRef<Set<string>>(new Set())
   const addedIdsRef = useRef<Set<string>>(new Set())
+  // Every id the spec compiler has ever produced this session. While the user
+  // types, a stale rect from a transient parse (e.g. "- id: a") can linger in
+  // the scene after the compile set moved on; without this guard the add-sync
+  // below mistakes it for a user-drawn shape and writes a ghost component
+  // scaffold back into the YAML. User-drawn shapes get random Excalidraw ids,
+  // which never collide with compiled ids.
+  const compiledIdsRef = useRef<Set<string>>(new Set())
+  // Same idea for label texts: every text the compiler has ever emitted per
+  // element id. A scene text that matches one of these is a stale echo of an
+  // earlier compile (e.g. a ⚠️ marker or [type] tag that changed while the
+  // user was typing in the editor), not a rename made on the canvas.
+  const compiledTextsRef = useRef<Map<string, Set<string>>>(new Map())
+  useEffect(() => {
+    elements.forEach((el: any) => {
+      compiledIdsRef.current.add(el.id)
+      if (el.type === "text" && typeof el.text === "string") {
+        let texts = compiledTextsRef.current.get(el.id)
+        if (!texts) {
+          texts = new Set()
+          compiledTextsRef.current.set(el.id, texts)
+        }
+        texts.add(el.text)
+      }
+    })
+  }, [elements])
   const connectedArrowsRef = useRef<Set<string>>(new Set())
   const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
   const lastSelectedUnitRef = useRef<string | null>(null)
@@ -650,7 +687,7 @@ export function ExcalidrawCanvas({
   return (
     <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
       <ExcalidrawComponent
-        excalidrawRef={handleExcalidrawRef}
+        excalidrawAPI={handleExcalidrawRef}
         theme="dark"
         UIOptions={{
           canvasActions: {
@@ -660,7 +697,8 @@ export function ExcalidrawCanvas({
         initialData={{
           elements,
           appState: {
-            viewBackgroundColor: "#0a0a0c",
+            // No explicit viewBackgroundColor: the dark theme's inversion filter
+            // would flip a dark value to light; the default resolves to dark.
             theme: "dark",
             currentItemStrokeColor: "#a855f7",
             currentItemFontFamily: 1, // Virgil
@@ -772,7 +810,8 @@ export function ExcalidrawCanvas({
                 el.type === "rectangle" &&
                 !el.isDeleted &&
                 !addedIdsRef.current.has(el.id) &&
-                !currentElementIds.has(el.id)
+                !currentElementIds.has(el.id) &&
+                !compiledIdsRef.current.has(el.id)
             )
             if (newlyCreatedRects.length > 0) {
               const rect = newlyCreatedRects[0] // process one at a time for stability
@@ -800,7 +839,8 @@ export function ExcalidrawCanvas({
                 el.startBinding?.elementId &&
                 el.endBinding?.elementId &&
                 !connectedArrowsRef.current.has(el.id) &&
-                !currentElementIds.has(el.id)
+                !currentElementIds.has(el.id) &&
+                !compiledIdsRef.current.has(el.id)
             )
             if (newlyCreatedArrows.length > 0) {
               const arrow = newlyCreatedArrows[0]
@@ -825,7 +865,10 @@ export function ExcalidrawCanvas({
             const changedTextElement = updatedElements.find((el: any) => {
               if (el.type !== "text" || !el.containerId || el.isDeleted) return false
               const oldEl = elements.find((old: any) => old.id === el.id)
-              return oldEl && oldEl.text !== el.text
+              if (!oldEl || oldEl.text === el.text) return false
+              // Stale echo of an earlier compile, not a rename made on canvas
+              if (compiledTextsRef.current.get(el.id)?.has(el.text)) return false
+              return true
             })
             if (changedTextElement) {
               const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
