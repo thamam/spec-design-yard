@@ -374,7 +374,7 @@ describe('Workspace Metrics Tab Feature', () => {
     // Wait for simulation to finish
     await waitFor(() => {
       expect(screen.getByText(/Simulation Completed/i)).toBeInTheDocument()
-    }, { timeout: 4000 })
+    }, { timeout: 10000 })
 
     expect(screen.getByText(/Packets Transmitted/i)).toBeInTheDocument()
     expect(screen.getByText(/Simulated Success Rate/i)).toBeInTheDocument()

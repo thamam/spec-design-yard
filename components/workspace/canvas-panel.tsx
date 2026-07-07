@@ -110,7 +110,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "missing-system-metadata-owner",
   "unrecognized-system-metadata-key",
   "missing-connection-label",
-  "duplicate-connection-label"
+  "duplicate-connection-label",
+  "stride-secret-leak"
 ])
 
 export function CanvasPanel({

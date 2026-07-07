@@ -14,6 +14,7 @@ import {
   FolderIcon,
   BarChart2Icon,
   SparklesIcon,
+  Shield,
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
@@ -1545,6 +1546,242 @@ interface MetricsTabProps {
   setPathTarget?: (val: string) => void
 }
 
+interface SecurityTabProps {
+  parsedSpec?: any
+  diagnostics?: Diagnostic[]
+  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
+  onExportReport?: () => void
+}
+
+function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix, onExportReport }: SecurityTabProps) {
+  const spoofingDiags = diagnostics.filter(d => d.code === "stride-spoofing")
+  const hasSpoofing = spoofingDiags.length > 0
+
+  const tamperingDiags = diagnostics.filter(d => d.code === "stride-tampering")
+  const hasTampering = tamperingDiags.length > 0
+
+  const repudiationDiags = diagnostics.filter(d => d.code === "stride-repudiation")
+  const hasRepudiation = repudiationDiags.length > 0
+
+  const infoDiags = diagnostics.filter(d => d.code === "stride-information-disclosure")
+  const hasInfo = infoDiags.length > 0
+
+  const elevationDiags = diagnostics.filter(d => d.code === "stride-elevation-of-privilege")
+  const hasElevation = elevationDiags.length > 0
+
+  const dosDiags = diagnostics.filter(d => d.code === "stride-denial-of-service")
+  const hasDos = dosDiags.length > 0
+
+  const secretDiags = diagnostics.filter(d => d.code === "stride-secret-leak")
+  const hasSecrets = secretDiags.length > 0
+
+  let score = 100
+  if (hasSpoofing) score -= 15
+  if (hasTampering) score -= 15
+  if (hasRepudiation) score -= 5
+  if (hasInfo) score -= 15
+  if (hasElevation) score -= 15
+  if (hasDos) score -= 15
+  if (hasSecrets) score -= 15
+  score = Math.max(0, score)
+
+  const threatCategories = [
+    {
+      id: "spoofing",
+      name: "Spoofing (S)",
+      desc: "Gateway elements must use security/auth labels to establish trusted identity.",
+      vulnerable: hasSpoofing,
+      diags: spoofingDiags,
+      recommendation: "Ensure all outgoing connections from Gateways have security/auth labels."
+    },
+    {
+      id: "tampering",
+      name: "Tampering (T)",
+      desc: "Connection channels must specify secure communication explicitly (e.g., TLS/gRPC/HTTPS).",
+      vulnerable: hasTampering,
+      diags: tamperingDiags,
+      recommendation: "Apply TLS, HTTPS, or gRPC communication labels explicitly to connections."
+    },
+    {
+      id: "repudiation",
+      name: "Repudiation (R)",
+      desc: "Key data Stores must attach to an audited event ledger or logging neighbor.",
+      vulnerable: hasRepudiation,
+      diags: repudiationDiags,
+      recommendation: "Connect store nodes to auditing log/ledger bricks (e.g., b2_ledger)."
+    },
+    {
+      id: "information-disclosure",
+      name: "Information Disclosure (I)",
+      desc: "Direct Gateway-to-Store flows bypassing validation checkpoints are prohibited.",
+      vulnerable: hasInfo,
+      diags: infoDiags,
+      recommendation: "Insert an Auth Verifier validation Stage component to protect raw data stores."
+    },
+    {
+      id: "elevation-of-privilege",
+      name: "Elevation of Privilege (E)",
+      desc: "Administrative or privileged nodes must require verification module connections.",
+      vulnerable: hasElevation,
+      diags: elevationDiags,
+      recommendation: "Connect administrative/privileged component nodes to verification modules."
+    },
+    {
+      id: "denial-of-service",
+      name: "Denial of Service (DoS)",
+      desc: "High fan-in bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.",
+      vulnerable: hasDos,
+      diags: dosDiags,
+      recommendation: "Add 'rate_limit: true' or 'throttled: true' under metadata configurations."
+    },
+    {
+      id: "secrets",
+      name: "Hardcoded Secrets Leakage",
+      desc: "Raw credentials, tokens, or private keys must not be stored in system metadata.",
+      vulnerable: hasSecrets,
+      diags: secretDiags,
+      recommendation: "Redact actual secrets with environment variable placeholders like '${API_KEY}'."
+    }
+  ]
+
+  const handleFixThreat = (categoryDiags: Diagnostic[]) => {
+    if (!onQuickFix || categoryDiags.length === 0) return
+    categoryDiags.forEach(d => {
+      if (d.path && d.code) {
+        onQuickFix(d.path, d.code)
+      }
+    })
+  }
+
+  const handleFixAllThreats = () => {
+    if (!onQuickFix) return
+    const allSecurityDiags = [
+      ...spoofingDiags,
+      ...tamperingDiags,
+      ...repudiationDiags,
+      ...infoDiags,
+      ...elevationDiags,
+      ...dosDiags,
+      ...secretDiags
+    ]
+    allSecurityDiags.forEach(d => {
+      if (d.path && d.code) {
+        onQuickFix(d.path, d.code)
+      }
+    })
+  }
+
+  const getScoreColor = (val: number) => {
+    if (val >= 90) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
+    if (val >= 70) return "text-amber-400 border-amber-500/30 bg-amber-500/5"
+    return "text-red-400 border-red-500/30 bg-red-500/5"
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4 font-sans select-none">
+      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-100">STRIDE Threat Modeling Dashboard</h2>
+          <p className="text-[10px] text-zinc-500 mt-0.5">Continuous automated security & vulnerability scanning</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="export-security-report-btn"
+            onClick={onExportReport}
+            className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 rounded text-xs font-bold transition-all cursor-pointer"
+          >
+            Export Report
+          </button>
+          <button
+            onClick={handleFixAllThreats}
+            disabled={score === 100}
+            className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
+              score === 100
+                ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                : "bg-indigo-600 hover:bg-indigo-700 text-white shadow"
+            }`}
+          >
+            Fix All Gaps
+          </button>
+        </div>
+      </div>
+
+      <div className={`flex items-center gap-4 p-3 border rounded-lg ${getScoreColor(score)}`}>
+        <div className="text-2xl font-black font-mono tracking-tighter shrink-0">{score}%</div>
+        <div className="min-w-0">
+          <div className="text-xs font-bold">Security Compliance Score</div>
+          <p className="text-[10px] text-zinc-400 leading-normal mt-0.5">
+            {score === 100
+              ? "Excellent! Your system blueprint fully mitigates all analyzed STRIDE threat boundaries."
+              : `System has active security warnings. Compliance score dropped to ${score}%. Apply recommendations below to secure it.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {threatCategories.map(cat => (
+          <div
+            key={cat.id}
+            data-testid={`threat-category-${cat.id}`}
+            className="p-3 border border-zinc-800/80 bg-zinc-900/20 rounded-md space-y-2"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    cat.vulnerable ? "bg-red-500 animate-pulse" : "bg-emerald-500"
+                  }`}
+                />
+                <span className="font-bold text-[11px] text-zinc-200">{cat.name}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  data-testid={`threat-status-${cat.id}`}
+                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wide ${
+                    cat.vulnerable
+                      ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                      : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                  }`}
+                >
+                  {cat.vulnerable ? "Vulnerable" : "Secured"}
+                </span>
+                {cat.vulnerable && (
+                  <button
+                    data-testid={`fix-threat-btn-${cat.id}`}
+                    onClick={() => handleFixThreat(cat.diags)}
+                    className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold transition-all shadow-sm"
+                  >
+                    Auto-Fix
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-zinc-400 leading-relaxed">{cat.desc}</p>
+
+            {cat.vulnerable && (
+              <div className="mt-2 bg-red-950/20 border border-red-500/10 rounded p-2 text-[10px] space-y-1">
+                <div className="font-bold text-red-400 uppercase tracking-wide text-[9px]">Active Vulnerabilities:</div>
+                <ul className="list-disc pl-3.5 space-y-1 text-zinc-400 leading-normal">
+                  {cat.diags.map((d, i) => (
+                    <li key={i}>
+                      {d.message} <span className="font-mono text-zinc-600 text-[9px]">({d.path || "N/A"})</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-[10px] text-indigo-300 font-medium leading-relaxed mt-1">
+                  <span className="font-bold text-indigo-400">Recommendation:</span> {cat.recommendation}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
 
 interface ComponentWithIndex {
@@ -2261,6 +2498,95 @@ function MetricsTab({
     downloadAnchor.remove()
   }
 
+  const handleExportMarkdownReport = () => {
+    const hasSpoofingThreat = diagnostics.some(d => d.code === 'stride-spoofing')
+    const hasTamperingThreat = diagnostics.some(d => d.code === 'stride-tampering')
+    const hasRepudiationThreat = diagnostics.some(d => d.code === 'stride-repudiation')
+    const hasInfoDisclosureThreat = diagnostics.some(d => d.code === 'stride-information-disclosure')
+    const hasElevationThreat = diagnostics.some(d => d.code === 'stride-elevation-of-privilege')
+    const hasDoSThreat = diagnostics.some(d => d.code === 'stride-denial-of-service')
+
+    const dateStr = new Date().toLocaleString()
+
+    const md = `# System Architecture Audit & Blueprint Report
+
+Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
+
+## 1. System Overview
+- **System Name:** ${systemName}
+- **System Health:** ${healthPct}%
+- **Coupling Rating:** ${couplingRating}
+- **Connection Density:** ${connectionDensity}
+- **Subgraphs Count:** ${subgraphsCount}
+
+## 2. Component Inventory
+- **Gateways (Ingestion points):** ${gatewayCount}
+- **Stages (Processing units):** ${stageCount}
+- **Bricks (Auxiliary sidecars):** ${brickCount}
+- **Stores (Data persistence):** ${storeCount}
+- **Total Components:** ${totalComponents}
+- **Total Connections:** ${totalConnections}
+
+## 3. Real-Time Linting Diagnostics
+- **Errors Count:** ${errorsCount}
+- **Warnings Count:** ${warningsCount}
+- **Info Count:** ${infoCount}
+
+### Detailed Active Diagnostics:
+${diagnostics.length === 0 
+  ? "✅ No architectural violations or lint warnings detected! Perfect design standard." 
+  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\n")}
+
+## 4. STRIDE Threat Modeling & Recommendations
+The system analysis evaluates six STRIDE threat boundaries across the design blueprint:
+
+### Spoofing (S):
+- Gateway elements must carry validation/auth labels.
+- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
+
+### Tampering (T):
+- Connection channels must specify secure communication.
+- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
+
+### Repudiation (R):
+- Key data Stores must attach to an audited event ledger or logging neighbor.
+- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
+
+### Information Disclosure (I):
+- Direct Gateway-to-Store flows bypassing stages.
+- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
+
+### Elevation of Privilege (E):
+- Administrative/privileged blocks must require verification.
+- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect administrative or privileged nodes to verification modules.
+
+### Denial of Service (DoS):
+- High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
+- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      const p = navigator.clipboard.writeText(md)
+      if (p && typeof p.catch === "function") {
+        p.catch((e) => console.error("Clipboard copy failed:", e))
+      }
+    }
+
+    const dataStr = "data:text/markdown;charset=utf-8," + encodeURIComponent(md)
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    const sanitizedName = systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    downloadAnchor.setAttribute("download", `architecture-audit-${sanitizedName}-${Date.now()}.md`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+  }
+
   const getBottleneckNode = useCallback((path: string[]) => {
     let minCap = Infinity
     let minNode = ""
@@ -2616,6 +2942,17 @@ function MetricsTab({
             </span>
           </div>
         </div>
+        <button
+          type="button"
+          data-testid="export-markdown-report-btn"
+          onClick={handleExportMarkdownReport}
+          className="mt-1.5 w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600/15 hover:bg-indigo-600/35 border border-indigo-500/25 hover:border-indigo-500/50 rounded-lg text-[11px] font-semibold text-indigo-300 font-sans tracking-wide transition-all active:scale-[0.98] cursor-pointer"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export Markdown Report
+        </button>
       </div>
 
       {/* System Metadata Card */}
@@ -3698,13 +4035,14 @@ function MetricsTab({
   )
 }
 
-type TabId = "code" | "tree" | "focus" | "metrics"
+type TabId = "code" | "tree" | "focus" | "metrics" | "security"
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "code",  label: "Code",  icon: <CodeIcon size={12} /> },
   { id: "tree",  label: "Tree",  icon: <NetworkIcon size={12} /> },
   { id: "focus", label: "Focus", icon: <FocusIcon size={12} /> },
   { id: "metrics", label: "Metrics", icon: <BarChart2Icon size={12} /> },
+  { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
 const FIXABLE_DIAGNOSTIC_CODES = new Set([
@@ -3752,7 +4090,8 @@ const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "missing-system-metadata-owner",
   "unrecognized-system-metadata-key",
   "missing-connection-label",
-  "duplicate-connection-label"
+  "duplicate-connection-label",
+  "stride-secret-leak"
 ])
 
 export function EditorPanel({
@@ -3888,6 +4227,194 @@ export function EditorPanel({
         setSpecText(updated)
       }
     }
+  }
+
+  const handleExportMarkdownReport = () => {
+    const components = Array.isArray(parsedSpec?.system?.components) ? parsedSpec.system.components : []
+    const systemName = parsedSpec?.system?.name || "Unnamed System"
+
+    const totalComponents = components.length
+    let gatewayCount = 0
+    let stageCount = 0
+    let brickCount = 0
+    let storeCount = 0
+    let totalConnections = 0
+
+    components.forEach((c: any) => {
+      if (!c) return
+      const type = String(c.type || '').toLowerCase()
+      if (type === 'gateway') gatewayCount++
+      else if (type === 'stage') stageCount++
+      else if (type === 'brick') brickCount++
+      else if (type === 'store') storeCount++
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (target) {
+            totalConnections++
+          }
+        })
+      }
+    })
+
+    const errorsCount = diagnostics.filter(d => d.severity === "error").length
+    const warningsCount = diagnostics.filter(d => d.severity === "warning").length
+    const infoCount = diagnostics.filter(d => d.severity === "info").length
+
+    const healthPct = Math.max(0, 100 - (errorsCount * 15) - (warningsCount * 5))
+    const connectionDensity = totalComponents > 0 ? parseFloat((totalConnections / totalComponents).toFixed(2)) : 0
+
+    let couplingRating = "Empty"
+    if (connectionDensity > 0) {
+      if (connectionDensity < 1.0) couplingRating = "Loose"
+      else if (connectionDensity < 1.8) couplingRating = "Balanced"
+      else if (connectionDensity < 2.5) couplingRating = "Dense"
+      else couplingRating = "Spaghettified"
+    }
+
+    // subgraphsCount calculation
+    const ids = new Set<string>()
+    components.forEach((c: any) => {
+      if (c && typeof c.id === 'string' && c.id.trim() !== "") {
+        ids.add(c.id.trim())
+      }
+    })
+
+    const adjUndirected: Record<string, string[]> = Object.create(null)
+    ids.forEach(id => {
+      adjUndirected[id] = []
+    })
+
+    components.forEach((c: any) => {
+      if (!c || typeof c.id !== 'string') return
+      const u = c.id.trim()
+      if (!ids.has(u)) return
+
+      const conns = c.connections || []
+      if (Array.isArray(conns)) {
+        conns.forEach((conn: any) => {
+          const target = typeof conn === 'string' ? conn : conn?.target
+          if (typeof target === 'string') {
+            const v = target.trim()
+            if (ids.has(v) && v !== u) {
+              if (!adjUndirected[u].includes(v)) adjUndirected[u].push(v)
+              if (!adjUndirected[v].includes(u)) adjUndirected[v].push(u)
+            }
+          }
+        })
+      }
+    })
+
+    const visitedNodes = new Set<string>()
+    let subgraphsCount = 0
+
+    ids.forEach(startNode => {
+      if (!visitedNodes.has(startNode)) {
+        subgraphsCount++
+        const queue = [startNode]
+        visitedNodes.add(startNode)
+        let qIdx = 0
+        while (qIdx < queue.length) {
+          const node = queue[qIdx++]
+          const neighbors = adjUndirected[node] || []
+          for (const neighbor of neighbors) {
+            if (!visitedNodes.has(neighbor)) {
+              visitedNodes.add(neighbor)
+              queue.push(neighbor)
+            }
+          }
+        }
+      }
+    })
+
+    const hasSpoofingThreat = diagnostics.some(d => d.code === 'stride-spoofing')
+    const hasTamperingThreat = diagnostics.some(d => d.code === 'stride-tampering')
+    const hasRepudiationThreat = diagnostics.some(d => d.code === 'stride-repudiation')
+    const hasInfoDisclosureThreat = diagnostics.some(d => d.code === 'stride-information-disclosure')
+    const hasElevationThreat = diagnostics.some(d => d.code === 'stride-elevation-of-privilege')
+    const hasDoSThreat = diagnostics.some(d => d.code === 'stride-denial-of-service')
+
+    const dateStr = new Date().toLocaleString()
+
+    const md = `# System Architecture Audit & Blueprint Report
+
+Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
+
+## 1. System Overview
+- **System Name:** ${systemName}
+- **System Health:** ${healthPct}%
+- **Coupling Rating:** ${couplingRating}
+- **Connection Density:** ${connectionDensity}
+- **Subgraphs Count:** ${subgraphsCount}
+
+## 2. Component Inventory
+- **Gateways (Ingestion points):** ${gatewayCount}
+- **Stages (Processing units):** ${stageCount}
+- **Bricks (Auxiliary sidecars):** ${brickCount}
+- **Stores (Data persistence):** ${storeCount}
+- **Total Components:** ${totalComponents}
+- **Total Connections:** ${totalConnections}
+
+## 3. Real-Time Linting Diagnostics
+- **Errors Count:** ${errorsCount}
+- **Warnings Count:** ${warningsCount}
+- **Info Count:** ${infoCount}
+
+### Detailed Active Diagnostics:
+${diagnostics.length === 0 
+  ? "✅ No architectural violations or lint warnings detected! Perfect design standard." 
+  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\n")}
+
+## 4. STRIDE Threat Modeling & Recommendations
+The system analysis evaluates six STRIDE threat boundaries across the design blueprint:
+
+### Spoofing (S):
+- Gateway elements must carry validation/auth labels.
+- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
+
+### Tampering (T):
+- Connection channels must specify secure communication.
+- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
+
+### Repudiation (R):
+- Key data Stores must attach to an audited event ledger or logging neighbor.
+- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
+
+### Information Disclosure (I):
+- Direct Gateway-to-Store flows bypassing stages.
+- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
+
+### Elevation of Privilege (E):
+- Administrative/privileged blocks must require verification.
+- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Connect administrative or privileged nodes to verification modules.
+
+### Denial of Service (DoS):
+- High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
+- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
+
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      const p = navigator.clipboard.writeText(md)
+      if (p && typeof p.catch === "function") {
+        p.catch((e) => console.error("Clipboard copy failed:", e))
+      }
+    }
+
+    const dataStr = "data:text/markdown;charset=utf-8," + encodeURIComponent(md)
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    const sanitizedName = systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    downloadAnchor.setAttribute("download", `architecture-audit-${sanitizedName}-${Date.now()}.md`)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
   }
 
   const handleCopy = () => {
@@ -4063,6 +4590,22 @@ export function EditorPanel({
           setPathSource={setPathSource}
           pathTarget={pathTarget}
           setPathTarget={setPathTarget}
+        />
+      </div>
+
+      <div
+        id="tabpanel-security"
+        role="tabpanel"
+        aria-labelledby="tab-security"
+        hidden={activeTab !== "security"}
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        style={{ background: "var(--background)" }}
+      >
+        <SecurityTab
+          parsedSpec={parsedSpec}
+          diagnostics={diagnostics}
+          onQuickFix={handleQuickFix}
+          onExportReport={handleExportMarkdownReport}
         />
       </div>
 
@@ -4443,6 +4986,14 @@ export function EditorPanel({
                           className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all"
                         >
                           Set to Stage
+                        </button>
+                      )}
+                      {d.code === "stride-secret-leak" && (
+                        <button
+                          onClick={() => handleQuickFix(d.path!, "stride-secret-leak")}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-sans font-bold uppercase tracking-wide bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all"
+                        >
+                          Use Environment Variable
                         </button>
                       )}
                       {d.code === "invalid-metadata-object" && (
