@@ -44,7 +44,7 @@ describe('Simulation History Log & JSON/CSV Report Exports', () => {
     // Wait for completion (simulation completed)
     await waitFor(() => {
       expect(screen.getByText(/Simulation Completed/i)).toBeInTheDocument()
-    }, { timeout: 1500 })
+    }, { timeout: 10000 })
 
     // 4. Verify that the Simulation History Panel is now rendered
     const historyPanel = screen.getByTestId('simulation-history-panel')

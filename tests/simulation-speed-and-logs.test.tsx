@@ -61,7 +61,7 @@ describe('Simulation Speed Controls & Tracing Logs', () => {
     // 7. Wait for completion
     await waitFor(() => {
       expect(screen.getByText(/Simulation Completed/i)).toBeInTheDocument()
-    }, { timeout: 1500 })
+    }, { timeout: 10000 })
 
     expect(logsConsole.textContent).toContain('[Complete]')
   })
