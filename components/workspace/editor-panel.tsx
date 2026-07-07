@@ -4363,41 +4363,41 @@ Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateSt
 - **Info Count:** ${infoCount}
 
 ### Detailed Active Diagnostics:
-\${diagnostics.length === 0 
+${diagnostics.length === 0 
   ? "✅ No architectural violations or lint warnings detected! Perfect design standard." 
-  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\\n")}
+  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\n")}
 
 ## 4. STRIDE Threat Modeling & Recommendations
 The system analysis evaluates six STRIDE threat boundaries across the design blueprint:
 
 ### Spoofing (S):
 - Gateway elements must carry validation/auth labels.
-- Status: \${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
 
 ### Tampering (T):
 - Connection channels must specify secure communication.
-- Status: \${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
 
 ### Repudiation (R):
 - Key data Stores must attach to an audited event ledger or logging neighbor.
-- Status: \${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
 
 ### Information Disclosure (I):
 - Direct Gateway-to-Store flows bypassing stages.
-- Status: \${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
 
 ### Elevation of Privilege (E):
 - Administrative/privileged blocks must require verification.
-- Status: \${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Connect administrative or privileged nodes to verification modules.
 
 ### Denial of Service (DoS):
 - High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
-- Status: \${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
 - Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
 
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -4411,7 +4411,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
     const downloadAnchor = document.createElement('a')
     downloadAnchor.setAttribute("href", dataStr)
     const sanitizedName = systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
-    downloadAnchor.setAttribute("download", `architecture-audit-\${sanitizedName}-\${Date.now()}.md`)
+    downloadAnchor.setAttribute("download", `architecture-audit-${sanitizedName}-${Date.now()}.md`)
     document.body.appendChild(downloadAnchor)
     downloadAnchor.click()
     downloadAnchor.remove()
