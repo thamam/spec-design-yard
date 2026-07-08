@@ -1309,5 +1309,147 @@ describe('Advanced Linter Features', () => {
       expect(g2gDiag?.message).toContain('Gateway component "gate_in_1" connects directly to Gateway "gate_in_2"')
     })
   })
+
+  describe('Dynamic Key List Message Validation', () => {
+    test('unrecognized system-level keys dynamically list system keys alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Sys Test',
+          components: [],
+          unrecognizedKey: 'value'
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'unrecognized-system-key')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized key "unrecognizedKey" in top-level system. Valid system keys are: components, metadata, name.')
+    })
+
+    test('unrecognized system metadata keys dynamically list metadata keys alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Sys Meta Test',
+          components: [],
+          metadata: {
+            unrecognizedKey: 'value'
+          }
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'unrecognized-system-metadata-key')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized metadata key "unrecognizedKey" in top-level system metadata. Valid system metadata keys are: description, owner, status, version.')
+    })
+
+    test('unrecognized system status values dynamically list statuses alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Sys Status Test',
+          components: [],
+          metadata: {
+            status: 'invalid-status'
+          }
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'invalid-system-metadata-status')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized system status value "invalid-status". Valid status values are: active, deprecated, draft.')
+    })
+
+    test('unrecognized component level keys dynamically list component keys alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Comp Key Test',
+          components: [
+            { id: 'node_a', type: 'Stage', unrecognizedKey: 'value' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'unrecognized-component-key')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized component key "unrecognizedKey" in component "node_a". Valid component keys are: connections, id, metadata, name, type, x, y.')
+    })
+
+    test('unrecognized component types dynamically list types alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Comp Type Test',
+          components: [
+            { id: 'node_a', type: 'InvalidType' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'unrecognized-type')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized component type "InvalidType" for component "node_a". Valid types are: Brick, Gateway, Stage, Store.')
+    })
+
+    test('unrecognized component metadata status values dynamically list status values alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Comp Meta Status Test',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                status: 'invalid-status'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'invalid-metadata-status')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized status value "invalid-status". Valid status values are: active, deprecated, draft.')
+    })
+
+    test('unrecognized component metadata color values dynamically list colors alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Comp Meta Color Test',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              metadata: {
+                color: 'invalid-color'
+              }
+            }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'invalid-metadata-color')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized metadata color "invalid-color". Valid colors are standard names (amber, emerald, indigo, purple, rose, sky, zinc) or a 3, 6, or 8-character hex code (e.g. #f00, #ff00ff, #ff0000ff).')
+    })
+
+    test('unrecognized connection level keys dynamically list connection keys alphabetically sorted', () => {
+      const spec = {
+        system: {
+          name: 'Conn Key Test',
+          components: [
+            {
+              id: 'node_a',
+              type: 'Stage',
+              connections: [
+                { target: 'node_b', unrecognizedKey: 'value' }
+              ]
+            },
+            { id: 'node_b', type: 'Stage' }
+          ]
+        }
+      }
+      const diagnostics = lintSpec(spec)
+      const diag = diagnostics.find(d => d.code === 'unrecognized-connection-key')
+      expect(diag).toBeDefined()
+      expect(diag?.message).toBe('Unrecognized connection key "unrecognizedKey" for connection to "node_b" on component "node_a". Valid keys are: label, target.')
+    })
+  })
 })
 

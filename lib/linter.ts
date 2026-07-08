@@ -39,7 +39,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (!allowedSystemKeys.has(k)) {
         diagnostics.push({
           severity: "warning",
-          message: `Unrecognized key "${k}" in top-level system. Valid system keys are: name, components, metadata.`,
+          message: `Unrecognized key "${k}" in top-level system. Valid system keys are: ${Array.from(allowedSystemKeys).sort().join(", ")}.`,
           path: `system.${k}`,
           code: "unrecognized-system-key",
         })
@@ -61,7 +61,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           if (!allowedSysMetaKeys.has(k)) {
             diagnostics.push({
               severity: "warning",
-              message: `Unrecognized metadata key "${k}" in top-level system metadata. Valid system metadata keys are: owner, description, status, version.`,
+              message: `Unrecognized metadata key "${k}" in top-level system metadata. Valid system metadata keys are: ${Array.from(allowedSysMetaKeys).sort().join(", ")}.`,
               path: `system.metadata.${k}`,
               code: "unrecognized-system-metadata-key",
             })
@@ -74,7 +74,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           if (!validStatuses.has(statusVal)) {
             diagnostics.push({
               severity: "warning",
-              message: `Unrecognized system status value "${sysMeta.status}". Valid status values are: draft, active, deprecated.`,
+              message: `Unrecognized system status value "${sysMeta.status}". Valid status values are: ${Array.from(validStatuses).sort().join(", ")}.`,
               path: "system.metadata.status",
               code: "invalid-system-metadata-status",
             })
@@ -185,7 +185,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (!allowedComponentKeys.has(k)) {
         diagnostics.push({
           severity: "warning",
-          message: `Unrecognized component key "${k}" in component "${comp.id || idx}". Valid component keys are: id, type, name, x, y, connections, metadata.`,
+          message: `Unrecognized component key "${k}" in component "${comp.id || idx}". Valid component keys are: ${Array.from(allowedComponentKeys).sort().join(", ")}.`,
           path: `${pathPrefix}.${k}`,
           code: "unrecognized-component-key",
         })
@@ -240,9 +240,10 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       }
       // 4. Unrecognized Type
       if (!validTypes.has(type)) {
+        const typesDisplay = Array.from(validTypes).map(t => t.charAt(0).toUpperCase() + t.slice(1)).sort().join(", ");
         diagnostics.push({
           severity: "warning",
-          message: `Unrecognized component type "${comp.type}" for component "${comp.id || idx}". Valid types are: Store, Stage, Brick, Gateway.`,
+          message: `Unrecognized component type "${comp.type}" for component "${comp.id || idx}". Valid types are: ${typesDisplay}.`,
           path: `${pathPrefix}.type`,
           code: "unrecognized-type",
         })
@@ -283,7 +284,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           if (!validStatuses.has(statusVal)) {
             diagnostics.push({
               severity: "warning",
-              message: `Unrecognized status value "${meta.status}". Valid status values are: draft, active, deprecated.`,
+              message: `Unrecognized status value "${meta.status}". Valid status values are: ${Array.from(validStatuses).sort().join(", ")}.`,
               path: `${pathPrefix}.metadata.status`,
               code: "invalid-metadata-status",
             })
@@ -297,7 +298,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           if (colorVal !== "" && !validColors.has(colorVal) && !hexRegex.test(colorVal)) {
             diagnostics.push({
               severity: "warning",
-              message: `Unrecognized metadata color "${meta.color}". Valid colors are standard names (indigo, purple, emerald, amber, rose, sky, zinc) or a 3, 6, or 8-character hex code (e.g. #f00, #ff00ff, #ff0000ff).`,
+              message: `Unrecognized metadata color "${meta.color}". Valid colors are standard names (${Array.from(validColors).sort().join(", ")}) or a 3, 6, or 8-character hex code (e.g. #f00, #ff00ff, #ff0000ff).`,
               path: `${pathPrefix}.metadata.color`,
               code: "invalid-metadata-color",
             })
@@ -450,7 +451,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         if (!allowedConnectionKeys.has(key)) {
           diagnostics.push({
             severity: "warning",
-            message: `Unrecognized connection key "${key}" for connection to "${target}" on component "${compId}". Valid keys are: target, label.`,
+            message: `Unrecognized connection key "${key}" for connection to "${target}" on component "${compId}". Valid keys are: ${Array.from(allowedConnectionKeys).sort().join(", ")}.`,
             path: `${connPath}.${key}`,
             code: "unrecognized-connection-key",
           })

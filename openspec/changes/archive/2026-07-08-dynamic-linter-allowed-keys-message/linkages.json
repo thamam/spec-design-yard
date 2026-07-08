@@ -1,0 +1,30 @@
+{
+  "change": "dynamic-linter-allowed-keys-message",
+  "links": [
+    {
+      "requirement": "yaml-linter/dynamic-system-keys-messages",
+      "design": "Decision 3: Comprehensive Alignment of Dynamic Rules",
+      "tasks": ["Slice 1: Refactor System-Level Diagnostic Messages"]
+    },
+    {
+      "requirement": "yaml-linter/dynamic-component-keys-messages",
+      "design": "Decision 1: Deterministic Sorting of Option Sets",
+      "tasks": ["Slice 2: Refactor Component-Level Diagnostic Messages"]
+    },
+    {
+      "requirement": "yaml-linter/dynamic-connection-keys-messages",
+      "design": "Decision 3: Comprehensive Alignment of Dynamic Rules",
+      "tasks": ["Slice 3: Refactor Connection-Level Diagnostic Messages"]
+    },
+    {
+      "requirement": "yaml-linter/dynamic-capitalized-types-messages",
+      "design": "Decision 2: Formatting Case-Insensitive / Standardized Casing Lists",
+      "tasks": ["Slice 2: Refactor Component-Level Diagnostic Messages"]
+    },
+    {
+      "requirement": "yaml-linter/dynamic-verification-tests",
+      "design": "Decision 1: Deterministic Sorting of Option Sets",
+      "tasks": ["Slice 4: Verification & Dynamic Set Validation Tests"]
+    }
+  ]
+}
