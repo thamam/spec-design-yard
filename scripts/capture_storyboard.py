@@ -12,14 +12,14 @@ async def main():
         page = await browser.new_page()
         await page.set_viewport_size({"width": 1440, "height": 900})
         
-        print("Navigating to http://localhost:3001...")
+        print("Navigating to http://localhost:3005...")
         try:
-            await page.goto("http://localhost:3001", wait_until="networkidle", timeout=30000)
+            await page.goto("http://localhost:3005", wait_until="networkidle", timeout=30000)
         except Exception as e:
             print(f"Warning during goto: {e}")
             
         print("Waiting for spec hydration...")
-        await page.wait_for_selector("[data-component-id]", timeout=20000)
+        await page.wait_for_selector("[data-testid='spec-textarea']", timeout=20000)
         await asyncio.sleep(2) # brief sleep to ensure state is settled
         
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,7 +57,14 @@ async def main():
         print("Capturing 4. Metrics View...")
         await page.screenshot(path=os.path.join(base_dir, "storyboard-4-metrics.png"))
         
-        print("SUCCESS: All 4 storyboard screenshots captured successfully!")
+        # 6. Switch to Security Tab and capture it
+        print("Switching to Security Tab...")
+        await page.click("#tab-security")
+        await asyncio.sleep(1)
+        print("Capturing 5. Security View...")
+        await page.screenshot(path=os.path.join(base_dir, "storyboard-5-security.png"))
+        
+        print("SUCCESS: All 5 storyboard screenshots captured successfully!")
         await browser.close()
 
 if __name__ == "__main__":
