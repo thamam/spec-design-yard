@@ -24,6 +24,17 @@ To bring both the Spec and Diagram interfaces to an elite standard, all future d
   * Rigid geometry auto-layout combined with organic sketchy rendering.
   * Rich gesture support (drag-to-connect, double-click-to-rename, delete element triggers).
 
-* **Strict AST Reconciliation Layer (The Contract Mediator):**
+* Strict AST Reconciliation Layer (The Contract Mediator):
   * A robust, fail-safe AST translation engine that translates coordinates, node creations, renames, and link adjustments between the visual Canvas state and the serialized YAML text state without parsing collisions or loss of comments.
+
+## Development Process (OpenSpec)
+
+All future work on `spec-design-yard` follows the spec-driven procedure defined in [openspec/README.md](openspec/README.md) as a permanent working rule.
+
+The operational gates are:
+* **Interactive Sessions:** Create `proposal.md` and `design.md`, then pause and wait for Tomer's explicit approval before proceeding with implementation.
+* **Autonomous / Cron Runs:** Complete all artifacts and implementation on a dedicated feature branch. Include the proposal summary at the top of the pull request description. Never merge to `main` autonomously.
+
+No code change can occur without its corresponding change directory, and spec artifacts must always travel in the same branch/PR as the code they describe.
+
 
