@@ -81,6 +81,20 @@ The linter enforces design discipline. The following rules generate quality warn
 
 ---
 
+### STRIDE Threat Modeling Security Rules
+
+Spec-Yard contains a built-in static architecture security analyzer that checks for the six core STRIDE threat vectors plus sensitive metadata credentials leaks:
+
+1. 🟡 **`stride-spoofing`**: A `Gateway` component lacks an owner or is connected downstream without custom secure/auth connection labels (e.g., matching security keywords like `auth`, `secure`, `token`, `validate`). *Why it matters:* Gateways are external interfaces and must validate incoming identity.
+2. 🟡 **`stride-tampering`**: A connection link is unlabeled or lacks custom encryption labels specifying secure channels (TLS/HTTPS/gRPC/SSH). *Why it matters:* Unlabeled data flows are susceptible to transit intercept, tampering, or eavesdropping.
+3. 🔵 **`stride-repudiation`**: A database `Store` lacks outgoing or incoming audit log links to tracing/ledger Brick components. *Why it matters:* Transaction stores must maintain a traceable audit ledger to prove non-repudiation.
+4. 🟡 **`stride-information-disclosure`**: A `Gateway` connects directly to a database `Store` bypassing verification/parsing stages. *Why it matters:* Direct data-store exposures without middle-tier sanitize/processing stages can result in mass credential theft or unauthorized data exposure.
+5. 🟡 **`stride-elevation-of-privilege`**: A privileged node (marked `privileged: true` or containing `admin` or `root` in its name/ID) lacks connection to a verification node. *Why it matters:* High-privilege components must be gated by authentication/verification barriers.
+6. 🟡 **`stride-denial-of-service`**: A bottleneck node with high traffic fan-in (>= 3 inbound connections) lacks rate limiting, throttling, or buffering metadata parameters (`rate_limit: true`, `throttled: true`). *Why it matters:* High fan-in components are susceptible to overload, memory leaks, and service degradation.
+7. 🟡 **`stride-secret-leak`**: A metadata field containing sensitive keys (such as `api_key`, `password`, `token`, `session_secret`) holds raw, hardcoded credentials. *Why it matters:* Blueprints should never store raw credentials in plaintext. Use environment variable references (e.g. `${MY_API_KEY}`) or placeholders instead.
+
+---
+
 ### Network Graph Topography Rules
 
 During compilation, Spec-Yard runs a **Breadth-First Search (BFS)** across the component network to find dead ends or unreachable islands:
