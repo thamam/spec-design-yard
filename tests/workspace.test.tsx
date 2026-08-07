@@ -400,4 +400,42 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     const nameInput = screen.getByTestId('focus-name-input') as HTMLInputElement
     expect(nameInput.value).toBe('inbox/')
   })
+
+  test('compileSpecToExcalidrawElements renders STRIDE threat zones and tags when showSecurityOverlay is enabled', () => {
+    const vulnerableSpec = {
+      system: {
+        name: 'Vulnerable System',
+        components: [
+          {
+            id: 'web_gateway',
+            type: 'Gateway',
+            connections: [{ target: 'user_store' }]
+          },
+          {
+            id: 'user_store',
+            type: 'Store'
+          }
+        ]
+      }
+    }
+
+    // 1. With showSecurityOverlay = false, no threat zones or threat texts should be rendered
+    const elementsNoOverlay = compileSpecToExcalidrawElements(vulnerableSpec, undefined, undefined, [], false)
+    const threatTextNoOverlay = elementsNoOverlay.find((el: any) => el.id?.startsWith('threat-text-'))
+    const threatZoneNoOverlay = elementsNoOverlay.find((el: any) => el.id?.startsWith('threat-zone-'))
+    expect(threatTextNoOverlay).toBeUndefined()
+    expect(threatZoneNoOverlay).toBeUndefined()
+
+    // 2. With showSecurityOverlay = true, threat texts and threat zones should be rendered
+    const elementsWithOverlay = compileSpecToExcalidrawElements(vulnerableSpec, undefined, undefined, [], true)
+    const threatTextWithOverlay = elementsWithOverlay.find((el: any) => el.id?.startsWith('threat-text-web_gateway'))
+    const threatZoneWithOverlay = elementsWithOverlay.find((el: any) => el.id?.startsWith('threat-zone-web_gateway'))
+
+    expect(threatTextWithOverlay).toBeDefined()
+    expect(threatZoneWithOverlay).toBeDefined()
+
+    expect(threatTextWithOverlay.text).toContain('Spoofing')
+    expect(threatZoneWithOverlay.strokeColor).toBe('#f43f5e')
+    expect(threatZoneWithOverlay.strokeStyle).toBe('dashed')
+  })
 })

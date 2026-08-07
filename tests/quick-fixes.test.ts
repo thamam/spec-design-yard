@@ -56,6 +56,7 @@ const HANDLED_FIX_TYPES = new Set([
   'stride-information-disclosure',
   'stride-elevation-of-privilege',
   'stride-denial-of-service',
+  'stride-secret-leak',
 ])
 
 describe('quick-fixes: single source of truth', () => {

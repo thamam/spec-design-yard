@@ -1,6 +1,8 @@
 import { normalizeConnections } from "./spec-model"
 
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
+const SENSITIVE_METADATA_REGEX = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
+const SECRET_PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\]|none|disabled|null|false)$/i
 
 export interface Diagnostic {
   severity: "error" | "warning" | "info"
@@ -1144,6 +1146,30 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           message: `Component "${compId}" has high incoming traffic fan-in (${inboundCount} inbound connections) and is vulnerable to Denial of Service (DoS). Consider adding "rate_limit: true" or "throttled: true" under component metadata to prevent service degradation.`,
           path: `system.components[${compIdx}]`,
           code: "stride-denial-of-service"
+        })
+      }
+
+      // 7. Information Disclosure: Hardcoded Secret/Token Leakage Check in Component Metadata
+      if (comp.metadata && typeof comp.metadata === "object" && !Array.isArray(comp.metadata)) {
+        Object.keys(comp.metadata).forEach((k) => {
+          if (SENSITIVE_METADATA_REGEX.test(k)) {
+            const val = comp.metadata[k]
+            if (val !== undefined && val !== null && typeof val !== "boolean" && typeof val !== "object") {
+              const valStr = String(val).trim()
+              if (
+                valStr !== "" &&
+                !valStr.startsWith("${") &&
+                !SECRET_PLACEHOLDER_REGEX.test(valStr)
+              ) {
+                diagnostics.push({
+                  severity: "warning",
+                  message: `Potential hardcoded secret or token detected in metadata key "${k}". Storing raw credentials in system blueprints is an Information Disclosure vulnerability (STRIDE).`,
+                  path: `system.components[${compIdx}].metadata.${k}`,
+                  code: "stride-secret-leak",
+                })
+              }
+            }
+          }
         })
       }
     })

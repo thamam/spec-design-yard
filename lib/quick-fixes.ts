@@ -45,7 +45,11 @@ export const FIXABLE_DIAGNOSTIC_CODES = new Set([
   "missing-system-metadata-owner",
   "unrecognized-system-metadata-key",
   "missing-connection-label",
-  "duplicate-connection-label"
+  "duplicate-connection-label",
+  // In the Set (not only prefix-matched) so strict-membership call sites like
+  // the Focus tab's per-diagnostic fix button treat it as fixable, matching
+  // the Security tab feature that introduced it.
+  "stride-secret-leak"
 ])
 
 export function isFixable(d: { code?: string }): boolean {

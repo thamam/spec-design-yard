@@ -42,6 +42,7 @@ export type FixType =
   | "self-connection"
   | "set-default-version"
   | "stride-denial-of-service"
+  | "stride-secret-leak"
   | "stride-elevation-of-privilege"
   | "stride-information-disclosure"
   | "stride-repudiation"
@@ -505,6 +506,9 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         modified = true
       } else if (fixType === "placeholder-system-metadata-owner" || fixType === "missing-system-metadata-owner") {
         doc.setIn(parts, "architecture-team")
+        modified = true
+      } else if (fixType === "stride-secret-leak") {
+        doc.setIn(parts, "${SENSITIVE_VALUE_PLACEHOLDER}")
         modified = true
       } else if (fixType === "missing-component-id") {
         const compNode = doc.getIn(parts) as any
