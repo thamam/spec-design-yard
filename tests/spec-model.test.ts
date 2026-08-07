@@ -45,6 +45,14 @@ system:
     expect(parseSpec("")).toEqual({ spec: null, error: null })
     expect(parseSpec("just a scalar")).toEqual({ spec: null, error: null })
   })
+
+  it("strips string-form connections at the parse boundary (mid-keystroke text parses as a string)", () => {
+    const { spec, error } = parseSpec(
+      "system:\n  components:\n    - id: gate\n      type: Gateway\n      connections:\n        - dig\n        - target: store_a\n          label: writes\n"
+    )
+    expect(error).toBeNull()
+    expect(spec?.system?.components?.[0]?.connections).toEqual([{ target: "store_a", label: "writes" }])
+  })
 })
 
 describe("normalizeConnections", () => {

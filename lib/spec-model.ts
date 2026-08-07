@@ -44,6 +44,10 @@ export interface ParseSpecResult {
 // Mid-keystroke YAML like a bare "- " parses to null list entries; every
 // consumer (FocusTab, linter, canvas compiler) assumes object entries, and a
 // render throw unmounts the whole workspace. Strip them at the parse boundary.
+// String-form connections ("- digest") are stripped here too: mid-keystroke
+// text inside a connections list parses as a string on every keystroke, so the
+// parse boundary keeps only { target } objects. normalizeConnections still
+// accepts the string form for specs built in memory (tests, tooling).
 function sanitizeParsedSpec(parsed: any): Spec {
   const components = parsed?.system?.components
   if (!Array.isArray(components)) return parsed
