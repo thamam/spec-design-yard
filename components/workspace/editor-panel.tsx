@@ -21,6 +21,7 @@ import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import specStore from "../../lib/spec-store"
+import { normalizeConnections, parseSpec } from "../../lib/spec-model"
 
 interface EditorPanelProps {
   specText?: string
@@ -775,18 +776,7 @@ function FocusTab({
     }
   }
 
-  const connectionsList = useMemo(() => {
-    const conns = Array.isArray(comp?.connections) ? comp.connections : []
-    return conns.map((c: any, originalIdx: number) => {
-      if (typeof c === "string") {
-        return { target: c, label: "", originalIdx }
-      }
-      if (c && typeof c === "object" && typeof c.target === "string") {
-        return { target: c.target, label: c.label || "", originalIdx }
-      }
-      return null
-    }).filter(Boolean) as { target: string, label: string; originalIdx: number }[]
-  }, [comp?.connections])
+  const connectionsList = useMemo(() => normalizeConnections(comp), [comp?.connections])
 
   const handleDisconnect = (target: string) => {
     if (!selectedUnit) return
@@ -841,12 +831,9 @@ function FocusTab({
     const list: { source: string; label: string; sourceIdx: number; originalIdx: number }[] = []
     parsedSpec.system.components.forEach((c: any, sourceIdx: number) => {
       if (!c || !c.id || c.id === selectedUnit) return
-      const conns = Array.isArray(c.connections) ? c.connections : []
-      conns.forEach((conn: any, originalIdx: number) => {
-        if (typeof conn === "string" && conn === selectedUnit) {
-          list.push({ source: c.id, label: "", sourceIdx, originalIdx })
-        } else if (conn && typeof conn === "object" && conn.target === selectedUnit) {
-          list.push({ source: c.id, label: conn.label || "", sourceIdx, originalIdx })
+      normalizeConnections(c).forEach((conn) => {
+        if (conn.target === selectedUnit) {
+          list.push({ source: c.id, label: conn.label, sourceIdx, originalIdx: conn.originalIdx })
         }
       })
     })
@@ -2457,18 +2444,11 @@ function MetricsTab({
           const compId = c.id.trim()
           typeMap.set(compId, c.type || "Stage")
           
-          const conns = c.connections || []
-          if (Array.isArray(conns)) {
-            conns.forEach((conn: any) => {
-              const target = typeof conn === 'string' ? conn : conn?.target
-              if (typeof target === 'string' && target.trim() !== '') {
-                const label = conn?.label || null
-                if (label) {
-                  labelMap.set(`${compId}->${target.trim()}`, label)
-                }
-              }
-            })
-          }
+          normalizeConnections(c).forEach((conn) => {
+            if (conn.target.trim() !== '' && conn.label) {
+              labelMap.set(`${compId}->${conn.target.trim()}`, conn.label)
+            }
+          })
         }
       })
     }
@@ -3742,14 +3722,10 @@ export function EditorPanel({
   useEffect(() => {
     if (specText === lastParsedTextRef.current) return
     lastParsedTextRef.current = specText
-    try {
-      const parsed = yaml.parse(specText)
-      setYamlSyntaxError(null)
-      if (propParsedSpec === undefined && parsed && typeof parsed === "object") {
-        setLocalParsedSpec(parsed)
-      }
-    } catch (e: any) {
-      setYamlSyntaxError(e.message || "Invalid YAML syntax")
+    const { spec, error } = parseSpec(specText)
+    setYamlSyntaxError(error)
+    if (propParsedSpec === undefined && spec) {
+      setLocalParsedSpec(spec)
     }
   }, [specText, propParsedSpec])
 

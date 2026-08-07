@@ -1,3 +1,5 @@
+import { normalizeConnections } from "./spec-model"
+
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
 
 export interface Diagnostic {
@@ -7,6 +9,8 @@ export interface Diagnostic {
   code?: string
 }
 
+// Deliberately `any`: the linter's job is to diagnose specs that violate the
+// Spec shape (numeric ids, scalar metadata), which its tests pass in directly.
 export function lintSpec(parsedSpec: any): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
   if (!parsedSpec) return diagnostics
@@ -867,19 +871,13 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         const u = c.id.trim()
         if (u === "" || !spofIds.has(u)) return
 
-        const conns = c.connections || []
-        if (Array.isArray(conns)) {
-          conns.forEach((conn: any) => {
-            const target = typeof conn === 'string' ? conn : conn?.target
-            if (typeof target === 'string') {
-              const v = target.trim()
-              if (v !== "" && v !== u && spofIds.has(v)) {
-                if (!adjUndir[u].includes(v)) adjUndir[u].push(v)
-                if (!adjUndir[v].includes(u)) adjUndir[v].push(u)
-              }
-            }
-          })
-        }
+        normalizeConnections(c).forEach(({ target }) => {
+          const v = target.trim()
+          if (v !== "" && v !== u && spofIds.has(v)) {
+            if (!adjUndir[u].includes(v)) adjUndir[u].push(v)
+            if (!adjUndir[v].includes(u)) adjUndir[v].push(u)
+          }
+        })
       })
       return adjUndir
     }
@@ -944,9 +942,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     components.forEach((other: any) => {
       if (other && Array.isArray(other.connections)) {
         const seenTargetsForOther = new Set<string>()
-        other.connections.forEach((conn: any) => {
-          const target = typeof conn === 'string' ? conn : conn?.target
-          if (typeof target === 'string' && target.trim() !== "") {
+        normalizeConnections(other).forEach(({ target }) => {
+          if (target.trim() !== "") {
             const trimmedTarget = target.trim()
             if (ids.has(trimmedTarget) && !seenTargetsForOther.has(trimmedTarget)) {
               seenTargetsForOther.add(trimmedTarget)
@@ -1033,19 +1030,17 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (type === "store") {
         let hasAudit = false
         const compConns = comp.connections || []
-        const hasOutToAudit = Array.isArray(compConns) && compConns.some((cn: any) => {
-          const target = typeof cn === 'string' ? cn : cn?.target
-          return typeof target === 'string' && auditNodeIds.has(target.trim())
-        })
+        const hasOutToAudit = Array.isArray(compConns) && normalizeConnections(comp).some(({ target }) =>
+          auditNodeIds.has(target.trim())
+        )
         
         let hasInFromAudit = false
         components.forEach((other: any) => {
           if (other && typeof other.id === 'string' && auditNodeIds.has(other.id.trim())) {
             const otherConns = other.connections || []
-            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
-              const target = typeof cn === 'string' ? cn : cn?.target
-              return typeof target === 'string' && target.trim() === compId
-            })
+            const hasIn = Array.isArray(otherConns) && normalizeConnections(other).some(({ target }) =>
+              target.trim() === compId
+            )
             if (hasIn) hasInFromAudit = true
           }
         })
@@ -1066,22 +1061,19 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       // 4. Information Disclosure Check (direct Gateway-to-Store connections / bypasses)
       if (type === "gateway") {
-        if (Array.isArray(conns)) {
-          conns.forEach((conn: any, connIdx: number) => {
-            const target = typeof conn === "string" ? conn : conn?.target
-            if (typeof target === "string" && ids.has(target.trim())) {
-              const targetType = typeMap[target.trim()] || ""
-              if (targetType === "store") {
-                diagnostics.push({
-                  severity: "warning",
-                  message: `Gateway connects directly to Store "${target.trim()}". Bypassing validation stages presents an Information Disclosure / Tampering threat.`,
-                  path: `system.components[${compIdx}].connections[${connIdx}]`,
-                  code: "stride-information-disclosure"
-                })
-              }
+        normalizeConnections(comp).forEach(({ target, originalIdx: connIdx }) => {
+          if (ids.has(target.trim())) {
+            const targetType = typeMap[target.trim()] || ""
+            if (targetType === "store") {
+              diagnostics.push({
+                severity: "warning",
+                message: `Gateway connects directly to Store "${target.trim()}". Bypassing validation stages presents an Information Disclosure / Tampering threat.`,
+                path: `system.components[${compIdx}].connections[${connIdx}]`,
+                code: "stride-information-disclosure"
+              })
             }
-          })
-        }
+          }
+        })
       }
 
       // 5. Elevation of Privilege Check (privileged component lacking verification node connections)
@@ -1093,19 +1085,17 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       if (isPrivileged) {
         let hasVerifyNode = false
         const compConns = comp.connections || []
-        const hasOutToVerify = Array.isArray(compConns) && compConns.some((cn: any) => {
-          const target = typeof cn === 'string' ? cn : cn?.target
-          return typeof target === 'string' && verifyNodeIds.has(target.trim())
-        })
+        const hasOutToVerify = Array.isArray(compConns) && normalizeConnections(comp).some(({ target }) =>
+          verifyNodeIds.has(target.trim())
+        )
         
         let hasInFromVerify = false
         components.forEach((other: any) => {
           if (other && typeof other.id === 'string' && verifyNodeIds.has(other.id.trim())) {
             const otherConns = other.connections || []
-            const hasIn = Array.isArray(otherConns) && otherConns.some((cn: any) => {
-              const target = typeof cn === 'string' ? cn : cn?.target
-              return typeof target === 'string' && target.trim() === compId
-            })
+            const hasIn = Array.isArray(otherConns) && normalizeConnections(other).some(({ target }) =>
+              target.trim() === compId
+            )
             if (hasIn) hasInFromVerify = true
           }
         })
