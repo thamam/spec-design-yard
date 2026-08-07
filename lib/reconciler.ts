@@ -1,12 +1,66 @@
 import yaml from "yaml"
 
+export type FixType =
+  | "brick-to-brick"
+  | "circular-dependency"
+  | "component-overlap"
+  | "connect-from-gateway"
+  | "connect-to-stage"
+  | "connect-to-store"
+  | "connection-case-mismatch"
+  | "convert-to-store"
+  | "delete-component"
+  | "duplicate-connection"
+  | "duplicate-connection-label"
+  | "duplicate-id"
+  | "empty-connection-target"
+  | "empty-system-name"
+  | "gateway-to-gateway"
+  | "insert-stage"
+  | "invalid-connection-label"
+  | "invalid-connection-object"
+  | "invalid-connections-array"
+  | "invalid-id-format"
+  | "invalid-metadata-color"
+  | "invalid-metadata-object"
+  | "invalid-metadata-status"
+  | "invalid-system-metadata-object"
+  | "invalid-system-metadata-status"
+  | "invalid-system-metadata-version"
+  | "missing-component-id"
+  | "missing-component-type"
+  | "missing-connection-label"
+  | "missing-metadata-description"
+  | "missing-metadata-owner"
+  | "missing-system-metadata"
+  | "missing-system-metadata-description"
+  | "missing-system-metadata-owner"
+  | "missing-system-name"
+  | "orphan-connection"
+  | "placeholder-system-metadata-description"
+  | "placeholder-system-metadata-owner"
+  | "self-connection"
+  | "set-default-version"
+  | "stride-denial-of-service"
+  | "stride-elevation-of-privilege"
+  | "stride-information-disclosure"
+  | "stride-repudiation"
+  | "stride-spoofing"
+  | "stride-tampering"
+  | "unrecognized-component-key"
+  | "unrecognized-connection-key"
+  | "unrecognized-metadata-key"
+  | "unrecognized-system-key"
+  | "unrecognized-system-metadata-key"
+  | "unrecognized-type"
+
 export type CanvasChange =
   | { type: "coords"; payload: { id: string; x: number; y: number }[] }
   | { type: "delete"; payload: { ids: string[] } }
   | { type: "rename"; payload: { id: string; newName: string; newType?: string } }
   | { type: "rename-id"; payload: { id: string; newId: string } }
-  | { type: "quick-fix"; payload: { path: string; fixType: string; extraData?: any } }
-  | { type: "quick-fix-all"; payload: { fixes: { path: string; fixType: string; extraData?: any }[] } }
+  | { type: "quick-fix"; payload: { path: string; fixType: FixType; extraData?: any } }
+  | { type: "quick-fix-all"; payload: { fixes: { path: string; fixType: FixType; extraData?: any }[] } }
   | { type: "add"; payload: { id: string; x: number; y: number; type: string; name?: string } }
   | { type: "connect"; payload: { source: string; target: string } }
   | { type: "disconnect"; payload: { source: string; target: string } }
