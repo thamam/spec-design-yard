@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react"
 import { CanvasChange } from "../../lib/reconciler"
 import { lintSpec } from "../../lib/linter"
+import {
+  createCanvasDiffState,
+  diffScene,
+  pruneTracking,
+  registerCompiledElements,
+  resolvePendingRename,
+} from "../../lib/canvas-diff"
+import { normalizeConnections } from "../../lib/spec-model"
 
 const getDeterministicSeed = (id: string) => {
   let hash = 0
@@ -21,34 +29,6 @@ const COLOR_MAP: Record<string, { stroke: string; bg: string }> = Object.assign(
   sky: { stroke: '#38bdf8', bg: 'rgba(56, 189, 248, 0.1)' },
   zinc: { stroke: '#71717a', bg: 'rgba(113, 113, 122, 0.1)' },
 })
-
-function getSourceAndTargetFromLabelId(labelId: string, parsedSpec: any): { source: string; target: string } {
-  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
-  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
-  for (const compId of sortedCompIds) {
-    if (labelId.startsWith(`arrow-label-${compId}-`)) {
-      return {
-        source: compId,
-        target: labelId.substring(`arrow-label-${compId}-`.length),
-      }
-    }
-  }
-  return { source: "", target: "" }
-}
-
-function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any): { source: string; target: string } {
-  const compIds = parsedSpec?.system?.components?.map((c: any) => c.id) || []
-  const sortedCompIds = [...compIds].sort((a, b) => b.length - a.length)
-  for (const compId of sortedCompIds) {
-    if (arrowId.startsWith(`arrow-${compId}-`)) {
-      return {
-        source: compId,
-        target: arrowId.substring(`arrow-${compId}-`.length),
-      }
-    }
-  }
-  return { source: "", target: "" }
-}
 
 export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: string, pathTarget?: string, hiddenTypes?: string[], showSecurityOverlay?: boolean): any[] {
   if (!parsedSpec?.system?.components || !Array.isArray(parsedSpec.system.components)) return []
@@ -93,18 +73,12 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       const u = c.id.trim()
       if (!ids.has(u)) return
 
-      const conns = c.connections || []
-      if (Array.isArray(conns)) {
-        conns.forEach((conn: any) => {
-          const target = typeof conn === 'string' ? conn : conn?.target
-          if (typeof target === 'string') {
-            const v = target.trim()
-            if (ids.has(v) && v !== u) {
-              if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
-            }
-          }
-        })
-      }
+      normalizeConnections(c).forEach(({ target }) => {
+        const v = target.trim()
+        if (ids.has(v) && v !== u) {
+          if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
+        }
+      })
     })
 
     const visited = new Set<string>()
@@ -622,35 +596,12 @@ export function ExcalidrawCanvas({
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
 
-  const deletedIdsRef = useRef<Set<string>>(new Set())
-  const addedIdsRef = useRef<Set<string>>(new Set())
-  // Every id the spec compiler has ever produced this session. While the user
-  // types, a stale rect from a transient parse (e.g. "- id: a") can linger in
-  // the scene after the compile set moved on; without this guard the add-sync
-  // below mistakes it for a user-drawn shape and writes a ghost component
-  // scaffold back into the YAML. User-drawn shapes get random Excalidraw ids,
-  // which never collide with compiled ids.
-  const compiledIdsRef = useRef<Set<string>>(new Set())
-  // Same idea for label texts: every text the compiler has ever emitted per
-  // element id. A scene text that matches one of these is a stale echo of an
-  // earlier compile (e.g. a ⚠️ marker or [type] tag that changed while the
-  // user was typing in the editor), not a rename made on the canvas.
-  const compiledTextsRef = useRef<Map<string, Set<string>>>(new Map())
+  // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
+  // this ref is just its storage cell.
+  const diffStateRef = useRef(createCanvasDiffState())
   useEffect(() => {
-    elements.forEach((el: any) => {
-      compiledIdsRef.current.add(el.id)
-      if (el.type === "text" && typeof el.text === "string") {
-        let texts = compiledTextsRef.current.get(el.id)
-        if (!texts) {
-          texts = new Set()
-          compiledTextsRef.current.set(el.id, texts)
-        }
-        texts.add(el.text)
-      }
-    })
+    diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
   }, [elements])
-  const connectedArrowsRef = useRef<Set<string>>(new Set())
-  const pendingRenameRef = useRef<{ id: string; name: string; type?: string } | null>(null)
   const lastSelectedUnitRef = useRef<string | null>(null)
 
   // Centering and selecting component on Canvas when selectedUnit changes from outside
@@ -683,39 +634,12 @@ export function ExcalidrawCanvas({
 
   // Synchronize deleted, added, and connected IDs ref with current elements
   useEffect(() => {
-    const currentIds = new Set(elements.map((el) => el.id))
-    
-    // Prune stale deleted ids
-    deletedIdsRef.current.forEach((id) => {
-      if (!currentIds.has(id)) {
-        deletedIdsRef.current.delete(id)
-      }
-    })
-
-    // Prune stale added ids
-    addedIdsRef.current.forEach((id) => {
-      if (!currentIds.has(id)) {
-        addedIdsRef.current.delete(id)
-      }
-    })
-
-    // Prune stale connected arrow ids
-    connectedArrowsRef.current.forEach((id) => {
-      if (!currentIds.has(id)) {
-        connectedArrowsRef.current.delete(id)
-      }
-    })
+    diffStateRef.current = pruneTracking(diffStateRef.current, elements)
   }, [elements])
 
   // Clear pending renames once they are reflected in parsedSpec
   useEffect(() => {
-    if (pendingRenameRef.current) {
-      const { id, name, type } = pendingRenameRef.current
-      const comp = parsedSpec?.system?.components?.find((c: any) => c.id === id)
-      if (comp && comp.name === name && (!type || comp.type === type)) {
-        pendingRenameRef.current = null
-      }
-    }
+    diffStateRef.current = resolvePendingRename(diffStateRef.current, parsedSpec)
   }, [parsedSpec])
 
   useEffect(() => {
@@ -801,243 +725,20 @@ export function ExcalidrawCanvas({
             }
           }
 
-          // Optimization: single-pass element set lookup
-          const currentElementIds = new Set(elements.map((el) => el.id))
+          // 2-4. Deletions, additions, connections, renames and coordinate
+          // moves are all decided by the pure scene differ.
+          if (!onCanvasChange) return
 
-          // Avoid interrupting active drawing/resizing/editing gestures
-          const isUserInteracting =
-            !!appState?.draggingElement ||
-            !!appState?.resizingElement ||
-            !!appState?.editingElement
-
-          // 2. Sync deletions back to editor spec
-          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const newlyDeletedRects = updatedElements.filter(
-              (el: any) =>
-                el.type === "rectangle" &&
-                el.isDeleted &&
-                !deletedIdsRef.current.has(el.id) &&
-                elements.some((old: any) => old.id === el.id && !old.isDeleted)
-            )
-            if (newlyDeletedRects.length > 0) {
-              const idsToDelete = newlyDeletedRects.map((r: any) => r.id)
-              idsToDelete.forEach((id: string) => deletedIdsRef.current.add(id))
-              onCanvasChange({
-                type: "delete",
-                payload: { ids: idsToDelete },
-              })
-              return
-            }
-
-            const newlyDeletedArrows = updatedElements.filter(
-              (el: any) =>
-                el.type === "arrow" &&
-                el.isDeleted &&
-                !deletedIdsRef.current.has(el.id) &&
-                elements.some((old: any) => old.id === el.id && !old.isDeleted)
-            )
-            if (newlyDeletedArrows.length > 0) {
-              const arrow = newlyDeletedArrows[0]
-              deletedIdsRef.current.add(arrow.id)
-              
-              let { source, target } = getSourceAndTargetFromArrowId(arrow.id, parsedSpec)
-              if (!source || !target) {
-                source = arrow.startBinding?.elementId
-                target = arrow.endBinding?.elementId
-              }
-              
-              if (source && target) {
-                onCanvasChange({
-                  type: "disconnect",
-                  payload: { source, target },
-                })
-                return
-              }
-            }
-
-            const newlyDeletedLabels = updatedElements.filter(
-              (el: any) =>
-                el.type === "text" &&
-                el.id.startsWith("arrow-label-") &&
-                el.isDeleted &&
-                !deletedIdsRef.current.has(el.id) &&
-                elements.some((old: any) => old.id === el.id && !old.isDeleted)
-            )
-            if (newlyDeletedLabels.length > 0) {
-              const labelEl = newlyDeletedLabels[0]
-              deletedIdsRef.current.add(labelEl.id)
-              
-              const { source, target } = getSourceAndTargetFromLabelId(labelEl.id, parsedSpec)
-              if (source && target) {
-                onCanvasChange({
-                  type: "connection-label",
-                  payload: { source, target, label: "" }
-                })
-                return
-              }
-            }
-          }
-
-          // If the user is actively drawing/dragging/resizing, do not sync additions/connections mid-gesture
-          if (isUserInteracting) return
-
-          // 2b. Sync node additions back to editor spec
-          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const newlyCreatedRects = updatedElements.filter(
-              (el: any) =>
-                el.type === "rectangle" &&
-                !el.isDeleted &&
-                !addedIdsRef.current.has(el.id) &&
-                !currentElementIds.has(el.id) &&
-                !compiledIdsRef.current.has(el.id)
-            )
-            if (newlyCreatedRects.length > 0) {
-              const rect = newlyCreatedRects[0] // process one at a time for stability
-              addedIdsRef.current.add(rect.id)
-              onCanvasChange({
-                type: "add",
-                payload: {
-                  id: rect.id,
-                  x: rect.x,
-                  y: rect.y,
-                  type: "Stage",
-                  name: `New Component ${rect.id.slice(0, 4)}`,
-                },
-              })
-              return
-            }
-          }
-
-          // 2c. Sync connection/arrow creations back to editor spec
-          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const newlyCreatedArrows = updatedElements.filter(
-              (el: any) =>
-                el.type === "arrow" &&
-                !el.isDeleted &&
-                el.startBinding?.elementId &&
-                el.endBinding?.elementId &&
-                !connectedArrowsRef.current.has(el.id) &&
-                !currentElementIds.has(el.id) &&
-                !compiledIdsRef.current.has(el.id)
-            )
-            if (newlyCreatedArrows.length > 0) {
-              const arrow = newlyCreatedArrows[0]
-              const source = arrow.startBinding.elementId
-              const target = arrow.endBinding.elementId
-              const sourceExists = parsedSpec?.system?.components?.some((c: any) => c.id === source)
-              const targetExists = parsedSpec?.system?.components?.some((c: any) => c.id === target)
-
-              if (sourceExists && targetExists) {
-                connectedArrowsRef.current.add(arrow.id)
-                onCanvasChange({
-                  type: "connect",
-                  payload: { source, target },
-                })
-                return
-              }
-            }
-          }
-
-          // 3. Sync renames back to editor spec
-          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const changedTextElement = updatedElements.find((el: any) => {
-              if (el.type !== "text" || !el.containerId || el.isDeleted) return false
-              const oldEl = elements.find((old: any) => old.id === el.id)
-              if (!oldEl || oldEl.text === el.text) return false
-              // Stale echo of an earlier compile, not a rename made on canvas
-              if (compiledTextsRef.current.get(el.id)?.has(el.text)) return false
-              return true
-            })
-            if (changedTextElement) {
-              const isEditingThisElement = appState?.editingElement && appState.editingElement.id === changedTextElement.id
-              if (!isEditingThisElement) {
-                if (changedTextElement.id.startsWith("arrow-label-")) {
-                  const { source, target } = getSourceAndTargetFromLabelId(changedTextElement.id, parsedSpec)
-
-                  if (source && target) {
-                    // Loop Guard: verify that label has actually changed compared to state in parsedSpec
-                    const comp = parsedSpec?.system?.components?.find((c: any) => c.id === source)
-                    const conn = comp?.connections?.find((conn: any) => {
-                      if (typeof conn === 'string') return conn === target
-                      return conn && typeof conn === 'object' && conn.target === target
-                    })
-                    const currentLabel = typeof conn === 'string' ? "" : (conn?.label || "")
-                    const newLabel = changedTextElement.text.trim()
-
-                    if (String(currentLabel) !== newLabel) {
-                      onCanvasChange({
-                        type: "connection-label",
-                        payload: { source, target, label: newLabel }
-                      })
-                    }
-                  }
-                  return
-                }
-
-                const lines = changedTextElement.text.split("\n")
-                const firstLineRaw = lines[0] ? lines[0].trim() : ""
-                // Strip the exact ❌ or ⚠️ suffixes including preceding space to prevent self-polluting UI-state serialization loops
-                const firstLine = firstLineRaw.replace(/ ❌$/, "").replace(/ ⚠️$/, "").trim()
-                let newType: string | undefined = undefined
-                
-                if (lines[1]) {
-                  const match = lines[1].trim().match(/^\[(.*)\]$/)
-                  if (match && match[1]) {
-                    newType = match[1].trim()
-                  }
-                }
-
-                // Guard: Check if actually different from parsedSpec to avoid loops/redundant sets
-                const comp = parsedSpec?.system?.components?.find((c: any) => c.id === changedTextElement.containerId)
-                if (comp) {
-                  const currentName = comp.name || comp.id
-                  const currentType = comp.type || "Unit"
-                  const nameChanged = currentName !== firstLine
-                  const typeChanged = newType !== undefined && currentType !== newType
-
-                  if (nameChanged || typeChanged) {
-                    if (
-                      pendingRenameRef.current &&
-                      pendingRenameRef.current.id === changedTextElement.containerId &&
-                      pendingRenameRef.current.name === firstLine &&
-                      pendingRenameRef.current.type === newType
-                    ) {
-                      return
-                    }
-
-                    pendingRenameRef.current = {
-                      id: changedTextElement.containerId,
-                      name: firstLine,
-                      type: newType,
-                    }
-
-                    onCanvasChange({
-                      type: "rename",
-                      payload: {
-                        id: changedTextElement.containerId,
-                        newName: firstLine,
-                        newType,
-                      }
-                    })
-                  }
-                }
-              }
-            }
-          }
-
-          // 4. Sync coordinate changes back to editor spec
-          if (onCanvasChange && updatedElements && updatedElements.length > 0) {
-            const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
-            if (rects.length > 0) {
-              const hasChanged = rects.some((r: any) => {
-                const current = elements.find((el: any) => el.id === r.id)
-                return current && (Math.round(current.x) !== Math.round(r.x) || Math.round(current.y) !== Math.round(r.y))
-              })
-              if (hasChanged) {
-                setPendingElements(rects)
-              }
-            }
-          }
+          const { changes, pendingElements: movedRects, nextState } = diffScene({
+            updatedElements,
+            compiledElements: elements,
+            appState,
+            parsedSpec,
+            state: diffStateRef.current,
+          })
+          diffStateRef.current = nextState
+          changes.forEach((change) => onCanvasChange(change))
+          if (movedRects) setPendingElements(movedRects)
         }}
       >
         {WelcomeScreenComponent && <WelcomeScreenComponent />}

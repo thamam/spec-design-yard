@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
-import yaml from "yaml"
 import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec } from "../../lib/linter"
+import { parseSpec } from "../../lib/spec-model"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -86,27 +86,6 @@ const INITIAL_SPEC = `system:
       connections:
         - target: commit_stage
         - target: inbox`
-
-// Mid-keystroke YAML like a bare "- " parses to null list entries; every
-// consumer (FocusTab, linter, canvas compiler) assumes object entries, and a
-// render throw unmounts the whole workspace. Strip them at the parse boundary.
-function sanitizeParsedSpec(parsed: any) {
-  const components = parsed?.system?.components
-  if (!Array.isArray(components)) return parsed
-  return {
-    ...parsed,
-    system: {
-      ...parsed.system,
-      components: components
-        .filter((c: any) => c && typeof c === "object" && !Array.isArray(c))
-        .map((c: any) =>
-          Array.isArray(c.connections)
-            ? { ...c, connections: c.connections.filter((conn: any) => conn && typeof conn === "object" && !Array.isArray(conn)) }
-            : c
-        ),
-    },
-  }
-}
 
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -227,13 +206,10 @@ export function WorkspaceLayout() {
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
-    try {
-      const parsed = yaml.parse(specText)
-      if (parsed && typeof parsed === "object") {
-        setParsedSpec(sanitizeParsedSpec(parsed))
-      }
-    } catch (e) {
-      // Ignore invalid parse on typos, keep last valid parse
+    // Ignore invalid parse on typos, keep last valid parse
+    const { spec } = parseSpec(specText)
+    if (spec) {
+      setParsedSpec(spec)
     }
   }, [specText])
 

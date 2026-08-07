@@ -18,8 +18,11 @@ import {
 } from "lucide-react"
 import yaml from "yaml"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
-import { reconcileSpec } from "../../lib/reconciler"
+import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
+import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
+import specStore from "../../lib/spec-store"
+import { normalizeConnections, parseSpec } from "../../lib/spec-model"
 
 interface EditorPanelProps {
   specText?: string
@@ -449,28 +452,8 @@ function FocusTab({
 
   const handleApplySingleFix = (d: Diagnostic) => {
     if (!onQuickFix || !d.path || !d.code) return
-    let fixType = d.code
-    let extraData: any = undefined
-
-    if (d.code === "empty-system-name") {
-      fixType = "missing-system-name"
-    } else if (d.code === "invalid-metadata-version") {
-      fixType = "set-default-version"
-    } else if (d.code === "unrecognized-type") {
-      extraData = { type: "Stage" }
-    } else if (d.code === "disconnected-component") {
-      fixType = "delete-component"
-    } else if (d.code === "unreachable-component") {
-      fixType = "connect-from-gateway"
-    } else if (d.code === "gateway-to-store" || d.code === "store-to-store") {
-      fixType = "insert-stage"
-    } else if (d.code === "sink-stage-brick") {
-      fixType = "connect-to-store"
-    } else if (d.code === "empty-gateway") {
-      fixType = "connect-to-stage"
-    } else if (d.code === "unused-store") {
-      fixType = "connect-to-store"
-    }
+    const fixType = fixTypeForCode(d.code) ?? d.code
+    const extraData: any = d.code === "unrecognized-type" ? { type: "Stage" } : undefined
 
     onQuickFix(d.path, fixType, extraData)
   }
@@ -794,18 +777,7 @@ function FocusTab({
     }
   }
 
-  const connectionsList = useMemo(() => {
-    const conns = Array.isArray(comp?.connections) ? comp.connections : []
-    return conns.map((c: any, originalIdx: number) => {
-      if (typeof c === "string") {
-        return { target: c, label: "", originalIdx }
-      }
-      if (c && typeof c === "object" && typeof c.target === "string") {
-        return { target: c.target, label: c.label || "", originalIdx }
-      }
-      return null
-    }).filter(Boolean) as { target: string, label: string; originalIdx: number }[]
-  }, [comp?.connections])
+  const connectionsList = useMemo(() => normalizeConnections(comp), [comp?.connections])
 
   const handleDisconnect = (target: string) => {
     if (!selectedUnit) return
@@ -860,12 +832,9 @@ function FocusTab({
     const list: { source: string; label: string; sourceIdx: number; originalIdx: number }[] = []
     parsedSpec.system.components.forEach((c: any, sourceIdx: number) => {
       if (!c || !c.id || c.id === selectedUnit) return
-      const conns = Array.isArray(c.connections) ? c.connections : []
-      conns.forEach((conn: any, originalIdx: number) => {
-        if (typeof conn === "string" && conn === selectedUnit) {
-          list.push({ source: c.id, label: "", sourceIdx, originalIdx })
-        } else if (conn && typeof conn === "object" && conn.target === selectedUnit) {
-          list.push({ source: c.id, label: conn.label || "", sourceIdx, originalIdx })
+      normalizeConnections(c).forEach((conn) => {
+        if (conn.target === selectedUnit) {
+          list.push({ source: c.id, label: conn.label, sourceIdx, originalIdx: conn.originalIdx })
         }
       })
     })
@@ -979,7 +948,7 @@ function FocusTab({
               </h3>
               <div className="flex flex-col gap-2">
                 {compDiagnostics.map((d, idx) => {
-                  const isFixable = d.code && d.path && FIXABLE_DIAGNOSTIC_CODES.has(d.code)
+                  const fixable = d.code && d.path && FIXABLE_DIAGNOSTIC_CODES.has(d.code)
                   return (
                     <div key={idx} className="flex items-start justify-between gap-4 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-900/60 text-xs">
                       <div className="flex flex-col gap-1">
@@ -990,7 +959,7 @@ function FocusTab({
                           </span>
                         )}
                       </div>
-                      {isFixable && onQuickFix && (
+                      {fixable && onQuickFix && (
                         <button
                           type="button"
                           data-testid={`focus-quick-fix-${d.code}`}
@@ -1832,17 +1801,8 @@ function MetricsTab({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("simulation_history")
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            setSimulationHistory(parsed)
-          }
-        } catch (e) {
-          console.error("Failed to parse simulation history from localStorage", e)
-        }
-      }
+      setSimulationHistory(specStore.getSimulationHistory())
+      setCustomPresets(specStore.getCustomPresets())
     }
   }, [])
 
@@ -2432,11 +2392,7 @@ function MetricsTab({
           if (duplicate) return prev
           const next = [newRun, ...prev]
           if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem("simulation_history", JSON.stringify(next))
-            } catch (e) {
-              console.error("Failed to save simulation history to localStorage", e)
-            }
+            specStore.saveSimulationHistory(next)
           }
           return next
         })
@@ -2814,18 +2770,11 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
           const compId = c.id.trim()
           typeMap.set(compId, c.type || "Stage")
           
-          const conns = c.connections || []
-          if (Array.isArray(conns)) {
-            conns.forEach((conn: any) => {
-              const target = typeof conn === 'string' ? conn : conn?.target
-              if (typeof target === 'string' && target.trim() !== '') {
-                const label = conn?.label || null
-                if (label) {
-                  labelMap.set(`${compId}->${target.trim()}`, label)
-                }
-              }
-            })
-          }
+          normalizeConnections(c).forEach((conn) => {
+            if (conn.target.trim() !== '' && conn.label) {
+              labelMap.set(`${compId}->${conn.target.trim()}`, conn.label)
+            }
+          })
         }
       })
     }
@@ -3375,7 +3324,11 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
                     }
                     setCustomPresets(prev => {
                       const filtered = prev.filter(p => p.name !== trimmed);
-                      return [...filtered, { name: trimmed, packets: simPacketCount, loss: simLossRatio }];
+                      const next = [...filtered, { name: trimmed, packets: simPacketCount, loss: simLossRatio }];
+                      if (typeof window !== "undefined") {
+                        specStore.saveCustomPresets(next)
+                      }
+                      return next;
                     });
                     setCustomPresetName("");
                   }}
@@ -3400,7 +3353,13 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
                           type="button"
                           data-testid={`delete-custom-preset-${preset.name}`}
                           onClick={() => {
-                            setCustomPresets(prev => prev.filter(p => p.name !== preset.name));
+                            setCustomPresets(prev => {
+                              const next = prev.filter(p => p.name !== preset.name);
+                              if (typeof window !== "undefined") {
+                                specStore.saveCustomPresets(next)
+                              }
+                              return next;
+                            });
                           }}
                           className="text-zinc-500 hover:text-red-400 font-bold ml-0.5 text-[9px]"
                           aria-label={`Delete custom preset ${preset.name}`}
@@ -3820,11 +3779,7 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
                     onClick={() => {
                       setSimulationHistory([])
                       if (typeof window !== "undefined") {
-                        try {
-                          localStorage.setItem("simulation_history", "[]")
-                        } catch (e) {
-                          console.error("Failed to clear simulation history in localStorage", e)
-                        }
+                        specStore.clearSimulationHistory()
                       }
                     }}
                     className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-950 hover:bg-red-900 text-red-200 border border-red-900/40 transition-all cursor-pointer active:scale-95 ml-1"
@@ -4045,55 +4000,6 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
-const FIXABLE_DIAGNOSTIC_CODES = new Set([
-  "missing-system-name",
-  "empty-system-name",
-  "missing-component-id",
-  "missing-component-type",
-  "invalid-metadata-object",
-  "invalid-connections-array",
-  "invalid-connection-object",
-  "unrecognized-metadata-key",
-  "unrecognized-component-key",
-  "unrecognized-system-key",
-  "unrecognized-connection-key",
-  "connection-case-mismatch",
-  "invalid-metadata-status",
-  "component-overlap",
-  "missing-metadata-description",
-  "missing-metadata-owner",
-  "invalid-metadata-version",
-  "unrecognized-type",
-  "self-connection",
-  "empty-connection-target",
-  "duplicate-connection",
-  "invalid-id-format",
-  "duplicate-id",
-  "orphan-connection",
-  "disconnected-component",
-  "unreachable-component",
-  "gateway-to-store",
-  "store-to-store",
-  "sink-stage-brick",
-  "empty-gateway",
-  "circular-dependency",
-  "invalid-metadata-color",
-  "invalid-connection-label",
-  "unused-store",
-  "missing-system-metadata",
-  "invalid-system-metadata-object",
-  "invalid-system-metadata-status",
-  "invalid-system-metadata-version",
-  "placeholder-system-metadata-description",
-  "missing-system-metadata-description",
-  "placeholder-system-metadata-owner",
-  "missing-system-metadata-owner",
-  "unrecognized-system-metadata-key",
-  "missing-connection-label",
-  "duplicate-connection-label",
-  "stride-secret-leak"
-])
-
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -4154,14 +4060,10 @@ export function EditorPanel({
   useEffect(() => {
     if (specText === lastParsedTextRef.current) return
     lastParsedTextRef.current = specText
-    try {
-      const parsed = yaml.parse(specText)
-      setYamlSyntaxError(null)
-      if (propParsedSpec === undefined && parsed && typeof parsed === "object") {
-        setLocalParsedSpec(parsed)
-      }
-    } catch (e: any) {
-      setYamlSyntaxError(e.message || "Invalid YAML syntax")
+    const { spec, error } = parseSpec(specText)
+    setYamlSyntaxError(error)
+    if (propParsedSpec === undefined && spec) {
+      setLocalParsedSpec(spec)
     }
   }, [specText, propParsedSpec])
 
@@ -4173,7 +4075,7 @@ export function EditorPanel({
   const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
     const updated = reconcileSpec(specText, {
       type: "quick-fix",
-      payload: { path, fixType, extraData }
+      payload: { path, fixType: fixType as FixType, extraData }
     })
     if (updated !== specText) {
       setSpecText(updated)
@@ -4182,34 +4084,14 @@ export function EditorPanel({
 
   const fixableDiagnostics = useMemo(() => {
     return diagnostics.filter((d) => {
-      return d.code && d.path && FIXABLE_DIAGNOSTIC_CODES.has(d.code)
+      return d.code && d.path && isFixable(d)
     })
   }, [diagnostics])
 
   const handleFixAll = () => {
     const fixes = fixableDiagnostics.map((d) => {
-      let fixType = d.code!
-      let extraData: any = undefined
-
-      if (d.code === "empty-system-name") {
-        fixType = "missing-system-name"
-      } else if (d.code === "invalid-metadata-version") {
-        fixType = "set-default-version"
-      } else if (d.code === "unrecognized-type") {
-        extraData = { type: "Stage" }
-      } else if (d.code === "disconnected-component") {
-        fixType = "delete-component"
-      } else if (d.code === "unreachable-component") {
-        fixType = "connect-from-gateway"
-      } else if (d.code === "gateway-to-store" || d.code === "store-to-store") {
-        fixType = "insert-stage"
-      } else if (d.code === "sink-stage-brick") {
-        fixType = "connect-to-store"
-      } else if (d.code === "empty-gateway") {
-        fixType = "connect-to-stage"
-      } else if (d.code === "unused-store") {
-        fixType = "connect-to-store"
-      }
+      const fixType = fixTypeForCode(d.code!) ?? d.code!
+      const extraData: any = d.code === "unrecognized-type" ? { type: "Stage" } : undefined
 
       return {
         path: d.path!,
@@ -4221,7 +4103,7 @@ export function EditorPanel({
     if (fixes.length > 0) {
       const updated = reconcileSpec(specText, {
         type: "quick-fix-all",
-        payload: { fixes }
+        payload: { fixes: fixes as { path: string; fixType: FixType; extraData?: any }[] }
       })
       if (updated !== specText) {
         setSpecText(updated)
