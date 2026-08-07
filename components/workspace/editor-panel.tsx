@@ -139,6 +139,7 @@ function CodeTab({ value, onChange }: CodeTabProps) {
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
       <textarea
         data-testid="spec-textarea"
+        data-focus-field="spec-textarea"
         id="spec-textarea"
         value={value}
         onChange={handleTextareaChange}
@@ -476,13 +477,13 @@ function FocusTab({
       const sysMeta = sys.metadata || {}
       setGlobalFormState(prev => {
         const activeEl = typeof document !== "undefined" ? document.activeElement : null
-        const activeTestId = activeEl?.getAttribute("data-testid")
+        const activeFocusField = activeEl?.getAttribute("data-focus-field")
 
-        const systemName = activeTestId !== "focus-system-name-input" ? (sys.name || "") : prev.systemName
-        const systemVersion = activeTestId !== "focus-system-version-input" ? (sysMeta.version || "") : prev.systemVersion
-        const systemStatus = activeTestId !== "focus-system-status-select" ? (sysMeta.status || "draft") : prev.systemStatus
-        const systemOwner = activeTestId !== "focus-system-owner-input" ? (sysMeta.owner || "") : prev.systemOwner
-        const systemDescription = activeTestId !== "focus-system-description-textarea" ? (sysMeta.description || "") : prev.systemDescription
+        const systemName = activeFocusField !== "focus-system-name-input" ? (sys.name || "") : prev.systemName
+        const systemVersion = activeFocusField !== "focus-system-version-input" ? (sysMeta.version || "") : prev.systemVersion
+        const systemStatus = activeFocusField !== "focus-system-status-select" ? (sysMeta.status || "draft") : prev.systemStatus
+        const systemOwner = activeFocusField !== "focus-system-owner-input" ? (sysMeta.owner || "") : prev.systemOwner
+        const systemDescription = activeFocusField !== "focus-system-description-textarea" ? (sysMeta.description || "") : prev.systemDescription
 
         if (
           systemName === prev.systemName &&
@@ -588,18 +589,18 @@ function FocusTab({
     if (selectedUnit && comp) {
       setFormState(prev => {
         const activeEl = typeof document !== "undefined" ? document.activeElement : null
-        const activeTestId = activeEl?.getAttribute("data-testid")
-        
+        const activeFocusField = activeEl?.getAttribute("data-focus-field")
+
         const nextState = { ...prev }
-        if (activeTestId !== "focus-name-input") nextState.name = comp.name || ""
-        if (activeTestId !== "focus-type-select") nextState.type = comp.type || "Stage"
-        if (activeTestId !== "focus-owner-input") nextState.owner = comp.metadata?.owner || ""
-        if (activeTestId !== "focus-status-select") nextState.status = comp.metadata?.status || "draft"
-        if (activeTestId !== "focus-color-select") nextState.color = comp.metadata?.color || "zinc"
-        if (activeTestId !== "focus-version-input") nextState.version = comp.metadata?.version || ""
-        if (activeTestId !== "focus-description-textarea") nextState.description = comp.metadata?.description || ""
-        if (activeTestId !== "focus-latency-input") nextState.latency = comp.metadata?.latency !== undefined ? String(comp.metadata.latency) : ""
-        if (activeTestId !== "focus-throughput-input") nextState.throughput = comp.metadata?.throughput !== undefined ? String(comp.metadata.throughput) : ""
+        if (activeFocusField !== "focus-name-input") nextState.name = comp.name || ""
+        if (activeFocusField !== "focus-type-select") nextState.type = comp.type || "Stage"
+        if (activeFocusField !== "focus-owner-input") nextState.owner = comp.metadata?.owner || ""
+        if (activeFocusField !== "focus-status-select") nextState.status = comp.metadata?.status || "draft"
+        if (activeFocusField !== "focus-color-select") nextState.color = comp.metadata?.color || "zinc"
+        if (activeFocusField !== "focus-version-input") nextState.version = comp.metadata?.version || ""
+        if (activeFocusField !== "focus-description-textarea") nextState.description = comp.metadata?.description || ""
+        if (activeFocusField !== "focus-latency-input") nextState.latency = comp.metadata?.latency !== undefined ? String(comp.metadata.latency) : ""
+        if (activeFocusField !== "focus-throughput-input") nextState.throughput = comp.metadata?.throughput !== undefined ? String(comp.metadata.throughput) : ""
         return nextState
       })
     }
@@ -609,8 +610,8 @@ function FocusTab({
   useEffect(() => {
     if (selectedUnit) {
       const activeEl = typeof document !== "undefined" ? document.activeElement : null
-      const activeTestId = activeEl?.getAttribute("data-testid")
-      if (activeTestId !== "focus-id-input") {
+      const activeFocusField = activeEl?.getAttribute("data-focus-field")
+      if (activeFocusField !== "focus-id-input") {
         setIdInput(selectedUnit)
       }
     }
@@ -631,12 +632,12 @@ function FocusTab({
 
       // Query DOM properties outside state setter to maintain pure callback behavior
       const activeEl = typeof document !== "undefined" ? document.activeElement : null
-      const activeTestId = activeEl?.getAttribute("data-testid") || ""
+      const activeFocusField = activeEl?.getAttribute("data-focus-field") || ""
 
       setLocalConnectionLabels(prev => {
         const next: Record<string, string> = {}
         Object.keys(newLabels).forEach(target => {
-          if (activeTestId === `focus-conn-label-input-${target}`) {
+          if (activeFocusField === `focus-conn-label-input-${target}`) {
             next[target] = prev[target] ?? newLabels[target]
           } else {
             next[target] = newLabels[target]
@@ -664,12 +665,12 @@ function FocusTab({
       })
 
       const activeEl = typeof document !== "undefined" ? document.activeElement : null
-      const activeTestId = activeEl?.getAttribute("data-testid") || ""
+      const activeFocusField = activeEl?.getAttribute("data-focus-field") || ""
 
       setLocalInboundConnectionLabels(prev => {
         const next: Record<string, string> = {}
         Object.keys(newInboundLabels).forEach(source => {
-          if (activeTestId === `focus-inbound-conn-label-input-${source}`) {
+          if (activeFocusField === `focus-inbound-conn-label-input-${source}`) {
             next[source] = prev[source] ?? newInboundLabels[source]
           } else {
             next[source] = newInboundLabels[source] || ""
@@ -991,6 +992,7 @@ function FocusTab({
                   <input
                     type="text"
                     data-testid="focus-id-input"
+                    data-focus-field="focus-id-input"
                     value={idInput}
                     onChange={(e) => {
                       setIdInput(e.target.value)
@@ -1027,6 +1029,7 @@ function FocusTab({
                 <input
                   type="text"
                   data-testid="focus-name-input"
+                  data-focus-field="focus-name-input"
                   value={formState.name || ""}
                   onChange={(e) => handleFieldChange("name", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
@@ -1039,6 +1042,7 @@ function FocusTab({
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component Type</label>
                 <select
                   data-testid="focus-type-select"
+                  data-focus-field="focus-type-select"
                   value={formState.type || "Stage"}
                   onChange={(e) => handleFieldChange("type", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
@@ -1056,6 +1060,7 @@ function FocusTab({
                 <input
                   type="text"
                   data-testid="focus-owner-input"
+                  data-focus-field="focus-owner-input"
                   value={formState.owner || ""}
                   onChange={(e) => handleFieldChange("metadata.owner", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
@@ -1068,6 +1073,7 @@ function FocusTab({
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Deployment Status</label>
                 <select
                   data-testid="focus-status-select"
+                  data-focus-field="focus-status-select"
                   value={formState.status || "draft"}
                   onChange={(e) => handleFieldChange("metadata.status", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
@@ -1083,6 +1089,7 @@ function FocusTab({
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Theme / Color</label>
                 <select
                   data-testid="focus-color-select"
+                  data-focus-field="focus-color-select"
                   value={formState.color || "zinc"}
                   onChange={(e) => handleFieldChange("metadata.color", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2 py-1.5 rounded-md font-sans focus:outline-none transition-all cursor-pointer"
@@ -1103,6 +1110,7 @@ function FocusTab({
                 <input
                   type="text"
                   data-testid="focus-version-input"
+                  data-focus-field="focus-version-input"
                   value={formState.version || ""}
                   onChange={(e) => handleFieldChange("metadata.version", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
@@ -1116,6 +1124,7 @@ function FocusTab({
                 <input
                   type="text"
                   data-testid="focus-latency-input"
+                  data-focus-field="focus-latency-input"
                   value={formState.latency || ""}
                   onChange={(e) => handleFieldChange("metadata.latency", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
@@ -1129,6 +1138,7 @@ function FocusTab({
                 <input
                   type="text"
                   data-testid="focus-throughput-input"
+                  data-focus-field="focus-throughput-input"
                   value={formState.throughput || ""}
                   onChange={(e) => handleFieldChange("metadata.throughput", e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
@@ -1142,6 +1152,7 @@ function FocusTab({
               <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Architectural Description</label>
               <textarea
                 data-testid="focus-description-textarea"
+                data-focus-field="focus-description-textarea"
                 value={formState.description || ""}
                 onChange={(e) => handleFieldChange("metadata.description", e.target.value)}
                 rows={2}
@@ -1180,6 +1191,7 @@ function FocusTab({
                         <input
                           type="text"
                           data-testid={`focus-conn-label-input-${conn.target}`}
+                          data-focus-field={`focus-conn-label-input-${conn.target}`}
                           value={localConnectionLabels[conn.target] || ""}
                           onChange={(e) => handleConnectionLabelChange(conn.target, e.target.value)}
                           placeholder="Add connection label..."
@@ -1288,6 +1300,7 @@ function FocusTab({
                         <input
                           type="text"
                           data-testid={`focus-inbound-conn-label-input-${conn.source}`}
+                          data-focus-field={`focus-inbound-conn-label-input-${conn.source}`}
                           value={localInboundConnectionLabels[conn.source] || ""}
                           onChange={(e) => handleInboundConnectionLabelChange(conn.source, e.target.value)}
                           placeholder="Add inbound connection label..."
@@ -1398,6 +1411,7 @@ function FocusTab({
               <input
                 type="text"
                 data-testid="focus-system-name-input"
+                data-focus-field="focus-system-name-input"
                 value={globalFormState.systemName || ""}
                 onChange={(e) => handleGlobalFieldChange("systemName", "system.name", e.target.value)}
                 placeholder="My System Name"
@@ -1437,6 +1451,7 @@ function FocusTab({
                       <input
                         type="text"
                         data-testid="focus-system-version-input"
+                        data-focus-field="focus-system-version-input"
                         value={globalFormState.systemVersion || ""}
                         onChange={(e) => handleGlobalFieldChange("systemVersion", "system.metadata.version", e.target.value)}
                         placeholder="e.g. 1.0.0"
@@ -1449,6 +1464,7 @@ function FocusTab({
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Status</label>
                       <select
                         data-testid="focus-system-status-select"
+                        data-focus-field="focus-system-status-select"
                         value={globalFormState.systemStatus || "draft"}
                         onChange={(e) => handleGlobalFieldChange("systemStatus", "system.metadata.status", e.target.value)}
                         className="w-full h-8 px-2 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-300 text-xs rounded transition-all focus:outline-none cursor-pointer font-sans"
@@ -1466,6 +1482,7 @@ function FocusTab({
                     <input
                       type="text"
                       data-testid="focus-system-owner-input"
+                      data-focus-field="focus-system-owner-input"
                       value={globalFormState.systemOwner || ""}
                       onChange={(e) => handleGlobalFieldChange("systemOwner", "system.metadata.owner", e.target.value)}
                       placeholder="e.g. architecture-team"
@@ -1478,6 +1495,7 @@ function FocusTab({
                     <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">System Description</label>
                     <textarea
                       data-testid="focus-system-description-textarea"
+                      data-focus-field="focus-system-description-textarea"
                       value={globalFormState.systemDescription || ""}
                       onChange={(e) => handleGlobalFieldChange("systemDescription", "system.metadata.description", e.target.value)}
                       placeholder="Enter high-level architecture description..."
