@@ -23,6 +23,25 @@ import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import specStore from "../../lib/spec-store"
 import { normalizeConnections, parseSpec } from "../../lib/spec-model"
+import {
+  computePathMetrics as computePathMetricsFor,
+  getBottleneckNode as getBottleneckNodeFor,
+  getHighestLatencyNode as getHighestLatencyNodeFor,
+  createSimulationState,
+  stepSimulation,
+  stepSizeForSpeed,
+  speedIntervalMs,
+  formatStartLogs,
+  formatCompletionLogs,
+  formatMilestoneLog,
+  formatStepLog,
+  formatPauseLog,
+  formatSpeedLog,
+  type SimSpeed,
+  type SimulationConfig,
+  type SimulationState,
+  type StepResult,
+} from "../../lib/simulation"
 
 interface EditorPanelProps {
   specText?: string
@@ -2309,63 +2328,10 @@ function MetricsTab({
   }, [components])
 
   // Memoized Path Metrics Calculation using O(1) map
-  const computePathMetrics = useCallback((path: string[]) => {
-    let cumulativeLatency = 0
-    let bottleneckCapacity = Infinity
-    let minSuccessRate = 1.0
-
-    path.forEach((nodeId) => {
-      const entry = componentsById.get(nodeId ? nodeId.trim() : "")
-      if (!entry) return
-
-      const { comp, index: compIdx } = entry
-      const type = String(comp?.type || "").toLowerCase()
-
-      // 1. Latency
-      let lat = 20
-      const metaLatency = comp?.metadata?.latency || comp?.latency
-      if (metaLatency) {
-        const parsed = parseInt(metaLatency, 10)
-        if (!isNaN(parsed)) lat = parsed
-      } else {
-        if (type === "gateway") lat = 5
-        else if (type === "stage") lat = 40
-        else if (type === "brick") lat = 15
-        else if (type === "store") lat = 80
-      }
-      cumulativeLatency += lat
-
-      // 2. Capacity/Throughput
-      let cap = 200
-      const metaCap = comp?.metadata?.throughput || comp?.metadata?.rate_limit || comp?.rate_limit || comp?.throughput
-      if (metaCap) {
-        const parsed = parseInt(metaCap, 10)
-        if (!isNaN(parsed)) cap = parsed
-      } else {
-        if (type === "gateway") cap = 1000
-        else if (type === "stage") cap = 150
-        else if (type === "brick") cap = 300
-        else if (type === "store") cap = 100
-      }
-      if (cap < bottleneckCapacity) {
-        bottleneckCapacity = cap
-      }
-
-      // 3. Success rate based on diagnostics
-      const compDiags = diagnosticsByComponent.get(compIdx) || []
-      compDiags.forEach((d) => {
-        if (d.severity === "error") minSuccessRate -= 0.20
-        else if (d.severity === "warning") minSuccessRate -= 0.05
-      })
-    })
-
-    const finalSuccessRate = Math.max(0.50, Math.min(1.0, minSuccessRate))
-    return {
-      cumulativeLatency,
-      bottleneckCapacity: bottleneckCapacity === Infinity ? 200 : bottleneckCapacity,
-      successRate: finalSuccessRate
-    }
-  }, [componentsById, diagnosticsByComponent])
+  const computePathMetrics = useCallback(
+    (path: string[]) => computePathMetricsFor(path, componentsById, diagnosticsByComponent),
+    [componentsById, diagnosticsByComponent]
+  )
 
   useEffect(() => {
     if (simulationState === "completed") {
@@ -2373,7 +2339,7 @@ function MetricsTab({
       if (path && path.length > 0) {
         const pathMetrics = computePathMetrics(path)
         const totalPackets = simPacketCount
-        const finalSuccess = simSuccessfulRef.current
+        const finalSuccess = simStateRef.current.successful
         const pathStr = path.join(" ➔ ")
         const newRun = {
           id: `sim-run-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -2543,137 +2509,69 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
     downloadAnchor.remove()
   }
 
-  const getBottleneckNode = useCallback((path: string[]) => {
-    let minCap = Infinity
-    let minNode = ""
-    path.forEach((node) => {
-      const entry = componentsById.get(node ? node.trim() : "")
-      if (!entry) return
-      const { comp } = entry
-      const type = String(comp?.type || "").toLowerCase()
-      let cap = 200
-      const metaCap = comp?.metadata?.throughput || comp?.metadata?.rate_limit || comp?.rate_limit || comp?.throughput
-      if (metaCap) {
-        const parsed = parseInt(metaCap, 10)
-        if (!isNaN(parsed)) cap = parsed
-      } else {
-        if (type === "gateway") cap = 1000
-        else if (type === "stage") cap = 150
-        else if (type === "brick") cap = 300
-        else if (type === "store") cap = 100
-      }
-      if (cap < minCap) {
-        minCap = cap
-        minNode = node
-      }
-    })
-    return { node: minNode, capacity: minCap === Infinity ? 200 : minCap }
-  }, [componentsById])
+  const getBottleneckNode = useCallback(
+    (path: string[]) => getBottleneckNodeFor(path, componentsById),
+    [componentsById]
+  )
 
-  const getHighestLatencyNode = useCallback((path: string[]) => {
-    let maxLat = -1
-    let maxNode = ""
-    path.forEach((node) => {
-      const entry = componentsById.get(node ? node.trim() : "")
-      if (!entry) return
-      const { comp } = entry
-      const type = String(comp?.type || "").toLowerCase()
-      let lat = 20
-      const metaLatency = comp?.metadata?.latency || comp?.latency
-      if (metaLatency) {
-        const parsed = parseInt(metaLatency, 10)
-        if (!isNaN(parsed)) lat = parsed
-      } else {
-        if (type === "gateway") lat = 5
-        else if (type === "stage") lat = 40
-        else if (type === "brick") lat = 15
-        else if (type === "store") lat = 80
-      }
-      if (lat > maxLat) {
-        maxLat = lat
-        maxNode = node
-      }
-    })
-    return { node: maxNode, latency: maxLat }
-  }, [componentsById])
+  const getHighestLatencyNode = useCallback(
+    (path: string[]) => getHighestLatencyNodeFor(path, componentsById),
+    [componentsById]
+  )
 
-  const simPacketsRef = useRef(0)
-  const simSuccessfulRef = useRef(0)
+  const simStateRef = useRef<SimulationState>(createSimulationState())
   const simPathRef = useRef<string[]>([])
   const simPathIdxRef = useRef<number | null>(null)
 
-  const startIntervalAtSpeed = (speed: "0.5x" | "1x" | "2x" | "5x") => {
+  // The engine is pure, so the tab rebuilds the config whenever it needs to run
+  // a step: path costs, packet count and loss ratio all come from current state.
+  const buildSimConfig = useCallback((path: string[]): SimulationConfig => {
+    const pathMetrics = computePathMetrics(path)
+    return {
+      path,
+      totalPackets: simPacketCount,
+      lossRatio: simLossRatio,
+      successRate: pathMetrics.successRate,
+      cumulativeLatency: pathMetrics.cumulativeLatency
+    }
+  }, [computePathMetrics, simPacketCount, simLossRatio])
+
+  const applyStep = (result: StepResult) => {
+    simStateRef.current = result.state
+    setSimulatedSuccessful(result.state.successful)
+    setSimulatedPackets(result.state.packets)
+  }
+
+  const startIntervalAtSpeed = (speed: SimSpeed) => {
     if (simulationIntervalRef.current) {
       clearInterval(simulationIntervalRef.current)
     }
 
-    const path = simPathRef.current
-    const pathMetrics = computePathMetrics(path)
-    const successProb = pathMetrics.successRate
-
-    const totalPackets = simPacketCount
-    const baseStepSize = Math.max(1, Math.round(totalPackets / 10))
-    const stepSize = speed === "2x" ? baseStepSize * 2 : speed === "5x" ? baseStepSize * 5 : baseStepSize
-    const finalSuccessProb = successProb * (1 - simLossRatio / 100)
-
-    const intervalTime = speed === "0.5x" ? 100 : 50
+    const config = buildSimConfig(simPathRef.current)
+    const stepSize = stepSizeForSpeed(config.totalPackets, speed)
 
     simulationIntervalRef.current = setInterval(() => {
-      let currentPackets = simPacketsRef.current
-      let currentSuccessful = simSuccessfulRef.current
+      const result = stepSimulation(simStateRef.current, config, stepSize)
 
-      let nextPackets = currentPackets + stepSize
-      const added = nextPackets >= totalPackets ? (totalPackets - currentPackets) : stepSize
-      const batchSuccess = Math.round(added * finalSuccessProb)
-      const finalSuccess = currentSuccessful + batchSuccess
-      const finalDropped = totalPackets - finalSuccess
-
-      if (nextPackets >= totalPackets) {
-        nextPackets = totalPackets
+      if (result.completed) {
         if (simulationIntervalRef.current) {
           clearInterval(simulationIntervalRef.current)
           simulationIntervalRef.current = null
         }
         setSimulationState("completed")
-        
-        const endNode = path[path.length - 1] || "end"
-        setSimulationLogs(prev => [
-          ...prev,
-          `✅ [Complete] All ${totalPackets} packets processed. Reached final store/sink [${endNode}] successfully.`,
-          `📊 [Report] Transmitted: ${totalPackets}, Success: ${finalSuccess}, Dropped/Lost: ${finalDropped}`
-        ])
-      } else {
-        const currentPct = Math.round((currentPackets / totalPackets) * 100)
-        const nextPct = Math.round((nextPackets / totalPackets) * 100)
-        
-        if (currentPct < 30 && nextPct >= 30) {
-          const midNode = path[Math.floor(path.length / 2)] || "intermediate"
-          setSimulationLogs(prev => [
-            ...prev,
-            `📦 [30%] Routing packets through [${midNode}] (latency accumulated so far: ${Math.round(pathMetrics.cumulativeLatency * 0.3)} ms)...`
-          ])
-        } else if (currentPct < 60 && nextPct >= 60) {
-          const lastNode = path[path.length - 2] || path[0]
-          setSimulationLogs(prev => [
-            ...prev,
-            `⚡ [60%] Flow passing successfully through [${lastNode}]...`
-          ])
-        }
+        setSimulationLogs(prev => [...prev, ...formatCompletionLogs(config, result)])
+      } else if (result.milestone !== null) {
+        setSimulationLogs(prev => [...prev, formatMilestoneLog(config, result.milestone as 30 | 60)])
       }
 
-      simSuccessfulRef.current = finalSuccess
-      simPacketsRef.current = nextPackets
-
-      setSimulatedSuccessful(finalSuccess)
-      setSimulatedPackets(nextPackets)
-    }, intervalTime)
+      applyStep(result)
+    }, speedIntervalMs(speed))
   }
 
   const handleStartSimulation = (path: string[], pathIdx: number) => {
     if (simulationState === "running") return
 
-    simPacketsRef.current = 0
-    simSuccessfulRef.current = 0
+    simStateRef.current = createSimulationState()
     simPathRef.current = path
     simPathIdxRef.current = pathIdx
 
@@ -2683,19 +2581,14 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
     setSimulatedSuccessful(0)
     setSimSpeed("1x")
 
-    const startNode = path[0] || "start"
-    const endNode = path[path.length - 1] || "end"
-    setSimulationLogs([
-      `🚀 [Start] Initiating flow tracing from start node [${startNode}] to final destination [${endNode}] with ${simPacketCount} packets.`,
-      `⚙️ [Config] Preset: ${derivedPreset}, Simulated packet loss: ${simLossRatio} percent`
-    ])
+    setSimulationLogs(formatStartLogs(buildSimConfig(path), derivedPreset))
 
     startIntervalAtSpeed("1x")
   }
 
-  const handleChangeSpeed = (newSpeed: "0.5x" | "1x" | "2x" | "5x" | "paused") => {
+  const handleChangeSpeed = (newSpeed: SimSpeed | "paused") => {
     if (simulationState !== "running") return
-    
+
     setSimSpeed(newSpeed)
 
     if (newSpeed === "paused") {
@@ -2705,58 +2598,39 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
       }
       setSimulationLogs(prev => [
         ...prev,
-        `⏸️ [Pause] Simulation paused at ${simPacketsRef.current}/${simPacketCount} packets.`
+        formatPauseLog(simStateRef.current.packets, simPacketCount)
       ])
     } else {
       setSimulationLogs(prev => [
         ...prev,
-        `▶️ [Speed] Set speed to ${newSpeed}. Resuming simulation tick...`
+        formatSpeedLog(newSpeed)
       ])
       startIntervalAtSpeed(newSpeed)
     }
   }
 
+  // Same engine call as the interval tick above — the step math lives in one place.
   const handleSingleStep = () => {
     if (simulationState !== "running" || simSpeed !== "paused") return
 
-    const path = simPathRef.current
-    const pathMetrics = computePathMetrics(path)
-    const successProb = pathMetrics.successRate
+    const config = buildSimConfig(simPathRef.current)
+    const result = stepSimulation(simStateRef.current, config, stepSizeForSpeed(config.totalPackets))
 
-    const totalPackets = simPacketCount
-    const stepSize = Math.max(1, Math.round(totalPackets / 10))
-    const finalSuccessProb = successProb * (1 - simLossRatio / 100)
-
-    let currentPackets = simPacketsRef.current
-    let nextPackets = currentPackets + stepSize
-    const added = nextPackets >= totalPackets ? (totalPackets - currentPackets) : stepSize
-    const batchSuccess = Math.round(added * finalSuccessProb)
-    const finalSuccess = simSuccessfulRef.current + batchSuccess
-    const finalDropped = totalPackets - finalSuccess
-
-    if (nextPackets >= totalPackets) {
-      nextPackets = totalPackets
+    if (result.completed) {
       setSimulationState("completed")
-      
-      const endNode = path[path.length - 1] || "end"
       setSimulationLogs(prev => [
         ...prev,
-        `🦶 [Step] Stepped to ${nextPackets}/${totalPackets} packets.`,
-        `✅ [Complete] All ${totalPackets} packets processed. Reached final store/sink [${endNode}] successfully.`,
-        `📊 [Report] Transmitted: ${totalPackets}, Success: ${finalSuccess}, Dropped/Lost: ${finalDropped}`
+        formatStepLog(config, result),
+        ...formatCompletionLogs(config, result)
       ])
     } else {
       setSimulationLogs(prev => [
         ...prev,
-        `🦶 [Step] Stepped to ${nextPackets}/${totalPackets} packets.`
+        formatStepLog(config, result)
       ])
     }
 
-    simSuccessfulRef.current = finalSuccess
-    simPacketsRef.current = nextPackets
-
-    setSimulatedSuccessful(finalSuccess)
-    setSimulatedPackets(nextPackets)
+    applyStep(result)
   }
 
   // Pre-computed O(1) type and label lookup maps for the path tracer to avoid nested linear scans on renders
