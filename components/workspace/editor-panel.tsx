@@ -20,6 +20,7 @@ import { lintSpec, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
+import specStore from "../../lib/spec-store"
 
 interface EditorPanelProps {
   specText?: string
@@ -1576,17 +1577,8 @@ function MetricsTab({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("simulation_history")
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          if (Array.isArray(parsed)) {
-            setSimulationHistory(parsed)
-          }
-        } catch (e) {
-          console.error("Failed to parse simulation history from localStorage", e)
-        }
-      }
+      setSimulationHistory(specStore.getSimulationHistory())
+      setCustomPresets(specStore.getCustomPresets())
     }
   }, [])
 
@@ -2176,11 +2168,7 @@ function MetricsTab({
           if (duplicate) return prev
           const next = [newRun, ...prev]
           if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem("simulation_history", JSON.stringify(next))
-            } catch (e) {
-              console.error("Failed to save simulation history to localStorage", e)
-            }
+            specStore.saveSimulationHistory(next)
           }
           return next
         })
@@ -3019,7 +3007,11 @@ function MetricsTab({
                     }
                     setCustomPresets(prev => {
                       const filtered = prev.filter(p => p.name !== trimmed);
-                      return [...filtered, { name: trimmed, packets: simPacketCount, loss: simLossRatio }];
+                      const next = [...filtered, { name: trimmed, packets: simPacketCount, loss: simLossRatio }];
+                      if (typeof window !== "undefined") {
+                        specStore.saveCustomPresets(next)
+                      }
+                      return next;
                     });
                     setCustomPresetName("");
                   }}
@@ -3044,7 +3036,13 @@ function MetricsTab({
                           type="button"
                           data-testid={`delete-custom-preset-${preset.name}`}
                           onClick={() => {
-                            setCustomPresets(prev => prev.filter(p => p.name !== preset.name));
+                            setCustomPresets(prev => {
+                              const next = prev.filter(p => p.name !== preset.name);
+                              if (typeof window !== "undefined") {
+                                specStore.saveCustomPresets(next)
+                              }
+                              return next;
+                            });
                           }}
                           className="text-zinc-500 hover:text-red-400 font-bold ml-0.5 text-[9px]"
                           aria-label={`Delete custom preset ${preset.name}`}
@@ -3464,11 +3462,7 @@ function MetricsTab({
                     onClick={() => {
                       setSimulationHistory([])
                       if (typeof window !== "undefined") {
-                        try {
-                          localStorage.setItem("simulation_history", "[]")
-                        } catch (e) {
-                          console.error("Failed to clear simulation history in localStorage", e)
-                        }
+                        specStore.clearSimulationHistory()
                       }
                     }}
                     className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-950 hover:bg-red-900 text-red-200 border border-red-900/40 transition-all cursor-pointer active:scale-95 ml-1"
