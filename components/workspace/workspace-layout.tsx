@@ -110,7 +110,7 @@ export function WorkspaceLayout() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const isInputOrTextarea = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-      const isSpecTextarea = target && target.getAttribute("data-testid") === "spec-textarea"
+      const isSpecTextarea = target && target.getAttribute("data-focus-field") === "spec-textarea"
 
       if (isInputOrTextarea && !isSpecTextarea) {
         return
