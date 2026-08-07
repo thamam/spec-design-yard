@@ -10,6 +10,7 @@ import {
   registerCompiledElements,
   resolvePendingRename,
 } from "../../lib/canvas-diff"
+import { normalizeConnections } from "../../lib/spec-model"
 
 const getDeterministicSeed = (id: string) => {
   let hash = 0
@@ -72,18 +73,12 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       const u = c.id.trim()
       if (!ids.has(u)) return
 
-      const conns = c.connections || []
-      if (Array.isArray(conns)) {
-        conns.forEach((conn: any) => {
-          const target = typeof conn === 'string' ? conn : conn?.target
-          if (typeof target === 'string') {
-            const v = target.trim()
-            if (ids.has(v) && v !== u) {
-              if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
-            }
-          }
-        })
-      }
+      normalizeConnections(c).forEach(({ target }) => {
+        const v = target.trim()
+        if (ids.has(v) && v !== u) {
+          if (!adjDirected[u].includes(v)) adjDirected[u].push(v)
+        }
+      })
     })
 
     const visited = new Set<string>()

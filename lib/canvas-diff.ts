@@ -1,4 +1,5 @@
 import { CanvasChange } from "./reconciler"
+import { normalizeConnections } from "./spec-model"
 
 /**
  * Pure scene-diff for the Excalidraw canvas.
@@ -364,11 +365,8 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
           if (source && target) {
             // Loop Guard: verify that label has actually changed compared to state in parsedSpec
             const comp = parsedSpec?.system?.components?.find((c: any) => c.id === source)
-            const conn = comp?.connections?.find((conn: any) => {
-              if (typeof conn === 'string') return conn === target
-              return conn && typeof conn === 'object' && conn.target === target
-            })
-            const currentLabel = typeof conn === 'string' ? "" : (conn?.label || "")
+            const conn = normalizeConnections(comp).find((c) => c.target === target)
+            const currentLabel = conn ? conn.label : ""
             const newLabel = changedTextElement.text.trim()
 
             if (String(currentLabel) !== newLabel) {
