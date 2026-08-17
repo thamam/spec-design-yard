@@ -34,7 +34,9 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     fireEvent.change(labelInput, { target: { value: 'process data' } })
 
     // Wait for the debounced AST update
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
 
     // Verify label updated in spec textarea
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
@@ -47,7 +49,9 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     fireEvent.click(disconnectBtn)
 
     // Wait for update
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // Verify connection is removed from spec
     const parsed = yaml.parse(textarea.value)
@@ -90,7 +94,9 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     fireEvent.click(addBtn)
 
     // Wait for update
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // Verify connection added in spec
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

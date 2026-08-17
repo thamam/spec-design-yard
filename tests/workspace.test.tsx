@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 // We will implement Workspace in pages/index.tsx or as a standalone component
 import Workspace from '../components/Workspace'
@@ -333,7 +333,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     fireEvent.change(nameInput, { target: { value: 'incoming_box' } })
     
     // Wait for the debounced AST reconciliation and parent state update (200ms)
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
     
     // Verify that the Workspace state and textarea are updated!
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

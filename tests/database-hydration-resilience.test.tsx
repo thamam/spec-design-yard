@@ -139,7 +139,9 @@ describe('Database Hydration Resilience & Auto-Save Security Checks', () => {
     fireEvent.change(textarea, { target: { value: textarea.value + '\n# Added comment' } })
 
     // Wait for the debouncer (1000ms) to fire if present
-    await new Promise(resolve => setTimeout(resolve, 1100))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1100))
+    })
 
     // Verify it saved the new edited content
     await waitFor(() => {
@@ -158,7 +160,9 @@ describe('Database Hydration Resilience & Auto-Save Security Checks', () => {
     fireEvent.change(textarea, { target: { value: textarea.value + '\n# Anonymous edit' } })
 
     // Wait to see if saveSpec was called
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    })
     expect(saveSpecSpy).not.toHaveBeenCalled()
   })
 })

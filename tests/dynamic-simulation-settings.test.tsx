@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 
@@ -112,13 +112,17 @@ describe('Dynamic Simulation Configuration Settings', () => {
     
     // Step size is max(1, round(50/10)) = 5. Interval runs every 50ms.
     // Let's wait 120ms to allow some packets to be transmitted
-    await new Promise((resolve) => setTimeout(resolve, 120))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    })
 
     // Check transmission progress is active and has transmitted some packets
     expect(screen.getByText(/Packets Transmitted:/i)).toBeInTheDocument()
 
     // Let's wait another 600ms for it to complete fully
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+    })
 
     // Verify simulation is completed
     await waitFor(() => {

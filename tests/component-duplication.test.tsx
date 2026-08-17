@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -29,7 +29,9 @@ describe('Interactive Component Duplication UI Integration', () => {
     fireEvent.click(duplicateBtn)
 
     // 5. Wait for the state update to propagate
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // 6. Verify that the selected component is now "inbox_copy_1"
     expect(screen.getByText('inbox_copy_1', { selector: '.font-bold' })).toBeInTheDocument()

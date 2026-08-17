@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -45,7 +45,9 @@ describe('Incoming Connections Manager in Focus Tab', () => {
     fireEvent.change(labelInput, { target: { value: 'reads raw data' } })
 
     // Wait for the debounced AST update
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
 
     // Verify label updated in spec textarea
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
@@ -58,7 +60,9 @@ describe('Incoming Connections Manager in Focus Tab', () => {
     fireEvent.click(disconnectBtn)
 
     // Wait for update
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // Verify connection from inbox to digest_stage is removed from spec
     const parsed = yaml.parse(textarea.value)
@@ -101,7 +105,9 @@ describe('Incoming Connections Manager in Focus Tab', () => {
     fireEvent.click(addBtn)
 
     // Wait for update
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // Verify connection added in spec from digest_stage targeting kb_store
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

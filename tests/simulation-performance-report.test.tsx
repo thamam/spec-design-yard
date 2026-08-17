@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 
@@ -34,7 +34,9 @@ describe('Simulation Performance Report & Diagnostic Analysis', () => {
     expect(screen.getByText(/Simulation Active/i)).toBeInTheDocument()
 
     // 5. Wait for simulation to complete fully (approx 600ms)
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    })
 
     // Verify simulation is completed
     await waitFor(() => {

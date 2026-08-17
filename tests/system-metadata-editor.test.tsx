@@ -73,7 +73,9 @@ describe('Global System Specification Settings in Focus Tab', () => {
     // 7. Edit System Name and verify spec updates
     fireEvent.change(nameInput, { target: { value: 'Sentinel Intelligent System' } })
     // Wait for debounce
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     let parsed = yaml.parse(textarea.value)
@@ -83,7 +85,9 @@ describe('Global System Specification Settings in Focus Tab', () => {
     fireEvent.change(ownerInput, { target: { value: 'Tomer & Sentinel' } })
     fireEvent.change(statusSelect, { target: { value: 'active' } })
     // Wait for debounce
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
 
     parsed = yaml.parse(textarea.value)
     expect(parsed.system.metadata.owner).toBe('Tomer & Sentinel')
