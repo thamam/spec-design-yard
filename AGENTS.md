@@ -26,7 +26,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
   - `quick-fixes.ts`, `autocomplete.ts`, `canvas-diff.ts` (Excalidraw scene diffing), `simulation.ts` (packet sim), `spec-store.ts` (persistence seam: localStorage + in-memory fallback)
   - `db.ts` — thin delegate onto spec-store; **not a real DB** despite the name
 - `components/workspace/` — `workspace-layout.tsx` owns all cross-panel state; `editor-panel.tsx` (left pane), `canvas-panel.tsx` + `excalidraw-canvas.tsx` (right pane), `metrics-tab.tsx` (simulator UI), `auth-panel.tsx` (**cosmetic only — no auth backend**)
-- `pages/index.tsx` → `<WorkspaceLayout/>`; `pages/hello-sentinel.tsx` is a leftover smoke-test page
+- `pages/index.tsx` → `<WorkspaceLayout/>` (the only routed page)
 
 ## Conventions (enforce, don't dilute)
 
@@ -38,8 +38,8 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 ## Gotchas
 
-- `prisma/schema.prisma` exists but **Prisma is not installed or wired** — persistence is localStorage-only; docs claiming a database are stale
-- `@xyflow/react` is in `package.json` but **unused** (zero imports) — do not build on it; the canvas is Excalidraw only
+- `prisma/schema.prisma` exists but **Prisma is not installed or wired** — persistence is localStorage-only
+- The canvas is Excalidraw only — do not add a second canvas library
 - No `next.config.*`, no ESLint/Prettier configs — match existing style manually
 - `components/Workspace.tsx` (PascalCase) is a legacy re-export stub — new components go in `components/workspace/`, kebab-case
 - `_bmad-output/project-context.md` is the detailed agent rulebook (43 rules: dep pins, Excalidraw sync guards, undo semantics, NaN/ghost-component traps) — read it before non-trivial canvas/reconciler work
