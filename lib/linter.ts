@@ -41,10 +41,17 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     return diagnostics
   }
 
-  if (!system.name || typeof system.name !== "string" || system.name.trim() === "") {
+  if (typeof system.name === "string" && system.name.trim() === "") {
     diagnostics.push({
       severity: "warning",
-      message: "System name is missing or empty.",
+      message: "System name is empty.",
+      path: "system.name",
+      code: "empty-system-name",
+    })
+  } else if (typeof system.name !== "string") {
+    diagnostics.push({
+      severity: "warning",
+      message: "System name is missing.",
       path: "system.name",
       code: "missing-system-name",
     })
@@ -181,7 +188,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
   const ids = new Set<string>()
   const lowercaseIds = new Map<string, string>()
   const validTypes = new Set(["store", "stage", "brick", "gateway"])
-  const allowedComponentKeys = new Set(["id", "type", "name", "x", "y", "connections", "metadata"])
+  const allowedComponentKeys = new Set(["id", "type", "name", "x", "y", "connections", "metadata", "latency", "throughput"])
   const typeMap: Record<string, string> = Object.create(null)
 
   // First pass: collect component IDs and validate basic fields
@@ -280,7 +287,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         const allowedMetaKeys = new Set([
           "owner", "description", "status", "version", "color",
           "rate_limit", "rate_limiting", "rateLimit", "rateLimiting", "rate-limit", "rate-limiting",
-          "throttled", "throttling", "buffer"
+          "throttled", "throttling", "buffer",
+          "latency", "throughput"
         ])
         const sortedAllowedKeys = Array.from(allowedMetaKeys).sort().join(", ")
         Object.keys(meta).forEach((k) => {

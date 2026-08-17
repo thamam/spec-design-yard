@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { FIXABLE_DIAGNOSTIC_CODES, isFixable, fixTypeForCode } from '../lib/quick-fixes'
+import { lintSpec } from '../lib/linter'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
 
@@ -141,5 +142,24 @@ describe('quick-fixes: STRIDE fixes are reachable end-to-end', () => {
       payload: { path: diagnostic.path, fixType: 'stride-spoofing' as any },
     })
     expect(updated).not.toBe(spec)
+  })
+})
+
+describe('quick-fixes: empty-system-name is reachable end-to-end', () => {
+  test('linter emits empty-system-name and the mapped fix sets a default name', () => {
+    const spec = 'system:\n  name: ""\n  components: []\n'
+
+    const diagnostic = lintSpec(yaml.parse(spec)).find(d => d.code === 'empty-system-name')
+    expect(diagnostic).toBeDefined()
+    expect(diagnostic?.path).toBe('system.name')
+    expect(isFixable(diagnostic!)).toBe(true)
+
+    const fixType = fixTypeForCode(diagnostic!.code!)
+    expect(fixType).toBe('missing-system-name')
+    const updated = reconcileSpec(spec, {
+      type: 'quick-fix',
+      payload: { path: diagnostic!.path!, fixType: fixType! },
+    })
+    expect(updated).toContain('name: "unnamed_system"')
   })
 })
