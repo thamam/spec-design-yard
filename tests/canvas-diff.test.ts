@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest"
 import {
   createCanvasDiffState,
   diffScene,
+  getSourceAndTargetFromArrowId,
+  getSourceAndTargetFromLabelId,
   pruneTracking,
   registerCompiledElements,
   resolvePendingRename,
@@ -257,5 +259,133 @@ describe("state helpers", () => {
     expect(stripDiagnosticMarkers("Inbox ❌")).toBe("Inbox")
     expect(stripDiagnosticMarkers("Inbox ⚠️")).toBe("Inbox")
     expect(stripDiagnosticMarkers("Inbox ❌ queue")).toBe("Inbox ❌ queue")
+  })
+})
+
+// The compiler (excalidraw-canvas.tsx) names arrows `arrow-${source}-${target}`
+// and their labels `arrow-label-${source}-${target}`. Since `-` is legal inside
+// component ids, extraction works by longest-prefix match against the spec's
+// component ids (sorted by descending length).
+describe("arrow/label id parsing", () => {
+  const prefixSpec = {
+    system: {
+      components: [
+        { id: "api", name: "API", type: "Gateway" },
+        { id: "api-gateway", name: "API Gateway", type: "Gateway" },
+        { id: "db", name: "DB", type: "Store" },
+      ],
+    },
+  }
+
+  describe("getSourceAndTargetFromArrowId", () => {
+    it("extracts source and target from a well-formed arrow id", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-digest", parsedSpec)).toEqual({
+        source: "inbox",
+        target: "digest",
+      })
+    })
+
+    it("prefers the longest matching component id as the source", () => {
+      // Naive first-match on "api" would yield target "gateway-db".
+      expect(getSourceAndTargetFromArrowId("arrow-api-gateway-db", prefixSpec)).toEqual({
+        source: "api-gateway",
+        target: "db",
+      })
+    })
+
+    it("still matches the shorter id when it is the real source", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-api-db", prefixSpec)).toEqual({
+        source: "api",
+        target: "db",
+      })
+    })
+
+    it("keeps separator characters inside the target id intact", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-api-gateway-db", prefixSpec).target).toBe("db")
+      const dashTargets = {
+        system: { components: [{ id: "inbox" }, { id: "digest-stage" }] },
+      }
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-digest-stage", dashTargets)).toEqual({
+        source: "inbox",
+        target: "digest-stage",
+      })
+    })
+
+    it("returns empty strings when no known component id prefixes the arrow id", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-stranger-digest", parsedSpec)).toEqual({
+        source: "",
+        target: "",
+      })
+    })
+
+    it("returns empty strings for malformed ids and empty input", () => {
+      expect(getSourceAndTargetFromArrowId("not-an-arrow", parsedSpec)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromArrowId("arrow-", parsedSpec)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromArrowId("", parsedSpec)).toEqual({ source: "", target: "" })
+    })
+
+    it("yields an empty target when the id ends right after the source prefix", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-", parsedSpec)).toEqual({
+        source: "inbox",
+        target: "",
+      })
+    })
+
+    it("does not mistake a label id for an arrow id", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-label-inbox-digest", parsedSpec)).toEqual({
+        source: "",
+        target: "",
+      })
+    })
+
+    it("returns empty strings without a parsed spec", () => {
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-digest", undefined)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-digest", null)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromArrowId("arrow-inbox-digest", {})).toEqual({ source: "", target: "" })
+    })
+  })
+
+  describe("getSourceAndTargetFromLabelId", () => {
+    it("extracts source and target from a well-formed label id", () => {
+      expect(getSourceAndTargetFromLabelId("arrow-label-inbox-digest", parsedSpec)).toEqual({
+        source: "inbox",
+        target: "digest",
+      })
+    })
+
+    it("prefers the longest matching component id as the source", () => {
+      expect(getSourceAndTargetFromLabelId("arrow-label-api-gateway-db", prefixSpec)).toEqual({
+        source: "api-gateway",
+        target: "db",
+      })
+      expect(getSourceAndTargetFromLabelId("arrow-label-api-db", prefixSpec)).toEqual({
+        source: "api",
+        target: "db",
+      })
+    })
+
+    it("keeps separator characters inside the target id intact", () => {
+      const dashTargets = {
+        system: { components: [{ id: "inbox" }, { id: "digest-stage" }] },
+      }
+      expect(getSourceAndTargetFromLabelId("arrow-label-inbox-digest-stage", dashTargets)).toEqual({
+        source: "inbox",
+        target: "digest-stage",
+      })
+    })
+
+    it("returns empty strings for unknown sources, malformed ids, and empty input", () => {
+      expect(getSourceAndTargetFromLabelId("arrow-label-stranger-digest", parsedSpec)).toEqual({
+        source: "",
+        target: "",
+      })
+      expect(getSourceAndTargetFromLabelId("arrow-inbox-digest", parsedSpec)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromLabelId("", parsedSpec)).toEqual({ source: "", target: "" })
+    })
+
+    it("returns empty strings without a parsed spec", () => {
+      expect(getSourceAndTargetFromLabelId("arrow-label-inbox-digest", undefined)).toEqual({ source: "", target: "" })
+      expect(getSourceAndTargetFromLabelId("arrow-label-inbox-digest", {})).toEqual({ source: "", target: "" })
+    })
   })
 })
