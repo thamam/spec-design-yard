@@ -2,7 +2,7 @@
 
 Welcome to **Spec-Design-Yard**! This is a state-of-the-art interactive visual workspace designed for defining, analyzing, and simulating complex system architectures. 
 
-By mapping architectures from a human-readable **YAML specification**, Spec-Yard combines strict static analysis (**architectural linting**) with beautiful visual representation (**Excalidraw/XYFlow canvas**) and dynamic modeling (**active packet traffic simulator**).
+By mapping architectures from a human-readable **YAML specification**, Spec-Yard combines strict static analysis (**architectural linting**) with beautiful visual representation (**Excalidraw canvas**) and dynamic modeling (**active packet traffic simulator**).
 
 ---
 
@@ -48,7 +48,7 @@ To keep instructions clean and focused, our documentation is granulated into log
 Spec-Yard is engineered with premium modern web technologies:
 * **Framework:** Next.js (Pages router) & React 18
 * **Styling:** TailwindCSS & PostCSS
-* **Interactive Canvas:** Excalidraw Canvas & XYFlow (React Flow)
+* **Interactive Canvas:** Excalidraw Canvas
 * **Testing:** Vitest with JSDOM and React Testing Library
 * **YAML Parser:** Standard JS YAML Engine
 
@@ -62,7 +62,7 @@ As Sentinel maintaining the yard, we adhere to absolute quality gates:
    ```bash
    npm run build
    ```
-3. **Test Integrity:** All 225+ tests must pass successfully before merging:
+3. **Test Integrity:** All tests (currently 378) must pass successfully before merging:
    ```bash
    npm run test
    ```
