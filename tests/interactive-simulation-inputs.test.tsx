@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -36,7 +36,9 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     fireEvent.change(throughputInput, { target: { value: '550' } })
 
     // Wait for the debouncer (250ms) to update the parent YAML state
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
 
     // 5. Verify the YAML text in the textarea is updated with the integer performance metadata
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
@@ -67,7 +69,9 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     fireEvent.change(throughputInput, { target: { value: '15' } })
 
     // Wait for debounce
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
 
     // 2. Switch back to Metrics Tab to run simulation
     fireEvent.click(metricsTabButton)
@@ -103,5 +107,11 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     expect(screen.getByText(/Bottleneck Capacity/i)).toBeInTheDocument()
     expect(screen.getByText(/15 req\/s/i)).toBeInTheDocument()
     expect(screen.getByText(/Simulation Active/i)).toBeInTheDocument()
+
+    // Let the running simulation finish inside act() so the interval's state
+    // updates don't land outside act after the assertions.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700))
+    })
   })
 })
