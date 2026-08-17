@@ -42,7 +42,21 @@ export class LocalStorageSpecStore implements SpecStore {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(`spec_${id}`)
-        if (saved) return JSON.parse(saved)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          // Valid JSON with the wrong shape (corrupted entry) is treated as
+          // not-found rather than handed back as a SpecDocument.
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            typeof parsed.id === "string" &&
+            typeof parsed.title === "string" &&
+            typeof parsed.yamlContent === "string" &&
+            typeof parsed.updatedAt === "string"
+          ) {
+            return parsed
+          }
+        }
       } catch (e) {
         console.error("Failed to read spec from localStorage", e)
       }
