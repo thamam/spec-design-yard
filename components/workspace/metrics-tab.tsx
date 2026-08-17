@@ -5,6 +5,8 @@ import { SearchIcon, SparklesIcon } from "lucide-react"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
 import specStore from "../../lib/spec-store"
 import { normalizeConnections } from "../../lib/spec-model"
+import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
+import { triggerDownload } from "./download"
 import {
   computePathMetrics as computePathMetricsFor,
   getBottleneckNode as getBottleneckNodeFor,
@@ -49,16 +51,6 @@ const SIMULATION_RUN_CSV_HEADERS = [
 
 function simulationRunCsvRow(run: any, path: string = run.path) {
   return [run.id, run.timestamp, path, run.packetCount, run.successful, run.dropped, run.lossRatio, run.latency, run.bottleneck]
-}
-
-/** The one place this tab hands a file to the browser. */
-function triggerDownload(href: string, filename: string) {
-  const downloadAnchor = document.createElement('a')
-  downloadAnchor.setAttribute("href", href)
-  downloadAnchor.setAttribute("download", filename)
-  document.body.appendChild(downloadAnchor)
-  downloadAnchor.click()
-  downloadAnchor.remove()
 }
 
 function downloadJSON(data: any, filename: string) {
@@ -694,76 +686,7 @@ export function MetricsTab({
   }
 
   const handleExportMarkdownReport = () => {
-    const hasSpoofingThreat = diagnostics.some(d => d.code === 'stride-spoofing')
-    const hasTamperingThreat = diagnostics.some(d => d.code === 'stride-tampering')
-    const hasRepudiationThreat = diagnostics.some(d => d.code === 'stride-repudiation')
-    const hasInfoDisclosureThreat = diagnostics.some(d => d.code === 'stride-information-disclosure')
-    const hasElevationThreat = diagnostics.some(d => d.code === 'stride-elevation-of-privilege')
-    const hasDoSThreat = diagnostics.some(d => d.code === 'stride-denial-of-service')
-
-    const dateStr = new Date().toLocaleString()
-
-    const md = `# System Architecture Audit & Blueprint Report
-
-Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
-
-## 1. System Overview
-- **System Name:** ${systemName}
-- **System Health:** ${healthPct}%
-- **Coupling Rating:** ${couplingRating}
-- **Connection Density:** ${connectionDensity}
-- **Subgraphs Count:** ${subgraphsCount}
-
-## 2. Component Inventory
-- **Gateways (Ingestion points):** ${gatewayCount}
-- **Stages (Processing units):** ${stageCount}
-- **Bricks (Auxiliary sidecars):** ${brickCount}
-- **Stores (Data persistence):** ${storeCount}
-- **Total Components:** ${totalComponents}
-- **Total Connections:** ${totalConnections}
-
-## 3. Real-Time Linting Diagnostics
-- **Errors Count:** ${errorsCount}
-- **Warnings Count:** ${warningsCount}
-- **Info Count:** ${infoCount}
-
-### Detailed Active Diagnostics:
-${diagnostics.length === 0 
-  ? "✅ No architectural violations or lint warnings detected! Perfect design standard." 
-  : diagnostics.map((d, i) => (i + 1) + ". [" + d.severity.toUpperCase() + "] (" + (d.code || "unknown") + "): " + d.message + " (Path: " + (d.path || "N/A") + ")").join("\n")}
-
-## 4. STRIDE Threat Modeling & Recommendations
-The system analysis evaluates six STRIDE threat boundaries across the design blueprint:
-
-### Spoofing (S):
-- Gateway elements must carry validation/auth labels.
-- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
-
-### Tampering (T):
-- Connection channels must specify secure communication.
-- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
-
-### Repudiation (R):
-- Key data Stores must attach to an audited event ledger or logging neighbor.
-- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
-
-### Information Disclosure (I):
-- Direct Gateway-to-Store flows bypassing stages.
-- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
-
-### Elevation of Privilege (E):
-- Administrative/privileged blocks must require verification.
-- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Connect administrative or privileged nodes to verification modules.
-
-### Denial of Service (DoS):
-- High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
-- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
-- Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
+    const md = generateArchitectureAuditReport(parsedSpec, diagnostics)
 
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       const p = navigator.clipboard.writeText(md)
@@ -772,10 +695,9 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
       }
     }
 
-    const sanitizedName = systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
     triggerDownload(
       "data:text/markdown;charset=utf-8," + encodeURIComponent(md),
-      `architecture-audit-${sanitizedName}-${Date.now()}.md`
+      architectureAuditReportFilename(systemName)
     )
   }
 
