@@ -8,8 +8,8 @@ import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
-import { lintSpec } from "../../lib/linter"
-import { parseSpec } from "../../lib/spec-model"
+import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
+import { parseSpec, type DroppedConnection } from "../../lib/spec-model"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -136,6 +136,7 @@ export function WorkspaceLayout() {
   }, [undo, redo])
 
   const [parsedSpec, setParsedSpec] = useState<any>(null)
+  const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"code" | "tree" | "focus" | "metrics" | "security">("code")
   const [pathSource, setPathSource] = useState<string>("")
@@ -173,7 +174,13 @@ export function WorkspaceLayout() {
       }
 
       const timer = setTimeout(() => {
-        db.saveSpec("main", "External Brain v0.2", specText)
+        const { spec } = parseSpec(specText)
+        const systemName = spec?.system?.name
+        const title =
+          typeof systemName === "string" && systemName.trim() !== ""
+            ? systemName.trim()
+            : db.getSpec("main")?.title || "Untitled Spec"
+        db.saveSpec("main", title, specText)
         lastLoadedSpecRef.current = specText
       }, 1000)
 
@@ -207,15 +214,16 @@ export function WorkspaceLayout() {
   // Dynamically parse the YAML as user types
   useEffect(() => {
     // Ignore invalid parse on typos, keep last valid parse
-    const { spec } = parseSpec(specText)
+    const { spec, droppedConnections: dropped } = parseSpec(specText)
+    setDroppedConnections(dropped)
     if (spec) {
       setParsedSpec(spec)
     }
   }, [specText])
 
   const diagnostics = useMemo(() => {
-    return lintSpec(parsedSpec)
-  }, [parsedSpec])
+    return [...lintSpec(parsedSpec), ...droppedConnectionDiagnostics(droppedConnections)]
+  }, [parsedSpec, droppedConnections])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
