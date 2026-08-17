@@ -31,3 +31,9 @@ storyboard*.png
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.bmad-loop/runs/
+.bmad-loop/cache/
+
+# agent tooling (local, machine-specific)
+/.codegraph/
+/.kimi-code/
