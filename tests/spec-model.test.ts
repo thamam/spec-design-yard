@@ -42,16 +42,31 @@ system:
   })
 
   it("returns neither spec nor error for a non-object document", () => {
-    expect(parseSpec("")).toEqual({ spec: null, error: null })
-    expect(parseSpec("just a scalar")).toEqual({ spec: null, error: null })
+    expect(parseSpec("")).toEqual({ spec: null, error: null, droppedConnections: [] })
+    expect(parseSpec("just a scalar")).toEqual({ spec: null, error: null, droppedConnections: [] })
   })
 
-  it("strips string-form connections at the parse boundary (mid-keystroke text parses as a string)", () => {
-    const { spec, error } = parseSpec(
+  it("strips string-form connections at the parse boundary but reports them", () => {
+    // Mid-keystroke text inside a connections list parses as a string, so the
+    // entries are still stripped — but silently dropping authored YAML is a
+    // data-loss bug, so each stripped entry is reported for a diagnostic.
+    const { spec, error, droppedConnections } = parseSpec(
       "system:\n  components:\n    - id: gate\n      type: Gateway\n      connections:\n        - dig\n        - target: store_a\n          label: writes\n"
     )
     expect(error).toBeNull()
     expect(spec?.system?.components?.[0]?.connections).toEqual([{ target: "store_a", label: "writes" }])
+    expect(droppedConnections).toEqual([{ componentIndex: 0, connectionIndex: 0, value: "dig" }])
+  })
+
+  it("reports string connections of every surviving component, with raw indexes", () => {
+    const { droppedConnections } = parseSpec(
+      "system:\n  components:\n    - id: a\n      connections:\n        - b\n        - target: c\n        - d\n    - id: e\n      connections:\n        - f\n"
+    )
+    expect(droppedConnections).toEqual([
+      { componentIndex: 0, connectionIndex: 0, value: "b" },
+      { componentIndex: 0, connectionIndex: 2, value: "d" },
+      { componentIndex: 1, connectionIndex: 0, value: "f" },
+    ])
   })
 })
 

@@ -39,6 +39,20 @@ export interface ParseSpecResult {
   spec: Spec | null
   /** The YAML syntax error message, or null when the text parsed. */
   error: string | null
+  /**
+   * String-form connections the sanitizer stripped, with their raw indexes, so
+   * callers can surface a diagnostic instead of dropping authored YAML silently.
+   */
+  droppedConnections: DroppedConnection[]
+}
+
+export interface DroppedConnection {
+  /** Index of the component in the raw `system.components` array. */
+  componentIndex: number
+  /** Index of the entry in the component's raw `connections` array. */
+  connectionIndex: number
+  /** The stripped string entry. */
+  value: string
 }
 
 // Mid-keystroke YAML like a bare "- " parses to null list entries; every
@@ -46,8 +60,10 @@ export interface ParseSpecResult {
 // render throw unmounts the whole workspace. Strip them at the parse boundary.
 // String-form connections ("- digest") are stripped here too: mid-keystroke
 // text inside a connections list parses as a string on every keystroke, so the
-// parse boundary keeps only { target } objects. normalizeConnections still
-// accepts the string form for specs built in memory (tests, tooling).
+// parse boundary keeps only { target } objects. Stripped strings are reported
+// via ParseSpecResult.droppedConnections so they don't vanish silently.
+// normalizeConnections still accepts the string form for specs built in memory
+// (tests, tooling).
 function sanitizeParsedSpec(parsed: any): Spec {
   const components = parsed?.system?.components
   if (!Array.isArray(components)) return parsed
@@ -67,6 +83,24 @@ function sanitizeParsedSpec(parsed: any): Spec {
 }
 
 /**
+ * Collect the string-form connection entries that sanitizeParsedSpec strips.
+ * Only surviving (object) components are walked — a dropped component's inner
+ * entries would point at a path that no longer exists.
+ */
+function collectDroppedConnections(parsed: any): DroppedConnection[] {
+  const components = parsed?.system?.components
+  if (!Array.isArray(components)) return []
+  const dropped: DroppedConnection[] = []
+  components.forEach((c: any, componentIndex: number) => {
+    if (!c || typeof c !== "object" || Array.isArray(c) || !Array.isArray(c.connections)) return
+    c.connections.forEach((conn: any, connectionIndex: number) => {
+      if (typeof conn === "string") dropped.push({ componentIndex, connectionIndex, value: conn })
+    })
+  })
+  return dropped
+}
+
+/**
  * Parse and sanitize spec text. A non-object document (empty text, a bare
  * scalar) yields `spec: null` with no error — it is not a syntax problem, there
  * is just nothing usable yet.
@@ -75,11 +109,11 @@ export function parseSpec(text: string): ParseSpecResult {
   try {
     const parsed = yaml.parse(text)
     if (parsed && typeof parsed === "object") {
-      return { spec: sanitizeParsedSpec(parsed), error: null }
+      return { spec: sanitizeParsedSpec(parsed), error: null, droppedConnections: collectDroppedConnections(parsed) }
     }
-    return { spec: null, error: null }
+    return { spec: null, error: null, droppedConnections: [] }
   } catch (e: any) {
-    return { spec: null, error: e?.message || "Invalid YAML syntax" }
+    return { spec: null, error: e?.message || "Invalid YAML syntax", droppedConnections: [] }
   }
 }
 

@@ -1,4 +1,4 @@
-import { normalizeConnections } from "./spec-model"
+import { normalizeConnections, type DroppedConnection } from "./spec-model"
 
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
 const SENSITIVE_METADATA_REGEX = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
@@ -9,6 +9,19 @@ export interface Diagnostic {
   message: string
   path?: string
   code?: string
+}
+
+// String-form connections ("- digest") are stripped at the parse boundary
+// (lib/spec-model.ts). Surface each dropped entry as a diagnostic so the user
+// gets feedback instead of silent data loss. Path format matches the linter's
+// connection-level diagnostics.
+export function droppedConnectionDiagnostics(dropped: DroppedConnection[]): Diagnostic[] {
+  return dropped.map((d) => ({
+    severity: "info",
+    code: "string-connection-stripped",
+    path: `system.components[${d.componentIndex}].connections[${d.connectionIndex}]`,
+    message: `Connection "- ${d.value}" was ignored; use the object form "- target: ${d.value}".`,
+  }))
 }
 
 // Deliberately `any`: the linter's job is to diagnose specs that violate the
@@ -239,7 +252,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
       })
     } else {
       const type = comp.type.trim().toLowerCase()
-      if (comp.id && typeof comp.id === "string") {
+      if (comp.id && typeof comp.id === "string" && !(comp.id.trim() in typeMap)) {
         typeMap[comp.id.trim()] = type
       }
       // 4. Unrecognized Type
@@ -526,7 +539,7 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
 
-      if (targetType === "gateway") {
+      if ((compType === "stage" || compType === "brick") && targetType === "gateway") {
         diagnostics.push({
           severity: "warning",
           message: `Component "${compId}" (${compType || 'unknown'}) connects directly to Gateway "${target}". Gateways are entry points and should not receive internal flow.`,

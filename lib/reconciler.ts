@@ -331,14 +331,18 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
                   if (targetId === target) {
                     const currentLabel = connNode.get('label')
                     if (currentLabel !== label) {
-                      connNode.set('label', label)
+                      if (typeof label === 'string' && label.trim() === '') {
+                        connNode.delete('label')
+                      } else {
+                        connNode.set('label', label)
+                      }
                       modified = true
                     }
                   }
                 } else if (connNode) {
                   // If it's a string node e.g. - target (though typically it's an object)
                   const val = typeof connNode.toJSON === 'function' ? connNode.toJSON() : connNode
-                  if (val === target) {
+                  if (val === target && typeof label === 'string' && label.trim() !== '') {
                     // Convert to object so we can set label
                     const idx = conns.items.indexOf(connNode)
                     if (idx !== -1) {
