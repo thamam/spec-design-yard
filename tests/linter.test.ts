@@ -1442,3 +1442,33 @@ describe('system.name diagnostics', () => {
     expect(issue?.code).toBe('missing-system-name')
   })
 })
+
+describe('simulation metadata keys', () => {
+  test('metadata.latency and metadata.throughput are recognized keys', () => {
+    const diagnostics = lintSpec({
+      system: {
+        name: 'Sim System',
+        components: [
+          {
+            id: 'svc',
+            type: 'Stage',
+            metadata: { latency: '50', throughput: '1000' }
+          }
+        ]
+      }
+    })
+    expect(diagnostics.filter(d => d.code === 'unrecognized-metadata-key')).toHaveLength(0)
+  })
+
+  test('top-level latency and throughput are recognized component keys', () => {
+    const diagnostics = lintSpec({
+      system: {
+        name: 'Sim System',
+        components: [
+          { id: 'svc', type: 'Stage', latency: '50', throughput: '1000' }
+        ]
+      }
+    })
+    expect(diagnostics.filter(d => d.code === 'unrecognized-component-key')).toHaveLength(0)
+  })
+})
