@@ -38,15 +38,6 @@ export class LocalStorageSpecStore implements SpecStore {
   private simulationHistory: SimulationRun[] = []
   private customPresets: CustomPreset[] = []
 
-  constructor() {
-    this.specs["default"] = {
-      id: "default",
-      title: "External Brain v0.2",
-      yamlContent: "",
-      updatedAt: new Date().toISOString(),
-    }
-  }
-
   public getSpec(id: string): SpecDocument | null {
     if (typeof window !== "undefined") {
       try {
