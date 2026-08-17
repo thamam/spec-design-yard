@@ -65,6 +65,8 @@ system:
 | `x` | No | Number | The horizontal coordinate on the layout canvas. |
 | `y` | No | Number | The vertical coordinate on the layout canvas. |
 | `metadata` | No | Object | Contains operational metadata for the component (see details below). |
+| `latency` | No | Number/String | Per-component latency (ms) used by the simulator. Equivalent to `metadata.latency`. |
+| `throughput` | No | Number/String | Per-component throughput/capacity used by the simulator. Equivalent to `metadata.throughput`. |
 | `connections` | No | Array | A list of downstream components to which this component sends data (see details below). |
 
 ---
@@ -112,3 +114,5 @@ metadata:
 * **`color`:** Standardizes visual groups on the canvas. Valid colors are: `indigo`, `purple`, `emerald`, `amber`, `rose`, `sky`, `zinc`, or any valid Hex code (e.g., `#f00` or `#ff00ff`).
 * **Rate Limiting Fields:** `rate_limit` (or `rateLimit` / `rate-limit`) can be defined to spec maximum traffic capacity.
 * **`buffer` / `throttled`:** Configures buffer sizes or throttle parameters to specify backpressure handling.
+* **`latency`:** Declared per-component latency (in milliseconds). Read by the packet-flow simulator when computing cumulative path latency; overrides the simulator's per-type default. May also be set as a top-level component field.
+* **`throughput`:** Declared per-component throughput/capacity (requests per second). Read by the simulator to find the bottleneck capacity of a path; overrides the per-type default. May also be set as a top-level component field.
