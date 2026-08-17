@@ -154,10 +154,11 @@ describe('quick-fixes: empty-system-name is reachable end-to-end', () => {
     expect(diagnostic?.path).toBe('system.name')
     expect(isFixable(diagnostic!)).toBe(true)
 
-    const fixType = fixTypeForCode(diagnostic!.code!) ?? diagnostic!.code!
+    const fixType = fixTypeForCode(diagnostic!.code!)
+    expect(fixType).toBe('missing-system-name')
     const updated = reconcileSpec(spec, {
       type: 'quick-fix',
-      payload: { path: diagnostic!.path!, fixType },
+      payload: { path: diagnostic!.path!, fixType: fixType! },
     })
     expect(updated).toContain('name: "unnamed_system"')
   })
