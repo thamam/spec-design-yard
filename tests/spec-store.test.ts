@@ -57,6 +57,27 @@ describe('LocalStorageSpecStore', () => {
     expect(rehydrated.getCustomPresets()).toEqual(presets)
   })
 
+  test('returns null for corrupted localStorage entries with the wrong shape', () => {
+    const store = new LocalStorageSpecStore()
+    // Valid JSON, wrong shape — missing yamlContent et al must not come back
+    // as a SpecDocument.
+    localStorage.setItem('spec_main', JSON.stringify({ id: 'main', foo: 1 }))
+    expect(store.getSpec('main')).toBeNull()
+
+    localStorage.setItem('spec_main', JSON.stringify('just a string'))
+    expect(store.getSpec('main')).toBeNull()
+
+    localStorage.setItem('spec_main', JSON.stringify(null))
+    expect(store.getSpec('main')).toBeNull()
+
+    localStorage.setItem('spec_main', JSON.stringify({ id: 42, title: 'T', yamlContent: 'y', updatedAt: 'u' }))
+    expect(store.getSpec('main')).toBeNull()
+
+    // A well-shaped entry still loads.
+    localStorage.setItem('spec_main', JSON.stringify({ id: 'main', title: 'T', yamlContent: 'y', updatedAt: 'u' }))
+    expect(store.getSpec('main')?.yamlContent).toBe('y')
+  })
+
   test('falls back to in-memory state when localStorage.getItem throws', () => {
     const store = new LocalStorageSpecStore()
     store.saveSpec('main', 'Title', 'yaml-content')

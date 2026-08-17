@@ -89,8 +89,8 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     const { spec: updated } = parseSpec(textarea.value)
     const inbox = updated?.system?.components?.find((c: any) => c.id === 'inbox')
     expect(inbox).toBeTruthy()
-    expect(inbox.x).toBe(Math.round(dragX))
-    expect(inbox.y).toBe(Math.round(dragY))
+    expect(inbox!.x).toBe(Math.round(dragX))
+    expect(inbox!.y).toBe(Math.round(dragY))
 
     // Comment preservation is a product invariant of the YAML write path.
     expect(textarea.value).toContain('# Attaching Bricks')
@@ -100,7 +100,9 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     // positions persisted explicitly — assert they are not corrupted.
     const digestRect = compiled.find((el: any) => el.id === 'digest_stage' && el.type === 'rectangle')
     const digest = updated?.system?.components?.find((c: any) => c.id === 'digest_stage')
-    expect(digest.x).toBe(Math.round(digestRect.x))
-    expect(digest.y).toBe(Math.round(digestRect.y))
+    expect(digestRect).toBeTruthy()
+    expect(digest).toBeTruthy()
+    expect(digest!.x).toBe(Math.round(digestRect!.x))
+    expect(digest!.y).toBe(Math.round(digestRect!.y))
   })
 })
