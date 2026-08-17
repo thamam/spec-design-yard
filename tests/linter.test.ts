@@ -1416,3 +1416,29 @@ describe('Advanced Linter Features', () => {
   })
 })
 
+
+describe('system.name diagnostics', () => {
+  test('absent name key emits missing-system-name', () => {
+    const diagnostics = lintSpec({ system: { components: [] } })
+    const issue = diagnostics.find(d => d.path === 'system.name')
+    expect(issue?.code).toBe('missing-system-name')
+  })
+
+  test('empty string name emits empty-system-name', () => {
+    const diagnostics = lintSpec({ system: { name: '', components: [] } })
+    const issue = diagnostics.find(d => d.path === 'system.name')
+    expect(issue?.code).toBe('empty-system-name')
+  })
+
+  test('blank/whitespace name emits empty-system-name', () => {
+    const diagnostics = lintSpec({ system: { name: '   ', components: [] } })
+    const issue = diagnostics.find(d => d.path === 'system.name')
+    expect(issue?.code).toBe('empty-system-name')
+  })
+
+  test('non-string name emits missing-system-name', () => {
+    const diagnostics = lintSpec({ system: { name: 42, components: [] } })
+    const issue = diagnostics.find(d => d.path === 'system.name')
+    expect(issue?.code).toBe('missing-system-name')
+  })
+})

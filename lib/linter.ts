@@ -41,10 +41,17 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
     return diagnostics
   }
 
-  if (!system.name || typeof system.name !== "string" || system.name.trim() === "") {
+  if (typeof system.name === "string" && system.name.trim() === "") {
     diagnostics.push({
       severity: "warning",
-      message: "System name is missing or empty.",
+      message: "System name is empty.",
+      path: "system.name",
+      code: "empty-system-name",
+    })
+  } else if (typeof system.name !== "string") {
+    diagnostics.push({
+      severity: "warning",
+      message: "System name is missing.",
       path: "system.name",
       code: "missing-system-name",
     })
