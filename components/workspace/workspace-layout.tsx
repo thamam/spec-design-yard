@@ -8,7 +8,7 @@ import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
-import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
+import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
 import { parseSpec, type DroppedConnection } from "../../lib/spec-model"
 
 const MIN_PANEL_WIDTH = 280

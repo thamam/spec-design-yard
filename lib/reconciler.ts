@@ -331,7 +331,10 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
                   if (targetId === target) {
                     const currentLabel = connNode.get('label')
                     if (currentLabel !== label) {
-                      if (typeof label === 'string' && label.trim() === '') {
+                      // Anything that is not a non-blank string (empty string,
+                      // number, object, null) must not be written into the
+                      // YAML — delete the key instead.
+                      if (typeof label !== 'string' || label.trim() === '') {
                         connNode.delete('label')
                       } else {
                         connNode.set('label', label)

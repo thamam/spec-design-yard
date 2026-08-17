@@ -1523,12 +1523,11 @@ function FocusTab({
 interface SecurityTabProps {
   parsedSpec?: any
   diagnostics?: Diagnostic[]
-  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
   onQuickFixAll?: (fixes: { path: string; fixType: string; extraData?: any }[]) => void
   onExportReport?: () => void
 }
 
-function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix, onQuickFixAll, onExportReport }: SecurityTabProps) {
+function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportReport }: SecurityTabProps) {
   const spoofingDiags = diagnostics.filter(d => d.code === "stride-spoofing")
   const hasSpoofing = spoofingDiags.length > 0
 
@@ -1856,9 +1855,14 @@ export function EditorPanel({
   // survive otherwise).
   const handleQuickFixAll = (fixes: { path: string; fixType: string; extraData?: any }[]) => {
     if (fixes.length === 0) return
+    // Diagnostic codes are not always FixType names ("empty-system-name" →
+    // "missing-system-name"); route each through the same mapping the
+    // single-fix path uses, falling back to the code itself when it already
+    // names a FixType (e.g. the stride-* codes).
+    const mapped = fixes.map((f) => ({ ...f, fixType: (fixTypeForCode(f.fixType) ?? f.fixType) as FixType }))
     const updated = reconcileSpec(specText, {
       type: "quick-fix-all",
-      payload: { fixes: fixes as { path: string; fixType: FixType; extraData?: any }[] }
+      payload: { fixes: mapped }
     })
     if (updated !== specText) {
       setSpecText(updated)
@@ -2269,7 +2273,6 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         <SecurityTab
           parsedSpec={parsedSpec}
           diagnostics={diagnostics}
-          onQuickFix={handleQuickFix}
           onQuickFixAll={handleQuickFixAll}
           onExportReport={handleExportMarkdownReport}
         />

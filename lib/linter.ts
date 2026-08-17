@@ -11,10 +11,10 @@ export interface Diagnostic {
   code?: string
 }
 
-// String-form connections ("- digest") are stripped at the parse boundary
-// (lib/spec-model.ts). Surface each dropped entry as a diagnostic so the user
-// gets feedback instead of silent data loss. Path format matches the linter's
-// connection-level diagnostics.
+// Non-object connection entries ("- digest", "- 8080") are stripped at the
+// parse boundary (lib/spec-model.ts). Surface each dropped entry as a
+// diagnostic so the user gets feedback instead of silent data loss. Path
+// format matches the linter's connection-level diagnostics.
 export function droppedConnectionDiagnostics(dropped: DroppedConnection[]): Diagnostic[] {
   return dropped.map((d) => ({
     severity: "info",

@@ -40,18 +40,19 @@ export interface ParseSpecResult {
   /** The YAML syntax error message, or null when the text parsed. */
   error: string | null
   /**
-   * String-form connections the sanitizer stripped, with their raw indexes, so
-   * callers can surface a diagnostic instead of dropping authored YAML silently.
+   * String-form connections the sanitizer stripped, indexed in the SANITIZED
+   * coordinate system (what consumers see), so callers can surface a diagnostic
+   * instead of dropping authored YAML silently.
    */
   droppedConnections: DroppedConnection[]
 }
 
 export interface DroppedConnection {
-  /** Index of the component in the raw `system.components` array. */
+  /** Index of the component in the sanitized `system.components` array. */
   componentIndex: number
-  /** Index of the entry in the component's raw `connections` array. */
+  /** Index of the entry in the component's sanitized `connections` array. */
   connectionIndex: number
-  /** The stripped string entry. */
+  /** The stripped entry, stringified. */
   value: string
 }
 
@@ -83,18 +84,31 @@ function sanitizeParsedSpec(parsed: any): Spec {
 }
 
 /**
- * Collect the string-form connection entries that sanitizeParsedSpec strips.
- * Only surviving (object) components are walked — a dropped component's inner
- * entries would point at a path that no longer exists.
+ * Collect the connection entries that sanitizeParsedSpec strips. Only
+ * surviving (object) components are walked — a dropped component's inner
+ * entries would point at a path that no longer exists. Indexes are in the
+ * sanitized coordinate system (a dropped entry's index = number of surviving
+ * object entries before it), matching what linter paths and FocusTab see.
+ * Null entries (mid-keystroke "- ") stay silent by design; every other
+ * non-object entry (strings, numbers, booleans) is authored content and is
+ * reported.
  */
 function collectDroppedConnections(parsed: any): DroppedConnection[] {
   const components = parsed?.system?.components
   if (!Array.isArray(components)) return []
   const dropped: DroppedConnection[] = []
-  components.forEach((c: any, componentIndex: number) => {
-    if (!c || typeof c !== "object" || Array.isArray(c) || !Array.isArray(c.connections)) return
-    c.connections.forEach((conn: any, connectionIndex: number) => {
-      if (typeof conn === "string") dropped.push({ componentIndex, connectionIndex, value: conn })
+  let componentIndex = 0
+  components.forEach((c: any) => {
+    if (!c || typeof c !== "object" || Array.isArray(c)) return
+    const survivingComponentIndex = componentIndex++
+    if (!Array.isArray(c.connections)) return
+    let connectionIndex = 0
+    c.connections.forEach((conn: any) => {
+      if (conn && typeof conn === "object" && !Array.isArray(conn)) {
+        connectionIndex++
+      } else if (conn !== null && conn !== undefined) {
+        dropped.push({ componentIndex: survivingComponentIndex, connectionIndex, value: String(conn) })
+      }
     })
   })
   return dropped
