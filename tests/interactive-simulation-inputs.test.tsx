@@ -99,9 +99,6 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     const simulateBtn = screen.getByRole('button', { name: /Run Performance Simulation/i })
     fireEvent.click(simulateBtn)
 
-    console.log("DOM BODY STATE:")
-    screen.debug(undefined, 50000)
-
     // Verify simulation starts and shows our custom bottleneck and latency
     expect(screen.getByText(/Cumulative Latency/i)).toBeInTheDocument()
     expect(screen.getByText(/Bottleneck Capacity/i)).toBeInTheDocument()
