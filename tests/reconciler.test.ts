@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { reconcileSpec } from '../lib/reconciler'
+import { lintSpec } from '../lib/linter'
+import { parseSpec } from '../lib/spec-model'
 
 describe('AST Reconciliation Layer', () => {
   const initialSpec = `system:
@@ -664,6 +666,91 @@ system:
 
     expect(updated).toContain('label: JSON Payload')
     expect(updated).toContain('target: digest_stage')
+  })
+
+  test('reconciles connection-label with an empty label by removing the label key', () => {
+    const spec = `system:
+  name: Test System
+  components:
+    # inbox is the raw intake store
+    - id: inbox
+      type: Store
+      connections:
+        - target: digest_stage
+          label: JSON Payload
+    - id: digest_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'connection-label' as any,
+      payload: {
+        source: 'inbox',
+        target: 'digest_stage',
+        label: ''
+      }
+    })
+
+    expect(updated).not.toContain('label')
+    expect(updated).toContain('target: digest_stage')
+    expect(updated).toContain('# inbox is the raw intake store')
+
+    // Lint the parsed spec, not the ParseSpecResult wrapper: the wrapper has no
+    // `.system`, so lintSpec would emit a spurious missing-system and the
+    // missing-connection-label assertion would pass vacuously.
+    const diagnostics = lintSpec(parseSpec(updated).spec)
+    expect(diagnostics.find(d => d.code === 'missing-system')).toBeUndefined()
+    expect(diagnostics.find(d => d.code === 'missing-connection-label')).toBeUndefined()
+  })
+
+  test('reconciles connection-label with a non-string label by removing the label key', () => {
+    // A non-string runtime value must not be written into the YAML; like a
+    // blank string, it deletes the key instead.
+    const spec = `system:
+  name: Test System
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: digest_stage
+          label: JSON Payload
+    - id: digest_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'connection-label' as any,
+      payload: {
+        source: 'inbox',
+        target: 'digest_stage',
+        label: 42 as any
+      }
+    })
+
+    expect(updated).not.toContain('label')
+    expect(updated).toContain('target: digest_stage')
+  })
+
+  test('reconciles connection-label updates an existing label in place', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        - target: digest_stage
+          label: Old Label
+    - id: digest_stage
+      type: Stage
+`
+    const updated = reconcileSpec(spec, {
+      type: 'connection-label' as any,
+      payload: {
+        source: 'inbox',
+        target: 'digest_stage',
+        label: 'New Label'
+      }
+    })
+
+    expect(updated).toContain('label: New Label')
+    expect(updated).not.toContain('Old Label')
   })
 
   test('quick-fix unrecognized-connection-key removes the key', () => {

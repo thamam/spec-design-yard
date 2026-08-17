@@ -16,11 +16,11 @@ import {
   Shield,
 } from "lucide-react"
 import yaml from "yaml"
-import { lintSpec, type Diagnostic } from "../../lib/linter"
+import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
-import { normalizeConnections, parseSpec } from "../../lib/spec-model"
+import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
 import { MetricsTab } from "./metrics-tab"
 
 interface EditorPanelProps {
@@ -1523,11 +1523,11 @@ function FocusTab({
 interface SecurityTabProps {
   parsedSpec?: any
   diagnostics?: Diagnostic[]
-  onQuickFix?: (path: string, fixType: string, extraData?: any) => void
+  onQuickFixAll?: (fixes: { path: string; fixType: string; extraData?: any }[]) => void
   onExportReport?: () => void
 }
 
-function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix, onExportReport }: SecurityTabProps) {
+function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportReport }: SecurityTabProps) {
   const spoofingDiags = diagnostics.filter(d => d.code === "stride-spoofing")
   const hasSpoofing = spoofingDiags.length > 0
 
@@ -1619,16 +1619,20 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix, onExportReport 
   ]
 
   const handleFixThreat = (categoryDiags: Diagnostic[]) => {
-    if (!onQuickFix || categoryDiags.length === 0) return
-    categoryDiags.forEach(d => {
-      if (d.path && d.code) {
-        onQuickFix(d.path, d.code)
-      }
-    })
+    if (!onQuickFixAll || categoryDiags.length === 0) return
+    // Batch into one reconcile: calling onQuickFix per diagnostic reconciles
+    // against the same stale render-snapshot specText, so only the last fix
+    // would survive.
+    const fixes = categoryDiags
+      .filter(d => d.path && d.code)
+      .map(d => ({ path: d.path!, fixType: d.code! }))
+    if (fixes.length > 0) {
+      onQuickFixAll(fixes)
+    }
   }
 
   const handleFixAllThreats = () => {
-    if (!onQuickFix) return
+    if (!onQuickFixAll) return
     const allSecurityDiags = [
       ...spoofingDiags,
       ...tamperingDiags,
@@ -1638,11 +1642,7 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFix, onExportReport 
       ...dosDiags,
       ...secretDiags
     ]
-    allSecurityDiags.forEach(d => {
-      if (d.path && d.code) {
-        onQuickFix(d.path, d.code)
-      }
-    })
+    handleFixThreat(allSecurityDiags)
   }
 
   const getScoreColor = (val: number) => {
@@ -1821,13 +1821,15 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
   const lastParsedTextRef = useRef<string>("")
 
   useEffect(() => {
     if (specText === lastParsedTextRef.current) return
     lastParsedTextRef.current = specText
-    const { spec, error } = parseSpec(specText)
+    const { spec, error, droppedConnections: dropped } = parseSpec(specText)
     setYamlSyntaxError(error)
+    setDroppedConnections(dropped)
     if (propParsedSpec === undefined && spec) {
       setLocalParsedSpec(spec)
     }
@@ -1835,13 +1837,32 @@ export function EditorPanel({
 
   const diagnostics = useMemo(() => {
     if (yamlSyntaxError) return []
-    return lintSpec(parsedSpec)
-  }, [parsedSpec, yamlSyntaxError])
+    return [...lintSpec(parsedSpec), ...droppedConnectionDiagnostics(droppedConnections)]
+  }, [parsedSpec, yamlSyntaxError, droppedConnections])
 
   const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
     const updated = reconcileSpec(specText, {
       type: "quick-fix",
       payload: { path, fixType: fixType as FixType, extraData }
+    })
+    if (updated !== specText) {
+      setSpecText(updated)
+    }
+  }
+
+  // Batched variant: one reconcile for many fixes, so every fix sees the
+  // accumulated text instead of the same stale snapshot (only the last would
+  // survive otherwise).
+  const handleQuickFixAll = (fixes: { path: string; fixType: string; extraData?: any }[]) => {
+    if (fixes.length === 0) return
+    // Diagnostic codes are not always FixType names ("empty-system-name" →
+    // "missing-system-name"); route each through the same mapping the
+    // single-fix path uses, falling back to the code itself when it already
+    // names a FixType (e.g. the stride-* codes).
+    const mapped = fixes.map((f) => ({ ...f, fixType: (fixTypeForCode(f.fixType) ?? f.fixType) as FixType }))
+    const updated = reconcileSpec(specText, {
+      type: "quick-fix-all",
+      payload: { fixes: mapped }
     })
     if (updated !== specText) {
       setSpecText(updated)
@@ -2246,13 +2267,13 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
         role="tabpanel"
         aria-labelledby="tab-security"
         hidden={activeTab !== "security"}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        className={activeTab === "security" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
         <SecurityTab
           parsedSpec={parsedSpec}
           diagnostics={diagnostics}
-          onQuickFix={handleQuickFix}
+          onQuickFixAll={handleQuickFixAll}
           onExportReport={handleExportMarkdownReport}
         />
       </div>

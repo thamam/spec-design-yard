@@ -1308,6 +1308,111 @@ describe('Advanced Linter Features', () => {
       expect(g2gDiag?.severity).toBe('warning')
       expect(g2gDiag?.message).toContain('Gateway component "gate_in_1" connects directly to Gateway "gate_in_2"')
     })
+
+    test('does not flag store-to-gateway as stage-brick-to-gateway', () => {
+      const spec = {
+        system: {
+          name: 'Store to Gateway System',
+          components: [
+            {
+              id: 'db_store',
+              type: 'Store',
+              connections: [{ target: 'gate_in', label: 'reads config' }]
+            },
+            {
+              id: 'gate_in',
+              type: 'Gateway'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const s2gDiags = diagnostics.filter(d => d.code === 'stage-brick-to-gateway')
+      expect(s2gDiags).toHaveLength(0)
+    })
+
+    test('flags gateway-to-gateway exactly once without stage-brick-to-gateway', () => {
+      const spec = {
+        system: {
+          name: 'Gateway to Gateway System',
+          components: [
+            {
+              id: 'gate_in_1',
+              type: 'Gateway',
+              connections: [{ target: 'gate_in_2', label: 'forwards' }]
+            },
+            {
+              id: 'gate_in_2',
+              type: 'Gateway'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const flowDiags = diagnostics.filter(d => d.code === 'gateway-to-gateway' || d.code === 'stage-brick-to-gateway')
+      expect(flowDiags).toHaveLength(1)
+      expect(flowDiags[0].code).toBe('gateway-to-gateway')
+    })
+
+    test('still flags stage-to-gateway and brick-to-gateway connections', () => {
+      const spec = {
+        system: {
+          name: 'Inbound Gateway Flow System',
+          components: [
+            {
+              id: 'stage_a',
+              type: 'Stage',
+              connections: [{ target: 'gate_in', label: 'pushes events' }]
+            },
+            {
+              id: 'brick_a',
+              type: 'Brick',
+              connections: [{ target: 'gate_in', label: 'pushes metrics' }]
+            },
+            {
+              id: 'gate_in',
+              type: 'Gateway'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      const s2gDiags = diagnostics.filter(d => d.code === 'stage-brick-to-gateway')
+      expect(s2gDiags).toHaveLength(2)
+      expect(s2gDiags.every(d => d.severity === 'warning')).toBe(true)
+    })
+
+    test('flow rules use the first component type when duplicate ids exist', () => {
+      const spec = {
+        system: {
+          name: 'Duplicate ID System',
+          components: [
+            {
+              id: 'stage_a',
+              type: 'Stage',
+              connections: [{ target: 'dup_node', label: 'sends data' }]
+            },
+            {
+              id: 'dup_node',
+              type: 'Store'
+            },
+            {
+              id: 'dup_node',
+              type: 'Gateway'
+            }
+          ]
+        }
+      }
+
+      const diagnostics = lintSpec(spec)
+      expect(diagnostics.find(d => d.code === 'duplicate-id')).toBeDefined()
+      // First "dup_node" is a Store, so stage_a -> dup_node must not be treated as Stage -> Gateway
+      const s2gDiags = diagnostics.filter(d => d.code === 'stage-brick-to-gateway')
+      expect(s2gDiags).toHaveLength(0)
+    })
   })
 })
 
