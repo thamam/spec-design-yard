@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 
@@ -47,7 +47,9 @@ describe('Focus Tab Inline Diagnostics & Quick-Fixes', () => {
     fireEvent.click(fixBtn)
 
     // Wait for the change to propagate
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // Verify that the spec was updated (unrecognized-type quick fix converts it to "Stage" by default)
     expect(textarea.value).toContain('type: Stage')

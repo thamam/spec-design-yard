@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
@@ -31,7 +31,9 @@ describe('Focus Tab Connections Inline Validation', () => {
     fireEvent.change(textarea, { target: { value: invalidSpec } })
 
     // Wait for YAML parsing & state update
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // 2. Switch to Metrics tab to select gate_1
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
@@ -89,7 +91,9 @@ describe('Focus Tab Connections Inline Validation', () => {
       type: Gateway
 `
     fireEvent.change(textarea, { target: { value: specText } })
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
 
     // 2. Select b1_schema
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
