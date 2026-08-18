@@ -1,7 +1,8 @@
-// Persistence seam: one home for spec documents, simulation history, and custom
-// simulation presets. Wraps localStorage with an in-memory fallback so the app
-// keeps working (within a single session) even when localStorage is unavailable
-// or throws (private browsing, quota exceeded, etc).
+// Persistence seam: types + the localStorage-backed store. Wraps localStorage
+// with an in-memory fallback so the app keeps working (within a single
+// session) even when localStorage is unavailable or throws (private browsing,
+// quota exceeded, etc). The app-wide store instance lives in
+// lib/remote-sync-store.ts, which wraps this class with file mirroring.
 
 export interface SpecDocument {
   id: string
@@ -144,7 +145,3 @@ export class LocalStorageSpecStore implements SpecStore {
     }
   }
 }
-
-const specStore: SpecStore = new LocalStorageSpecStore()
-
-export default specStore

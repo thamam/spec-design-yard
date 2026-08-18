@@ -62,3 +62,30 @@ Runs Vitest in watch mode.
 3. **Open the browser:** Go to `http://localhost:3000`
 4. **Make adjustments:** Edit the system architecture spec directly inside the Editor's **Code Tab** using YAML syntax, watch the live linter update inline, and view the visual graph adjust in real time on the canvas.
 5. **Verify stability:** Run `npm run test` to confirm all system unit and integration tests are passing perfectly.
+
+---
+
+## Working on a Client Repo
+
+By default everything you create lives in the browser's localStorage. To have
+the spec and workspace metadata saved as files inside the project you are
+designing for, point the dev server at that repo at launch:
+
+```bash
+SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev
+```
+
+With the variable set, the app persists into the client repo:
+
+- `<repo>/main.spec.yaml` — the spec itself, raw YAML (committable, diffable,
+  hand-editable outside the tool)
+- `<repo>/.specyard/spec-index.json` — spec title / updated-at metadata
+- `<repo>/.specyard/simulation_history.json` — simulation run history
+- `<repo>/.specyard/custom_presets.json` — custom simulator presets
+
+On load, the repo file wins over any stale browser cache. Add `.specyard/` to
+the client repo's `.gitignore` if you don't want tool metadata committed (the
+spec file itself is meant to be committed).
+
+Without `SPEC_YARD_PROJECT_DIR`, behavior is unchanged: localStorage-only
+persistence, no filesystem writes.

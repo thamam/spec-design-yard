@@ -1,0 +1,30 @@
+{
+  "change": "file-backed-project-storage",
+  "links": [
+    {
+      "requirement": "spec-persistence/Project-scoped file persistence",
+      "design": "Decision 2: File layout in the client repo",
+      "tasks": ["Task 1: Store API route", "Task 2: Remote-sync store"]
+    },
+    {
+      "requirement": "spec-persistence/Server-canonical hydration",
+      "design": "Decision 5: Hydration order — server wins on mount",
+      "tasks": ["Task 2: Remote-sync store", "Task 3: Server-canonical hydration"]
+    },
+    {
+      "requirement": "spec-persistence/Metadata sidecar",
+      "design": "Decision 2: File layout in the client repo",
+      "tasks": ["Task 1: Store API route", "Task 2: Remote-sync store"]
+    },
+    {
+      "requirement": "spec-persistence/LocalStorage fallback when file mode is off",
+      "design": "Decision 3: Keep the synchronous SpecStore interface",
+      "tasks": ["Task 2: Remote-sync store", "Task 5: Quality gate"]
+    },
+    {
+      "requirement": "spec-persistence/Path safety",
+      "design": "Decision 4: One catch-all API route with a whitelist",
+      "tasks": ["Task 1: Store API route"]
+    }
+  ]
+}

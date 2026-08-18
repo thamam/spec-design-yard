@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from "react"
 import { SearchIcon, SparklesIcon } from "lucide-react"
 import { lintSpec, type Diagnostic } from "../../lib/linter"
-import specStore from "../../lib/spec-store"
+import specStore from "../../lib/remote-sync-store"
 import { normalizeConnections } from "../../lib/spec-model"
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
 import { triggerDownload } from "./download"

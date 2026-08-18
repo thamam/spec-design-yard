@@ -21,18 +21,8 @@ describe('Auto-save derives document title from the spec', () => {
     vi.restoreAllMocks()
   })
 
-  const signIn = () => {
-    fireEvent.click(screen.getByRole('button', { name: /Sign In/i }))
-    const emailInput = screen.getByPlaceholderText('tomer@neuronbox.ai') as HTMLInputElement
-    fireEvent.change(emailInput, { target: { value: 'tomer@neuronbox.ai' } })
-    const signInButtons = screen.getAllByRole('button', { name: /Sign In/i })
-    const submitBtn = signInButtons.find(btn => btn.getAttribute('type') === 'submit') || signInButtons[1]
-    fireEvent.click(submitBtn)
-  }
-
   test('saving a spec whose system.name is "My Yard" persists title "My Yard"', async () => {
     render(<Workspace />)
-    signIn()
 
     const myYardSpec = `system:
   name: My Yard
@@ -59,7 +49,6 @@ describe('Auto-save derives document title from the spec', () => {
 `)
 
     render(<Workspace />)
-    signIn()
 
     // Wait for hydration of the seeded spec
     await waitFor(() => {
