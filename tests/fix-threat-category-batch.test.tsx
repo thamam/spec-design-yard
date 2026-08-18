@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Regression guard: the Security tab's per-category "Fix" button looped
 // onQuickFix per diagnostic, and each call reconciled against the same stale
@@ -24,6 +25,7 @@ const TWO_SECRETS_SPEC = `system:
 describe('Security tab category fix applies ALL fixes in the category', () => {
   test('clicking the secrets category fix redacts every leaked secret, not just the last one', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
     fireEvent.change(textarea, { target: { value: TWO_SECRETS_SPEC } })

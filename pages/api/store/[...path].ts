@@ -1,12 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next"
+import { randomUUID } from "crypto"
 import fs from "fs"
 import path from "path"
 
 // File-backed persistence for the workspace store, active only when the app is
 // launched with SPEC_YARD_PROJECT_DIR pointing at a client repo. Keys are
 // whitelisted — the client never supplies a filesystem path — and every
-// resolved path is containment-checked against the real (symlink-resolved)
-// project root before any read or write.
+// resolved path (spec, meta, spec-index) is containment-checked against the
+// real (symlink-resolved) project root before any read or write.
 
 // Null-prototype map: prototype-chain keys ("constructor", "__proto__", ...)
 // must not pass the whitelist.
@@ -19,6 +20,15 @@ const SPEC_ID = "main"
 const SPEC_FILENAME = "main.spec.yaml"
 const SIDECAR_DIR = ".specyard"
 const SPEC_INDEX_FILENAME = "spec-index.json"
+
+interface SpecIndexEntry {
+  title?: string
+  updatedAt?: string
+  /** Opaque collision-free write token; the client echoes it as baseRev. */
+  rev?: string
+  /** File mtime at our last write — catches raw external edits. */
+  mtimeMs?: number
+}
 
 type ResolvedTarget =
   | { kind: "spec"; file: string }
@@ -66,29 +76,58 @@ function resolveTarget(segments: string[], realRoot: string): ResolvedTarget | n
     return null
   }
   const file = path.resolve(realRoot, rel)
-  if (!isInsideRoot(realRoot, file)) return null
+  if (!isInsideRoot(realRoot, file) || !isRealPathInsideRoot(realRoot, file)) return null
   return { kind, file }
 }
 
-function writeFileAtomic(file: string, contents: string) {
+/** The sidecar index path gets the same containment treatment as targets. */
+function resolveIndexPath(realRoot: string): string | null {
+  const file = path.resolve(realRoot, SIDECAR_DIR, SPEC_INDEX_FILENAME)
+  if (!isInsideRoot(realRoot, file) || !isRealPathInsideRoot(realRoot, file)) return null
+  return file
+}
+
+/** Tmp files stage in the sidecar so a crash never litters the repo root. */
+function writeFileAtomic(file: string, contents: string, stagingDir: string) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = `${file}.tmp-${process.pid}`
+  fs.mkdirSync(stagingDir, { recursive: true })
+  const tmp = path.join(stagingDir, `.tmp-${path.basename(file)}-${process.pid}`)
   fs.writeFileSync(tmp, contents, "utf8")
   fs.renameSync(tmp, file)
 }
 
-function readSpecIndex(projectDir: string): Record<string, { title?: string; updatedAt?: string; mtimeMs?: number }> {
+/**
+ * Missing or corrupted index is an empty index; an unreadable-but-present
+ * index is a fault — treating it as empty would make the PUT path treat a
+ * tracked file as untracked and overwrite it.
+ */
+function readSpecIndex(indexPath: string): Record<string, SpecIndexEntry> {
+  let raw: string
   try {
-    const raw = fs.readFileSync(path.join(projectDir, SIDECAR_DIR, SPEC_INDEX_FILENAME), "utf8")
+    raw = fs.readFileSync(indexPath, "utf8")
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return {}
+    throw e
+  }
+  try {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed
   } catch {
-    // Missing or corrupted index is rebuilt from this save.
+    // Corrupted index is rebuilt from this save.
   }
   return {}
 }
 
 export default function storeHandler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    return handle(req, res)
+  } catch (e) {
+    console.error("[spec-yard] store route error", e)
+    return res.status(500).json({ error: "Store operation failed" })
+  }
+}
+
+function handle(req: NextApiRequest, res: NextApiResponse) {
   const projectDir = process.env.SPEC_YARD_PROJECT_DIR
   if (!projectDir) {
     // 200-with-flag rather than 501: standalone mode is a normal configuration,
@@ -108,7 +147,12 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
   const raw = req.query.path
   const segments = Array.isArray(raw) ? raw : raw ? [raw] : []
   const target = resolveTarget(segments, realRoot)
-  if (!target || !isRealPathInsideRoot(realRoot, target.file)) {
+  if (!target) {
+    return res.status(400).json({ error: "Unknown store key" })
+  }
+
+  const indexPath = resolveIndexPath(realRoot)
+  if (!indexPath) {
     return res.status(400).json({ error: "Unknown store key" })
   }
 
@@ -125,12 +169,13 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
         if (e?.code === "ENOENT") return res.status(200).json({ found: false })
         return res.status(500).json({ error: "Failed to read spec file" })
       }
-      const index = readSpecIndex(projectDir)
+      const index = readSpecIndex(indexPath)
       return res.status(200).json({
         id: SPEC_ID,
         title: index[SPEC_ID]?.title || "Untitled Spec",
         yamlContent: contents,
         updatedAt: index[SPEC_ID]?.updatedAt || null,
+        rev: index[SPEC_ID]?.rev || null,
       })
     }
     try {
@@ -149,33 +194,38 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
     if (!body || typeof body.yamlContent !== "string") {
       return res.status(400).json({ error: "PUT spec requires { title, yamlContent }" })
     }
-    // Optimistic concurrency. The client echoes the updatedAt its edit was
-    // based on; the index also records the file mtime from our last write, so
-    // BOTH a second app instance (updatedAt mismatch) and a raw external edit
-    // (mtime mismatch — an external editor doesn't touch the index) 409
-    // instead of silently clobbering. A file with no index entry is adopted:
-    // the app may legitimately open a repo whose main.spec.yaml was authored
-    // by hand, and blocking first-save would brick that flow.
-    const index = readSpecIndex(projectDir)
+    // Optimistic concurrency. The client echoes the rev its edit was based on;
+    // the index also records the file mtime from our last write, so a second
+    // app instance (stale rev), a raw external edit (mtime mismatch — an
+    // external editor doesn't touch the index), and an external deletion all
+    // 409 instead of silently clobbering. A file with no index entry is
+    // adopted: the app may legitimately open a repo whose main.spec.yaml was
+    // authored by hand, and blocking first-save would brick that flow.
+    const index = readSpecIndex(indexPath)
     const entry = index[SPEC_ID]
-    if (fs.existsSync(target.file) && entry?.mtimeMs != null) {
+    if (entry?.rev != null) {
+      if (!fs.existsSync(target.file)) {
+        return res.status(409).json({ conflict: true, reason: "deleted", current: { title: entry.title, updatedAt: entry.updatedAt } })
+      }
       const currentMtime = fs.statSync(target.file).mtimeMs
-      if (currentMtime !== entry.mtimeMs || body.baseUpdatedAt !== entry.updatedAt) {
+      if (currentMtime !== entry.mtimeMs || body.baseRev !== entry.rev) {
         return res.status(409).json({ conflict: true, current: { title: entry.title, updatedAt: entry.updatedAt } })
       }
     }
-    writeFileAtomic(target.file, body.yamlContent)
+    writeFileAtomic(target.file, body.yamlContent, path.dirname(indexPath))
     const updatedAt = new Date().toISOString()
+    const rev = randomUUID()
     index[SPEC_ID] = {
       title: typeof body.title === "string" ? body.title : "Untitled Spec",
       updatedAt,
+      rev,
       mtimeMs: fs.statSync(target.file).mtimeMs,
     }
-    writeFileAtomic(path.join(projectDir, SIDECAR_DIR, SPEC_INDEX_FILENAME), JSON.stringify(index, null, 2))
-    // Echo updatedAt so the client can chain its next PUT on it.
-    return res.status(200).json({ ok: true, updatedAt })
+    writeFileAtomic(indexPath, JSON.stringify(index, null, 2), path.dirname(indexPath))
+    // Echo rev so the client can chain its next PUT on it.
+    return res.status(200).json({ ok: true, updatedAt, rev })
   }
 
-  writeFileAtomic(target.file, JSON.stringify(req.body ?? null, null, 2))
+  writeFileAtomic(target.file, JSON.stringify(req.body ?? null, null, 2), path.dirname(target.file))
   return res.status(200).json({ ok: true })
 }

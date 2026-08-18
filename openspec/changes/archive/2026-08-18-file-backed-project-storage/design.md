@@ -20,7 +20,7 @@ bundle.
   editor tab label. Pure YAML (no envelope) so it stays hand-editable and
   diffs cleanly.
 - `<projectDir>/.specyard/` — sidecar directory for tool metadata:
-  `spec-index.json` (`{id, title, updatedAt}`), `simulation_history.json`,
+  `spec-index.json` (title/updatedAt/rev keyed by spec id), `simulation_history.json`,
   `custom_presets.json`. Users can commit or gitignore it per preference.
 
 - **Rationale**: the spec is the artifact of value and gets prime placement;

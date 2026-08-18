@@ -2,15 +2,18 @@
 // to LocalStorageSpecStore (which becomes a write-through cache) and mirroring
 // every write to the file-backed API route.
 //
-// Failure policy (distilled from adversarial review of PR #10):
+// Failure policy (distilled from two adversarial review rounds on PR #10):
 // - Only the spec GET gates file mode. Meta fetch failures are scoped to
-//   themselves — one bad preset fetch must not silently disable persistence
-//   for the session.
-// - mirror() checks res.ok; HTTP failures are logged loudly, never thrown
-//   into the UI. Spec PUTs are serialized (promise chain) because they carry
-//   optimistic-concurrency bases — parallel fire-and-forget would 409 itself.
-// - A 409 conflict (file changed outside this session) stops mirroring and
-//   logs a reload instruction rather than clobbering the external change.
+//   themselves — one bad preset fetch must not disable persistence.
+// - Mirrors stay silent until arm() is called (end of workspace hydration):
+//   pre-hydration writes would race the in-flight server pull.
+// - All PUTs check res.ok and are serialized per URL (spec via specPutChain,
+//   meta via per-URL chains) — parallel fire-and-forget would race the
+//   optimistic-concurrency base and can land out of order.
+// - Spec writes carry a baseRev token. A 409 triggers a reconcile: if the
+//   server holds exactly what we last sent, our ack was merely lost — adopt
+//   the fresh rev and retry once. A real divergence latches file mode off
+//   with a loud reload instruction rather than clobbering the external change.
 
 import {
   LocalStorageSpecStore,
@@ -23,14 +26,25 @@ import {
 export class RemoteSyncSpecStore implements SpecStore {
   private local = new LocalStorageSpecStore()
   // Flipped when loadFromServer sees file mode off / unreachable, or a
-  // conflict forces us to stop: from then on no mirror fetches are attempted,
-  // keeping standalone mode exactly the localStorage baseline.
+  // genuine conflict forces us to stop: no mirror fetches after that.
   private fileModeDisabled = false
-  // The spec-index updatedAt this session's edits are based on (echoed back
-  // as baseUpdatedAt on PUT). null until the server tells us.
-  private serverUpdatedAt: string | null = null
-  // Serializes spec PUTs so their baseUpdatedAt chaining stays valid.
+  // Mirrors stay silent until the workspace finishes hydrating (arm()).
+  private armed = false
+  // The spec-index rev this session's edits are based on (echoed back as
+  // baseRev on PUT). null until the server tells us.
+  private serverRev: string | null = null
+  // The yamlContent of the most recent PUT we attempted — lets a 409 caused
+  // by a lost ack be distinguished from a genuine external edit.
+  private lastMirroredYaml: string | null = null
+  // Serializes spec PUTs so their baseRev chaining stays valid.
   private specPutChain: Promise<void> = Promise.resolve()
+  // Per-URL serialization for meta PUTs (same out-of-order-landing risk).
+  private metaChains = new Map<string, Promise<void>>()
+
+  /** Called by the workspace when hydration completes; arms mirroring. */
+  arm(): void {
+    this.armed = true
+  }
 
   getSpec(id: string): SpecDocument | null {
     return this.local.getSpec(id)
@@ -38,7 +52,7 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument {
     const doc = this.local.saveSpec(id, title, yamlContent)
-    if (typeof window === "undefined" || this.fileModeDisabled) return doc
+    if (!this.canMirror()) return doc
     this.specPutChain = this.specPutChain.then(() =>
       this.putSpec(`/api/store/spec/${encodeURIComponent(id)}`, { title, yamlContent })
     )
@@ -67,6 +81,8 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.mirror("/api/store/meta/custom_presets", presets)
   }
 
+  // Cache-local eviction (tests, cross-project bleed guard). Deliberately NOT
+  // mirrored: the project file is never deleted by the store.
   removeSpec(id: string): void {
     this.local.removeSpec(id)
   }
@@ -103,12 +119,14 @@ export class RemoteSyncSpecStore implements SpecStore {
       }
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
-        this.serverUpdatedAt = typeof body.updatedAt === "string" ? body.updatedAt : null
+        this.serverRev = typeof body.rev === "string" ? body.rev : null
+        this.lastMirroredYaml = body.yamlContent
       } else {
         // {found:false}: file mode on, nothing stored for THIS project. Drop
         // the cached spec so another project's spec is never written here.
         this.local.removeSpec("main")
-        this.serverUpdatedAt = null
+        this.serverRev = null
+        this.lastMirroredYaml = null
       }
     } catch (e) {
       console.error("Failed to load spec store from server", e)
@@ -124,29 +142,33 @@ export class RemoteSyncSpecStore implements SpecStore {
   private async pullMeta(url: string, apply: (value: any[]) => void): Promise<void> {
     try {
       const res = await fetch(url)
-      if (res.ok) {
-        const value = await res.json()
-        if (Array.isArray(value)) apply(value)
-      } else {
+      if (!res.ok) {
         console.error(`[spec-yard] Failed to load ${url} (${res.status})`)
+        return
       }
+      const value = await res.json()
+      // An authoritative null means THIS project has no stored metadata —
+      // clear the cache rather than showing another project's leftovers.
+      if (Array.isArray(value)) apply(value)
+      else if (value === null) apply([])
     } catch (e) {
       console.error(`[spec-yard] Failed to load ${url}`, e)
     }
   }
 
   private async putSpec(url: string, body: { title: string; yamlContent: string }): Promise<void> {
+    // What the server should hold if our PREVIOUS (serialized) PUT landed —
+    // the reference point for distinguishing a lost ack from a real conflict.
+    const prevMirrored = this.lastMirroredYaml
+    this.lastMirroredYaml = body.yamlContent
     try {
       const res = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, baseUpdatedAt: this.serverUpdatedAt }),
+        body: JSON.stringify({ ...body, baseRev: this.serverRev }),
       })
       if (res.status === 409) {
-        this.fileModeDisabled = true
-        console.error(
-          "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
-        )
+        await this.reconcileAfterConflict(url, body, prevMirrored)
         return
       }
       if (!res.ok) {
@@ -154,23 +176,72 @@ export class RemoteSyncSpecStore implements SpecStore {
         return
       }
       const ack = await res.json().catch(() => null)
-      if (ack && typeof ack.updatedAt === "string") this.serverUpdatedAt = ack.updatedAt
+      if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
     } catch (e) {
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
     }
   }
 
+  /**
+   * A 409 is genuine when the server holds something other than what we last
+   * sent. When it holds exactly our last PUT, that write landed but its ack
+   * was lost — adopt the fresh rev and retry once. Genuine conflicts latch
+   * file mode off with a reload instruction.
+   */
+  private async reconcileAfterConflict(
+    url: string,
+    body: { title: string; yamlContent: string },
+    prevMirrored: string | null
+  ): Promise<void> {
+    try {
+      const res = await fetch(url)
+      if (res.ok) {
+        const current = await res.json().catch(() => null)
+        if (current && current.yamlContent === prevMirrored && typeof current.rev === "string") {
+          this.serverRev = current.rev
+          const retry = await fetch(url, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...body, baseRev: this.serverRev }),
+          })
+          if (retry.ok) {
+            const ack = await retry.json().catch(() => null)
+            if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+            return
+          }
+        }
+      }
+    } catch {
+      // Fall through to latch-off below.
+    }
+    this.fileModeDisabled = true
+    console.error(
+      "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
+    )
+  }
+
   private mirror(url: string, body: unknown): void {
-    if (typeof window === "undefined" || this.fileModeDisabled) return
-    fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then((res) => {
-        if (!res.ok) console.error(`[spec-yard] Mirror to ${url} failed (${res.status}) — data is only in browser storage`)
+    if (!this.canMirror()) return
+    const prev = this.metaChains.get(url) ?? Promise.resolve()
+    const next = prev.then(() => this.putMeta(url, body))
+    this.metaChains.set(url, next)
+  }
+
+  private async putMeta(url: string, body: unknown): Promise<void> {
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       })
-      .catch((e) => console.error(`Failed to mirror ${url} to server`, e))
+      if (!res.ok) console.error(`[spec-yard] Mirror to ${url} failed (${res.status}) — data is only in browser storage`)
+    } catch (e) {
+      console.error(`Failed to mirror ${url} to server`, e)
+    }
+  }
+
+  private canMirror(): boolean {
+    return typeof window !== "undefined" && this.armed && !this.fileModeDisabled
   }
 }
 

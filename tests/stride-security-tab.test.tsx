@@ -2,10 +2,12 @@ import { describe, test, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('STRIDE Security Dashboard Tab', () => {
   test('supports switching to the Security tab and viewing threat audits with quick-fixes', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Verify "Security" tab button is visible in the tab list
     const securityTabBtn = screen.getByRole('tab', { name: /Security/i })
@@ -43,7 +45,7 @@ describe('STRIDE Security Dashboard Tab', () => {
     - id: user_store
       type: Store
       metadata:
-        api_key: "sk_live_vulnerable_123"
+        api_key: "unsafe-plaintext-key-for-linter-test"
 `
     fireEvent.change(textarea, { target: { value: customVulnerableSpec } })
 
@@ -89,6 +91,7 @@ describe('STRIDE Security Dashboard Tab', () => {
     const createElementSpy = vi.spyOn(document, 'createElement')
 
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const securityTabBtn = screen.getByRole('tab', { name: /Security/i })
     fireEvent.click(securityTabBtn)

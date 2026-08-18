@@ -144,10 +144,6 @@ export function WorkspaceLayout() {
   const [isHydrated, setIsHydrated] = useState(false)
 
   const lastLoadedSpecRef = useRef<string | null>(null)
-  // Live mirror of specText so the async hydrate can tell whether the user
-  // started typing before hydration resolved (those keystrokes must win).
-  const specTextRef = useRef(specText)
-  specTextRef.current = specText
 
   // Hydrate the saved spec on mount. When the app runs against a project dir
   // (SPEC_YARD_PROJECT_DIR), the repo file is canonical: pull server state
@@ -161,11 +157,7 @@ export function WorkspaceLayout() {
       const savedDoc = db.getSpec("main")
       const loaded = savedDoc && savedDoc.yamlContent ? savedDoc.yamlContent : INITIAL_SPEC
       lastLoadedSpecRef.current = loaded
-      // If the user already typed during the hydration window, keep their text;
-      // the autosave effect will persist it once isHydrated flips.
-      if (specTextRef.current === INITIAL_SPEC) {
-        resetHistory(loaded)
-      }
+      resetHistory(loaded)
       setIsHydrated(true)
     }
     hydrate()
@@ -173,6 +165,18 @@ export function WorkspaceLayout() {
       cancelled = true
     }
   }, [resetHistory])
+
+  // Until hydration resolves, NO mutation path may touch the spec — an early
+  // edit would fork from the built-in template and then be autosaved over the
+  // canonical project file. The textarea is disabled in the UI; every other
+  // path (canvas edits, quick-fixes, renames) is gated here at the source.
+  const guardedSetSpecText = useCallback((
+    val: string | ((prev: string) => string),
+    options?: { isTyping?: boolean; immediate?: boolean }
+  ) => {
+    if (!isHydrated) return
+    setSpecText(val, options)
+  }, [isHydrated, setSpecText])
 
   // Save current spec to DB on modification (once hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
@@ -198,6 +202,7 @@ export function WorkspaceLayout() {
 
   // Sync canvas position edits, deletions, and renames back into YAML spec
   const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
+    if (!isHydrated) return
     if (Array.isArray(change)) {
       const updated = reconcileSpec(specText, { type: "coords", payload: change })
       if (updated !== specText) {
@@ -209,7 +214,7 @@ export function WorkspaceLayout() {
         setSpecText(updated, { immediate: true })
       }
     }
-  }, [specText, setSpecText])
+  }, [isHydrated, specText, setSpecText])
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
@@ -283,7 +288,7 @@ export function WorkspaceLayout() {
         >
           <EditorPanel
             specText={specText}
-            setSpecText={setSpecText}
+            setSpecText={guardedSetSpecText}
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}

@@ -72,8 +72,11 @@ the spec and workspace metadata saved as files inside the project you are
 designing for, point the dev server at that repo at launch:
 
 ```bash
-SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev
+SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev -- -H 127.0.0.1
 ```
+
+(The `-H 127.0.0.1` binds the dev server to loopback only — recommended,
+since the store API is unauthenticated by design.)
 
 With the variable set, the app persists into the client repo:
 

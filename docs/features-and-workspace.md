@@ -59,5 +59,5 @@ The visual canvas translates your text specification into an elegant graphical d
 
 ## 4. Operational Safety
 
-* **Browser-Local Persistence:** Your YAML specification is continuously auto-saved to the browser's `localStorage` (alongside simulation history and custom simulation presets). If `localStorage` is unavailable or throws (private browsing, quota exceeded), an in-memory fallback keeps the app working for the current session. The login panel is currently cosmetic only — no authentication backend or remote database is connected.
+* **Two-Mode Persistence:** By default your YAML specification is continuously auto-saved to the browser's `localStorage` (alongside simulation history and custom simulation presets), with an in-memory fallback when `localStorage` is unavailable. When launched with `SPEC_YARD_PROJECT_DIR=<client-repo>`, everything persists as files inside that repo instead (`main.spec.yaml` + `.specyard/`), with conflict protection against external edits — see "Working on a Client Repo" in `getting-started.md`.
 * **Undo/Redo Engine:** Standard editor commands are supported across all panel actions. Pressing `Ctrl + Z` (or `Cmd + Z` on macOS) reverses your edits step-by-step. `Ctrl + Y` (or `Cmd + Shift + Z`) re-applies changes.

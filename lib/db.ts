@@ -18,7 +18,11 @@ export const db = {
     return specStore.removeSpec(id)
   },
   /** Pull project-file state into the local cache. See RemoteSyncSpecStore. */
-  loadFromServer(): Promise<boolean> {
-    return specStore.loadFromServer()
+  async loadFromServer(): Promise<boolean> {
+    const active = await specStore.loadFromServer()
+    // Hydration attempt complete either way — arm mirroring (no-op when the
+    // store decided file mode is off).
+    specStore.arm()
+    return active
   },
 }

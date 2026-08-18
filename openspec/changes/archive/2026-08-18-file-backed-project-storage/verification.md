@@ -108,3 +108,31 @@ route's empty states moved from 404/501 to 200-with-marker
 the browser console on every normal launch. Client tolerates both shapes.
 
 Full unit gate re-run after the change: 395/395 tests, clean `npm run build`.
+
+## Addendum 2 (2026-08-19): adversarial + code review remediation
+
+PR #10 underwent two review rounds — adversarial review (Claude Code) and
+regular code review (Codex), both run against the pushed branch.
+
+**Round 1 (both: CHANGES REQUIRED)** — fixed in commit `d6f26a7`:
+cross-project spec bleed, keystroke-during-hydration wipe, silent mirror
+failures, transient meta failure latching file mode off, no write-concurrency
+control, symlink escape (verified by reviewer), prototype-chain key crash
+(verified), EACCES masked as missing, MetricsTab pre-hydration staleness,
+test singleton pollution, docs/spec wording drift.
+
+**Round 2 (both: CHANGES REQUIRED)** — fixed in the follow-up remediation:
+hydration lockout now gates ALL mutation paths (`guardedSetSpecText` +
+`handleCanvasChange`), not just the textarea; the spec-index read/write path
+gets the same realpath containment check as targets; the concurrency token is
+a collision-free `rev` UUID (ms-granularity `updatedAt` made the round-1
+token collidable and its test flaky); external deletion of a tracked file is
+a 409, not a silent recreate; lost-ack 409s reconcile (GET → adopt fresh rev
+→ retry once) instead of latching file mode off; meta PUTs are serialized
+per URL; mirrors stay silent until `arm()` at hydration completion;
+authoritative-null meta clears the cache (no cross-project metadata bleed);
+write errors are structured 500s and tmp files stage in `.specyard/`;
+`readSpecIndex` throws on non-ENOENT faults; docs recommend loopback binding.
+
+**Post-round-2 gate:** 409+ unit tests green (see final suite run), clean
+`npm run build`, browser E2E 17/17 re-run in both modes.

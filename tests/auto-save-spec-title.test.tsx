@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import { db } from '../lib/db'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Regression guard: the debounced auto-save hardcoded the document title
 // ("External Brain v0.2") instead of deriving it from the spec's system.name.
@@ -23,6 +24,7 @@ describe('Auto-save derives document title from the spec', () => {
 
   test('saving a spec whose system.name is "My Yard" persists title "My Yard"', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const myYardSpec = `system:
   name: My Yard
@@ -49,6 +51,7 @@ describe('Auto-save derives document title from the spec', () => {
 `)
 
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Wait for hydration of the seeded spec
     await waitFor(() => {

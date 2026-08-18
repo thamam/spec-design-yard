@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // The parse boundary strips string-form connections ("- digest") from the
 // sanitized spec. The user must get feedback instead of silent data loss: one
@@ -32,6 +33,7 @@ const OBJECT_CONN_SPEC = `system:
 describe('Dropped string-form connection diagnostics', () => {
   test('typing a string-form connection shows an info diagnostic that disappears when converted to object form', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
     fireEvent.change(textarea, { target: { value: STRING_CONN_SPEC } })

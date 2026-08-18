@@ -25,6 +25,16 @@
       "requirement": "spec-persistence/Path safety",
       "design": "Decision 4: One catch-all API route with a whitelist",
       "tasks": ["Task 1: Store API route"]
+    },
+    {
+      "requirement": "spec-persistence/Hydration input lockout",
+      "design": "Decision 5: Hydration order — server wins on mount",
+      "tasks": ["Task 3: Server-canonical hydration"]
+    },
+    {
+      "requirement": "spec-persistence/Write conflict protection",
+      "design": "Decision 4: One catch-all API route with a whitelist",
+      "tasks": ["Task 1: Store API route", "Task 2: Remote-sync store"]
     }
   ]
 }

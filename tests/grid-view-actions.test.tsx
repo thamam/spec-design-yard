@@ -3,10 +3,12 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
   test('supports deleting a component directly from its card in Grid View', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -34,6 +36,7 @@ describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
 
   test('supports duplicating a component directly from its card in Grid View', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -62,6 +65,7 @@ describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
 
   test('supports duplicating a component multiple times resolving suffixes sequentially without infinite loops', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -85,6 +89,7 @@ describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
 
   test('supports resolving a diagnostic with inline quick-fix button on the card', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })

@@ -3,10 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Interactive Component ID Renaming in Focus Tab', () => {
   test('supports renaming component ID, bidirectionally updating references, and retaining selection', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab to select digest_stage
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })

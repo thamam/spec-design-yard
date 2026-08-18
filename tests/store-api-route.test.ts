@@ -202,48 +202,71 @@ describe('store API route — adversarial hardening', () => {
 
   test('external edit between load and save is rejected with 409, not clobbered', () => {
     // First save establishes the index (adopt: no index entry yet)
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseUpdatedAt: null }), mockRes())
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
     const getRes = mockRes()
     handler(mockReq('GET', ['spec', 'main']), getRes)
-    const base = getRes.body.updatedAt
-    expect(typeof base).toBe('string')
+    const baseRev = getRes.body.rev
+    expect(typeof baseRev).toBe('string')
 
     // External edit: rewrite the file directly (mtime changes, index doesn't)
     fs.writeFileSync(path.join(projectDir, 'main.spec.yaml'), 'v: EXTERNAL\n')
 
     const conflictRes = mockRes()
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseUpdatedAt: base }), conflictRes)
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev }), conflictRes)
     expect(conflictRes.statusCode).toBe(409)
     expect(fs.readFileSync(path.join(projectDir, 'main.spec.yaml'), 'utf8')).toBe('v: EXTERNAL\n')
   })
 
-  test('stale baseUpdatedAt (second tab) is rejected with 409; correct base succeeds', () => {
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseUpdatedAt: null }), mockRes())
+  test('external deletion of a tracked spec is a 409, not a silent recreate', () => {
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
+    fs.unlinkSync(path.join(projectDir, 'main.spec.yaml'))
+
+    const res = mockRes()
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev: 'whatever' }), res)
+    expect(res.statusCode).toBe(409)
+    expect(fs.existsSync(path.join(projectDir, 'main.spec.yaml'))).toBe(false)
+  })
+
+  test('stale baseRev (second tab) is rejected with 409; correct base succeeds', () => {
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
     const getRes = mockRes()
     handler(mockReq('GET', ['spec', 'main']), getRes)
-    const base = getRes.body.updatedAt
+    const base = getRes.body.rev
 
     // Tab A saves, advancing the index
     const putA = mockRes()
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseUpdatedAt: base }), putA)
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev: base }), putA)
     expect(putA.statusCode).toBe(200)
-    const newBase = putA.body.updatedAt
+    const newBase = putA.body.rev
 
     // Tab B saves with the stale base
     const putB = mockRes()
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V3', yamlContent: 'v: 3\n', baseUpdatedAt: base }), putB)
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V3', yamlContent: 'v: 3\n', baseRev: base }), putB)
     expect(putB.statusCode).toBe(409)
 
     // Tab B with the fresh base succeeds
     const putB2 = mockRes()
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'V3', yamlContent: 'v: 3\n', baseUpdatedAt: newBase }), putB2)
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'V3', yamlContent: 'v: 3\n', baseRev: newBase }), putB2)
     expect(putB2.statusCode).toBe(200)
+  })
+
+  test('spec-index write is containment-checked too (spec PUT with symlinked .specyard)', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-outside-'))
+    try {
+      fs.symlinkSync(outside, path.join(projectDir, '.specyard'), 'dir')
+      const res = mockRes()
+      handler(mockReq('PUT', ['spec', 'main'], { title: 'T', yamlContent: 'system: {}\n', baseRev: null }), res)
+      expect(res.statusCode).toBe(400)
+      expect(fs.readdirSync(outside)).toEqual([])
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
   })
 
   test('hand-authored spec file (no index) is adopted on first save', () => {
     fs.writeFileSync(path.join(projectDir, 'main.spec.yaml'), 'system:\n  name: Hand Made\n')
     const res = mockRes()
-    handler(mockReq('PUT', ['spec', 'main'], { title: 'Hand Made', yamlContent: 'system:\n  name: Hand Made\n  # edit\n', baseUpdatedAt: null }), res)
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'Hand Made', yamlContent: 'system:\n  name: Hand Made\n  # edit\n', baseRev: null }), res)
     expect(res.statusCode).toBe(200)
   })
 })

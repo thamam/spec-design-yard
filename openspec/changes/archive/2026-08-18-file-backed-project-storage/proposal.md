@@ -26,7 +26,7 @@ the store's contents as files inside the client repo:
 
 - `<projectDir>/main.spec.yaml` — the spec, raw YAML text (hand-editable
   outside the tool, committable, diffable)
-- `<projectDir>/.specyard/spec-index.json` — `{id, title, updatedAt}` metadata
+- `<projectDir>/.specyard/spec-index.json` — title/updatedAt/rev metadata keyed by spec id
 - `<projectDir>/.specyard/simulation_history.json` — metrics-tab run history
 - `<projectDir>/.specyard/custom_presets.json` — custom simulator presets
 

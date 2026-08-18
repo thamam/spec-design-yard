@@ -5,9 +5,10 @@ import Workspace from '../components/Workspace'
 import { lintSpec } from '../lib/linter'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Auto-Layout and Circular Dependency Quick-Fix Features', () => {
-  test('circular-dependency has a quick-fix button "Remove Connection" rendered in diagnostics panel', () => {
+  test('circular-dependency has a quick-fix button "Remove Connection" rendered in diagnostics panel', async () => {
     const specWithCycle = `system:
   name: Cycle Test
   components:
@@ -22,6 +23,7 @@ describe('Auto-Layout and Circular Dependency Quick-Fix Features', () => {
 `
     // Render workspace with the cycle
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: specWithCycle } })
 
@@ -45,10 +47,11 @@ describe('Auto-Layout and Circular Dependency Quick-Fix Features', () => {
     expect(cycleDiagAfter).toBeUndefined()
   })
 
-  test('autoLayoutDiagram calculates clean layered positions for components', () => {
+  test('autoLayoutDiagram calculates clean layered positions for components', async () => {
     // We will test the layout utility directly or indirectly.
     // Let's verify that when Workspace is rendered, there is a Re-layout Diagram button in the canvas panel.
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const relayoutBtn = screen.getByRole('button', { name: /Re-layout Diagram/i })
     expect(relayoutBtn).toBeInTheDocument()
 
@@ -88,9 +91,10 @@ describe('Auto-Layout and Circular Dependency Quick-Fix Features', () => {
     expect(stage.x).toBeLessThan(store.x)
   })
 
-  test('autoLayoutDiagram does not loop infinitely on cyclical specs', () => {
+  test('autoLayoutDiagram does not loop infinitely on cyclical specs', async () => {
     // Render workspace
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const relayoutBtn = screen.getByRole('button', { name: /Re-layout Diagram/i })
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 

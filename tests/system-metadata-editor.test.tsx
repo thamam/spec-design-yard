@@ -4,6 +4,7 @@ import React from 'react'
 import Workspace from '../components/Workspace'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Global System Specification Settings in Focus Tab', () => {
   test('direct reconcileSpec test for system properties', () => {
@@ -27,6 +28,7 @@ describe('Global System Specification Settings in Focus Tab', () => {
 
   test('displays system name and supports initializing and editing system-level metadata when no component is selected', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Focus Tab
     const focusTabBtn = screen.getByRole('tab', { name: /Focus/i })
