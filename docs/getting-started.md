@@ -87,5 +87,17 @@ On load, the repo file wins over any stale browser cache. Add `.specyard/` to
 the client repo's `.gitignore` if you don't want tool metadata committed (the
 spec file itself is meant to be committed).
 
+**Editing the file outside the tool:** safe only while the workspace is
+closed, or before the workspace's first save. The app reads the file on mount;
+if the file changes underneath an open session (external edit, `git checkout`,
+a second app instance), the next autosave is rejected with a conflict instead
+of overwriting — reload the workspace to adopt the external version.
+
+**Network exposure:** the store API has no authentication by design — it is a
+local-dev tool. Do not bind the dev server to a non-localhost interface
+(`next dev -H 0.0.0.0`) or otherwise expose it on an untrusted network while
+`SPEC_YARD_PROJECT_DIR` is set: anyone who can reach the port can read and
+overwrite files under the project directory.
+
 Without `SPEC_YARD_PROJECT_DIR`, behavior is unchanged: localStorage-only
 persistence, no filesystem writes.

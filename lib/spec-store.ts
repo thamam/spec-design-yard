@@ -24,6 +24,7 @@ export interface CustomPreset {
 export interface SpecStore {
   getSpec(id: string): SpecDocument | null
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument
+  removeSpec(id: string): void
   getSimulationHistory(): SimulationRun[]
   saveSimulationHistory(history: SimulationRun[]): void
   clearSimulationHistory(): void
@@ -81,6 +82,17 @@ export class LocalStorageSpecStore implements SpecStore {
       }
     }
     return doc
+  }
+
+  public removeSpec(id: string): void {
+    delete this.specs[id]
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem(`spec_${id}`)
+      } catch (e) {
+        console.error("Failed to remove spec from localStorage", e)
+      }
+    }
   }
 
   public getSimulationHistory(): SimulationRun[] {

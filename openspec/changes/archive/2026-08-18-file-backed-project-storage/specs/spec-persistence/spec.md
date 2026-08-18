@@ -14,8 +14,8 @@ filesystem writes.
 
 When launched with `SPEC_YARD_PROJECT_DIR` set, the system SHALL persist the
 spec as raw YAML text at `<projectDir>/main.spec.yaml` and SHALL record
-`{id, title, updatedAt}` metadata in `<projectDir>/.specyard/spec-index.json`
-on every save.
+title/updatedAt metadata keyed by spec id in
+`<projectDir>/.specyard/spec-index.json` on every save.
 
 #### Scenario: Autosave writes the spec file
 
@@ -44,7 +44,13 @@ autosave.
 - GIVEN `<projectDir>/main.spec.yaml` does not exist
 - WHEN the workspace mounts
 - THEN the editor falls back to the localStorage spec or the built-in
-  initial spec, exactly as in baseline behavior
+  initial spec
+
+> Amended post-review (2026-08-19): in file mode, a missing spec file now
+> discards the localStorage cache (no cross-project bleed) and starts from the
+> built-in initial spec; the editor is input-locked until hydration completes;
+> writes carry optimistic-concurrency protection (409 on external edit or
+> stale base). See verification.md addendum and the living spec., exactly as in baseline behavior
 
 ### Requirement: Metadata sidecar
 

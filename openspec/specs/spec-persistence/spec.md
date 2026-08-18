@@ -13,8 +13,8 @@ lives with the project it describes.
 
 When launched with `SPEC_YARD_PROJECT_DIR` set, the system SHALL persist the
 spec as raw YAML text at `<projectDir>/main.spec.yaml` and SHALL record
-`{id, title, updatedAt}` metadata in `<projectDir>/.specyard/spec-index.json`
-on every save.
+title/updatedAt metadata keyed by spec id in
+`<projectDir>/.specyard/spec-index.json` on every save.
 
 #### Scenario: Autosave writes the spec file
 
@@ -40,10 +40,47 @@ autosave.
 
 #### Scenario: First launch against a repo with no spec file
 
-- GIVEN `<projectDir>/main.spec.yaml` does not exist
+- GIVEN file mode is active and `<projectDir>/main.spec.yaml` does not exist
 - WHEN the workspace mounts
-- THEN the editor falls back to the localStorage spec or the built-in
-  initial spec
+- THEN the editor shows the built-in initial spec
+- AND any localStorage-cached spec (which may belong to a different project)
+  is discarded, never written into this repo
+
+### Requirement: Hydration input lockout
+
+The editor SHALL refuse user input until hydration (including the server pull)
+has completed, so a keystroke during the hydration window can never be
+autosaved over the canonical project file.
+
+#### Scenario: Typing during hydration
+
+- GIVEN the workspace is still hydrating
+- WHEN the user types in the spec editor
+- THEN the input is refused (editor disabled)
+- AND once hydration completes the editor shows the hydrated spec and accepts
+  input
+
+### Requirement: Write conflict protection
+
+When file mode is active, a spec write SHALL be rejected with a conflict
+(HTTP 409) when the file changed since the writer's base — whether by another
+app instance (stale `baseUpdatedAt`) or by an external edit (file mtime
+mismatch) — and no bytes are written. On conflict the client SHALL stop
+mirroring and log a reload instruction.
+
+#### Scenario: External edit during an open session
+
+- GIVEN the workspace is open on a repo spec
+- WHEN the file is edited outside the app
+- THEN the next autosave PUT is rejected with 409
+- AND the external content remains on disk
+
+#### Scenario: Hand-authored file adoption
+
+- GIVEN `<projectDir>/main.spec.yaml` exists but was never written by the app
+  (no index entry)
+- WHEN the app first saves
+- THEN the write succeeds and the file comes under conflict protection
 
 ### Requirement: Metadata sidecar
 

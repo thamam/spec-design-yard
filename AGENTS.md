@@ -39,7 +39,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 ## Gotchas
 
-- Persistence has two modes. Default: localStorage-only. With `SPEC_YARD_PROJECT_DIR=<client-repo> npm run dev`: the store API route (`pages/api/store/[...path].ts`) writes `<repo>/main.spec.yaml` + `<repo>/.specyard/*.json`, and on mount the repo file wins over the browser cache (`loadFromServer` before `setIsHydrated` in `workspace-layout.tsx`). There is no auth or remote backend — the API route is local-dev only.
+- Persistence has two modes. Default: localStorage-only. With `SPEC_YARD_PROJECT_DIR=<client-repo> npm run dev`: the store API route (`pages/api/store/[...path].ts`) writes `<repo>/main.spec.yaml` + `<repo>/.specyard/*.json`, and on mount the repo file wins over the browser cache (`loadFromServer` before `setIsHydrated` in `workspace-layout.tsx`). There is no auth on the route by design — local-dev use only; never expose the dev server on an untrusted network with the env var set.
 - The canvas is Excalidraw only — do not add a second canvas library
 - No `next.config.*`, no ESLint/Prettier configs — match existing style manually
 - `components/Workspace.tsx` (PascalCase) is a legacy re-export stub — new components go in `components/workspace/`, kebab-case
@@ -48,7 +48,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 ## Repo overlays (not app code)
 
-- `openspec/` — spec-driven workflow; one living spec (`specs/stride-security/`), completed changes under `changes/archive/`
+- `openspec/` — spec-driven workflow; living specs under `specs/` (`stride-security`, `spec-persistence`), completed changes under `changes/archive/`
 - `_bmad/`, `.agent/`, `.agents/`, `.claude/`, `.codex/`, `.bmad-loop/` — agent-framework installs and orchestration state; excluded from the codegraph index
 - `sketches/` — 4 static HTML design explorations; `design-artifacts/` — empty scaffold dirs
 - `scripts/` — legacy agent tooling (Playwright pixel validation used by CI, v0.dev utilities); not wired into npm scripts

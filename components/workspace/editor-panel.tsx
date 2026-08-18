@@ -37,15 +37,18 @@ interface EditorPanelProps {
   setPathTarget?: (val: string) => void
   activeTab?: TabId
   setActiveTab?: (tab: TabId) => void
+  /** False while the workspace is hydrating; the editor refuses input until then. */
+  isHydrated?: boolean
 }
 
 /* ── Code Tab ── */
 interface CodeTabProps {
   value: string
   onChange: (val: string) => void
+  disabled?: boolean
 }
 
-function CodeTab({ value, onChange }: CodeTabProps) {
+function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
@@ -146,7 +149,8 @@ function CodeTab({ value, onChange }: CodeTabProps) {
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
         onKeyDown={handleKeyDown}
-        className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto"
+        disabled={disabled}
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 
@@ -1780,6 +1784,7 @@ export function EditorPanel({
   setPathTarget: propSetPathTarget,
   activeTab: propActiveTab,
   setActiveTab: propSetActiveTab,
+  isHydrated: propIsHydrated,
 }: EditorPanelProps) {
   const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
@@ -2039,7 +2044,7 @@ export function EditorPanel({
         className={activeTab === "code" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
-        <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} />
+        <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} disabled={propIsHydrated === false} />
       </div>
 
       <div
@@ -2090,6 +2095,7 @@ export function EditorPanel({
           setPathSource={setPathSource}
           pathTarget={pathTarget}
           setPathTarget={setPathTarget}
+          storeHydrated={propIsHydrated}
         />
       </div>
 

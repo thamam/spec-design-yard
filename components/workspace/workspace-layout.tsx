@@ -293,6 +293,7 @@ export function WorkspaceLayout() {
             setPathTarget={setPathTarget}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            isHydrated={isHydrated}
           />
         </div>
 

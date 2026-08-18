@@ -37,6 +37,8 @@ interface MetricsTabProps {
   setPathSource?: (val: string) => void
   pathTarget?: string
   setPathTarget?: (val: string) => void
+  /** Flips true when workspace hydration (incl. server pull) has completed. */
+  storeHydrated?: boolean
 }
 
 const EMPTY_DIAGNOSTICS: Diagnostic[] = []
@@ -126,6 +128,7 @@ export function MetricsTab({
   setPathSource: propSetPathSource,
   pathTarget: propPathTarget,
   setPathTarget: propSetPathTarget,
+  storeHydrated,
 }: MetricsTabProps) {
   const [localPathSource, setLocalPathSource] = useState<string>("")
   const [localPathTarget, setLocalPathTarget] = useState<string>("")
@@ -158,6 +161,18 @@ export function MetricsTab({
       setCustomPresets(specStore.getCustomPresets())
     }
   }, [])
+
+  // Server hydration lands after mount (workspace awaits loadFromServer before
+  // isHydrated flips). Re-read the store when that signal arrives so the UI
+  // shows the project-backed history/presets instead of overwriting them with
+  // the empty pre-hydration state. storeHydrated is optional: undefined means
+  // "no workspace hydration signal" (standalone usage/tests) and never re-reads.
+  useEffect(() => {
+    if (storeHydrated && typeof window !== "undefined") {
+      setSimulationHistory(specStore.getSimulationHistory())
+      setCustomPresets(specStore.getCustomPresets())
+    }
+  }, [storeHydrated])
 
   useEffect(() => {
     setComparedPathIndices([])

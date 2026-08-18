@@ -9,6 +9,9 @@ describe('Database Hydration Resilience & Auto-Save Checks', () => {
     if (typeof window !== 'undefined') {
       localStorage.clear()
     }
+    // The app-wide store singleton keeps an in-memory fallback that survives
+    // localStorage.clear() — remove the spec explicitly or tests leak state.
+    db.removeSpec("main")
     vi.restoreAllMocks()
   })
 
@@ -16,6 +19,7 @@ describe('Database Hydration Resilience & Auto-Save Checks', () => {
     if (typeof window !== 'undefined') {
       localStorage.clear()
     }
+    db.removeSpec("main")
     vi.restoreAllMocks()
   })
 
@@ -63,10 +67,13 @@ describe('Database Hydration Resilience & Auto-Save Checks', () => {
       expect(textarea.value).toContain('Stored Unchanged System')
     })
 
-    // The saveSpec should not be called with the exact loaded text — hydration must not
-    // trigger a redundant save-back. The only allowed call is the seed in test setup.
+    // Wait through the full autosave debounce: hydration must not trigger a
+    // save-back of the unchanged text — zero calls, not "at most one".
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1200))
+    })
     const saveCallsAfterMount = saveSpecSpy.mock.calls.filter(call => call[2] === customUserSpecText)
-    expect(saveCallsAfterMount.length).toBeLessThanOrEqual(1)
+    expect(saveCallsAfterMount.length).toBe(0)
   })
 
   test('successfully saves to database on user edit', async () => {

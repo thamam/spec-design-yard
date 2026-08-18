@@ -14,6 +14,9 @@ export const db = {
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument {
     return specStore.saveSpec(id, title, yamlContent)
   },
+  removeSpec(id: string): void {
+    return specStore.removeSpec(id)
+  },
   /** Pull project-file state into the local cache. See RemoteSyncSpecStore. */
   loadFromServer(): Promise<boolean> {
     return specStore.loadFromServer()
