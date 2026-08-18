@@ -62,10 +62,10 @@ smoke (dev server + curl round-trip).
   (not as `lib/spec-store.ts`'s default export) to avoid a circular import;
   `lib/db.ts` and `metrics-tab.tsx` were repointed. `spec-store.ts` no longer
   has a default export. Behavior is as designed.
-- `workspace-layout.tsx`: during the async hydration window, user keystrokes
-  win over the arriving server/local snapshot (guarded by `specTextRef`) —
-  a fix for a race the async boundary introduced, caught by
-  `tests/database-hydration-resilience.test.tsx`.
+- `workspace-layout.tsx`: the async hydration boundary initially let
+  hydration win over early keystrokes (guarded by `specTextRef`); after
+  adversarial review this was replaced by a full input lockout — every
+  mutation path is gated until hydration completes.
 
 ## Incident note
 

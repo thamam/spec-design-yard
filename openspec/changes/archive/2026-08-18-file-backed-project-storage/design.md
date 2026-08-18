@@ -77,3 +77,31 @@ the repo file.
   localStorage is only a cache and a fallback for when the write mirror fails.
 - **Rejected**: last-write-wins by timestamp — clock skew and cross-machine
   edge cases for zero benefit in a local, single-user tool.
+
+## Decision 6: Optimistic concurrency and mirror discipline (post-review)
+
+Added during adversarial-review remediation (rounds 1-3 on PR #10):
+
+- Every mirrored write checks `res.ok`; HTTP failures are logged loudly and
+  never thrown into the UI.
+- Spec PUTs are serialized through a promise chain and carry a `baseRev`
+  token (a `randomUUID` minted per server write, echoed in the PUT ack) —
+  millisecond-granularity timestamps proved collidable. The index also
+  records file mtime so raw external edits (which don't touch the index)
+  are caught. External deletion of a tracked file 409s.
+- A 409 caused by a lost ack reconciles: re-GET, and if the server holds
+  exactly what our previous PUT sent, adopt the fresh rev and retry once.
+  Genuine divergence latches mirroring off with a reload instruction.
+- Meta PUTs are serialized per URL; mirrors stay silent until `arm()` fires
+  at hydration completion, and pre-hydration meta writes are stashed and
+  flushed (local + server) on arm.
+- Legacy index entries without a `rev` self-heal on GET (a rev is minted);
+  a bare PUT against a rev-less entry is refused (409 `legacy-index`).
+- All mirrored paths — spec, meta, and the spec-index itself — pass the
+  realpath containment check, not just the request target.
+
+- **Rationale**: file mode must never silently lose or clobber user data;
+  every failure either heals (reconcile, migration) or stops loudly
+  (latch + reload instruction).
+- **Rejected**: ETag/If-Match headers and mtime-only tokens — the rev UUID
+  is simpler, collision-free, and portable across filesystems.

@@ -270,3 +270,42 @@ describe('store API route — adversarial hardening', () => {
     expect(res.statusCode).toBe(200)
   })
 })
+
+describe('store API route — legacy index migration', () => {
+  let projectDir: string
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-legacy-'))
+    process.env.SPEC_YARD_PROJECT_DIR = projectDir
+  })
+
+  afterEach(() => {
+    delete process.env.SPEC_YARD_PROJECT_DIR
+    fs.rmSync(projectDir, { recursive: true, force: true })
+  })
+
+  test('legacy entry without rev: GET mints one, bare PUT 409s, PUT with minted rev succeeds', () => {
+    // Simulate a pre-rev index entry
+    fs.writeFileSync(path.join(projectDir, 'main.spec.yaml'), 'system:\n  name: Legacy\n')
+    fs.mkdirSync(path.join(projectDir, '.specyard'), { recursive: true })
+    fs.writeFileSync(path.join(projectDir, '.specyard', 'spec-index.json'),
+      JSON.stringify({ main: { title: 'Legacy', updatedAt: '2026-08-18T00:00:00.000Z', mtimeMs: fs.statSync(path.join(projectDir, 'main.spec.yaml')).mtimeMs } }))
+
+    // Bare PUT against a rev-less entry is refused (no silent adoption)
+    const barePut = mockRes()
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'Legacy', yamlContent: 'system: {}\n', baseRev: null }), barePut)
+    expect(barePut.statusCode).toBe(409)
+    expect(barePut.body.reason).toBe('legacy-index')
+
+    // GET self-heals: mints a rev
+    const getRes = mockRes()
+    handler(mockReq('GET', ['spec', 'main']), getRes)
+    expect(getRes.statusCode).toBe(200)
+    expect(typeof getRes.body.rev).toBe('string')
+
+    // PUT chained on the minted rev succeeds
+    const putRes = mockRes()
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'Legacy', yamlContent: 'system: {}\n', baseRev: getRes.body.rev }), putRes)
+    expect(putRes.statusCode).toBe(200)
+  })
+})

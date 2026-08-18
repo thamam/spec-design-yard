@@ -35,9 +35,10 @@ Client-side, a `RemoteSyncSpecStore` wraps the existing
 mirrors every write to the server. On mount, one awaited `loadFromServer()`
 makes the server file canonical, overriding stale local cache.
 
-When `SPEC_YARD_PROJECT_DIR` is unset, the API route answers `501` and the
-client behaves exactly as today (localStorage-only). No behavior change for
-the existing standalone workflow.
+When `SPEC_YARD_PROJECT_DIR` is unset, the API route answers
+`200 {enabled: false}` (quiet by design — an error status would log to the
+browser console on every load) and the client behaves exactly as today
+(localStorage-only). No behavior change for the existing standalone workflow.
 
 ## Scope
 

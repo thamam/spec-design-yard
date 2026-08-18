@@ -64,9 +64,11 @@ autosaved over the canonical project file.
 
 When file mode is active, a spec write SHALL be rejected with a conflict
 (HTTP 409) when the file changed since the writer's base — whether by another
-app instance (stale `baseUpdatedAt`) or by an external edit (file mtime
-mismatch) — and no bytes are written. On conflict the client SHALL stop
-mirroring and log a reload instruction.
+app instance (stale `baseRev`), an external edit (file mtime mismatch), or
+external deletion — and no bytes are written. On conflict the client SHALL
+reconcile first (if the server holds exactly what its previous write sent,
+it adopts the fresh `rev` and retries once); a genuine divergence stops
+mirroring and logs a reload instruction.
 
 #### Scenario: External edit during an open session
 

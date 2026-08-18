@@ -40,10 +40,21 @@ export class RemoteSyncSpecStore implements SpecStore {
   private specPutChain: Promise<void> = Promise.resolve()
   // Per-URL serialization for meta PUTs (same out-of-order-landing risk).
   private metaChains = new Map<string, Promise<void>>()
+  // Meta writes attempted before arm() (pre-hydration user actions) are
+  // stashed per URL and flushed after hydration's pulls land, so an early
+  // simulation run isn't silently discarded. The apply fn re-syncs the local
+  // delegate, which pullMeta may have overwritten with server state.
+  private pendingMeta = new Map<string, { body: unknown; apply: (v: any) => void }>()
 
-  /** Called by the workspace when hydration completes; arms mirroring. */
+  /** Called by the workspace when hydration completes; arms mirroring and
+   *  flushes any pre-hydration meta writes on top of the pulled state. */
   arm(): void {
     this.armed = true
+    this.pendingMeta.forEach(({ body, apply }, url) => {
+      apply(body)
+      this.mirror(url, body, apply)
+    })
+    this.pendingMeta.clear()
   }
 
   getSpec(id: string): SpecDocument | null {
@@ -65,7 +76,7 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   saveSimulationHistory(history: SimulationRun[]): void {
     this.local.saveSimulationHistory(history)
-    this.mirror("/api/store/meta/simulation_history", history)
+    this.mirror("/api/store/meta/simulation_history", history, (v) => this.local.saveSimulationHistory(v))
   }
 
   clearSimulationHistory(): void {
@@ -78,7 +89,7 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   saveCustomPresets(presets: CustomPreset[]): void {
     this.local.saveCustomPresets(presets)
-    this.mirror("/api/store/meta/custom_presets", presets)
+    this.mirror("/api/store/meta/custom_presets", presets, (v) => this.local.saveCustomPresets(v))
   }
 
   // Cache-local eviction (tests, cross-project bleed guard). Deliberately NOT
@@ -117,6 +128,9 @@ export class RemoteSyncSpecStore implements SpecStore {
         this.fileModeDisabled = true
         return false
       }
+      // File mode confirmed on — clear any latch from a previous failed
+      // attempt (e.g. a Fast Refresh remount after a transient error).
+      this.fileModeDisabled = false
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
         this.serverRev = typeof body.rev === "string" ? body.rev : null
@@ -147,10 +161,11 @@ export class RemoteSyncSpecStore implements SpecStore {
         return
       }
       const value = await res.json()
-      // An authoritative null means THIS project has no stored metadata —
-      // clear the cache rather than showing another project's leftovers.
+      // An authoritative non-array (null = nothing stored; a wrong-shape file
+      // = not ours) clears the cache rather than showing another project's
+      // leftovers.
       if (Array.isArray(value)) apply(value)
-      else if (value === null) apply([])
+      else apply([])
     } catch (e) {
       console.error(`[spec-yard] Failed to load ${url}`, e)
     }
@@ -220,8 +235,14 @@ export class RemoteSyncSpecStore implements SpecStore {
     )
   }
 
-  private mirror(url: string, body: unknown): void {
-    if (!this.canMirror()) return
+  private mirror(url: string, body: unknown, apply: (v: any) => void): void {
+    if (typeof window === "undefined") return
+    if (this.fileModeDisabled) return
+    if (!this.armed) {
+      // Pre-hydration write: stash the latest value per URL; arm() flushes.
+      this.pendingMeta.set(url, { body, apply })
+      return
+    }
     const prev = this.metaChains.get(url) ?? Promise.resolve()
     const next = prev.then(() => this.putMeta(url, body))
     this.metaChains.set(url, next)

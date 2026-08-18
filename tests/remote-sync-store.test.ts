@@ -357,3 +357,66 @@ describe('RemoteSyncSpecStore round-2 protocol fixes', () => {
     expect(maxConcurrent).toBe(1)
   })
 })
+
+describe('RemoteSyncSpecStore round-3 fixes', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('valid-but-non-array meta JSON clears the cache too', async () => {
+    localStorage.setItem('simulation_history', JSON.stringify([{ id: 'other-project-run' }]))
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false } },
+      '/api/store/meta/simulation_history': { status: 200, body: { unexpected: 'object' } },
+      '/api/store/meta/custom_presets': { status: 200, body: 'a string' },
+    }))
+
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+
+    expect(store.getSimulationHistory()).toEqual([])
+    expect(store.getCustomPresets()).toEqual([])
+  })
+
+  test('pre-arm meta writes are queued and flushed on arm (local + server)', async () => {
+    const fetchMock = mockFetchSequence({})
+    vi.stubGlobal('fetch', fetchMock)
+
+    const store = new RemoteSyncSpecStore()
+    // Early write (pre-arm): applied locally, not yet mirrored
+    store.saveSimulationHistory([{ id: 'early-run' }])
+    expect(store.getSimulationHistory()).toEqual([{ id: 'early-run' }])
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    store.arm()
+    await vi.waitFor(() => {
+      const puts = fetchMock.mock.calls.filter(([u, init]: any[]) => init?.method === 'PUT' && String(u).includes('simulation_history'))
+      expect(puts).toHaveLength(1)
+      expect(JSON.parse(puts[0][1].body)).toEqual([{ id: 'early-run' }])
+    })
+    expect(store.getSimulationHistory()).toEqual([{ id: 'early-run' }])
+  })
+
+  test('a successful loadFromServer resets a previous failure latch', async () => {
+    const store = new RemoteSyncSpecStore()
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down') }))
+    expect(await store.loadFromServer()).toBe(false)
+
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false } },
+    }))
+    expect(await store.loadFromServer()).toBe(true)
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    await vi.waitFor(() => {
+      const fetchMock = globalThis.fetch as any
+      expect(fetchMock.mock.calls.some(([, init]: any[]) => init?.method === 'PUT')).toBe(true)
+    })
+  })
+})

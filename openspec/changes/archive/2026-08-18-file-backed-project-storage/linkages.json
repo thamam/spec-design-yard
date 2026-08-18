@@ -33,7 +33,7 @@
     },
     {
       "requirement": "spec-persistence/Write conflict protection",
-      "design": "Decision 4: One catch-all API route with a whitelist",
+      "design": "Decision 6: Optimistic concurrency and mirror discipline (post-review)",
       "tasks": ["Task 1: Store API route", "Task 2: Remote-sync store"]
     }
   ]

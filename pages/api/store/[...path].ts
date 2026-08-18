@@ -170,6 +170,13 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         return res.status(500).json({ error: "Failed to read spec file" })
       }
       const index = readSpecIndex(indexPath)
+      // Migration: an entry written before rev existed gets one minted on
+      // read (fail-closed — without this, its writes would 409 forever).
+      if (index[SPEC_ID] && index[SPEC_ID].rev == null) {
+        index[SPEC_ID].rev = randomUUID()
+        index[SPEC_ID].mtimeMs = fs.statSync(target.file).mtimeMs
+        writeFileAtomic(indexPath, JSON.stringify(index, null, 2), path.dirname(indexPath))
+      }
       return res.status(200).json({
         id: SPEC_ID,
         title: index[SPEC_ID]?.title || "Untitled Spec",
@@ -203,7 +210,12 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
     // authored by hand, and blocking first-save would brick that flow.
     const index = readSpecIndex(indexPath)
     const entry = index[SPEC_ID]
-    if (entry?.rev != null) {
+    if (entry) {
+      // Legacy entry without a rev: refuse adoption-overwrite; the client must
+      // GET first (which mints a rev and establishes the baseline).
+      if (entry.rev == null) {
+        return res.status(409).json({ conflict: true, reason: "legacy-index", current: { title: entry.title, updatedAt: entry.updatedAt } })
+      }
       if (!fs.existsSync(target.file)) {
         return res.status(409).json({ conflict: true, reason: "deleted", current: { title: entry.title, updatedAt: entry.updatedAt } })
       }
