@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 /*
  * The isolated-store and processing-sink recommendations are the linter's
@@ -26,6 +27,7 @@ const SPEC_WITH_SINK_AND_ISOLATED_STORE = `system:
 
 async function renderMetricsFor(specText: string) {
   render(<Workspace />)
+  await waitForWorkspaceHydration()
 
   fireEvent.click(screen.getByRole('tab', { name: /Code/i }))
   const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

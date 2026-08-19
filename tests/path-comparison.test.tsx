@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Interactive Path Comparison Tool', () => {
   test('supports selecting two paths side-by-side and displays rich comparison metrics', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Code tab and inject alternative paths spec
     const codeTabBtn = screen.getByRole('tab', { name: /Code/i })

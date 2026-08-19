@@ -1,7 +1,8 @@
-// Persistence seam: one home for spec documents, simulation history, and custom
-// simulation presets. Wraps localStorage with an in-memory fallback so the app
-// keeps working (within a single session) even when localStorage is unavailable
-// or throws (private browsing, quota exceeded, etc).
+// Persistence seam: types + the localStorage-backed store. Wraps localStorage
+// with an in-memory fallback so the app keeps working (within a single
+// session) even when localStorage is unavailable or throws (private browsing,
+// quota exceeded, etc). The app-wide store instance lives in
+// lib/remote-sync-store.ts, which wraps this class with file mirroring.
 
 export interface SpecDocument {
   id: string
@@ -23,6 +24,7 @@ export interface CustomPreset {
 export interface SpecStore {
   getSpec(id: string): SpecDocument | null
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument
+  removeSpec(id: string): void
   getSimulationHistory(): SimulationRun[]
   saveSimulationHistory(history: SimulationRun[]): void
   clearSimulationHistory(): void
@@ -80,6 +82,17 @@ export class LocalStorageSpecStore implements SpecStore {
       }
     }
     return doc
+  }
+
+  public removeSpec(id: string): void {
+    delete this.specs[id]
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem(`spec_${id}`)
+      } catch (e) {
+        console.error("Failed to remove spec from localStorage", e)
+      }
+    }
   }
 
   public getSimulationHistory(): SimulationRun[] {
@@ -144,7 +157,3 @@ export class LocalStorageSpecStore implements SpecStore {
     }
   }
 }
-
-const specStore: SpecStore = new LocalStorageSpecStore()
-
-export default specStore

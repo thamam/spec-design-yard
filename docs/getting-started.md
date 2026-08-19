@@ -62,3 +62,45 @@ Runs Vitest in watch mode.
 3. **Open the browser:** Go to `http://localhost:3000`
 4. **Make adjustments:** Edit the system architecture spec directly inside the Editor's **Code Tab** using YAML syntax, watch the live linter update inline, and view the visual graph adjust in real time on the canvas.
 5. **Verify stability:** Run `npm run test` to confirm all system unit and integration tests are passing perfectly.
+
+---
+
+## Working on a Client Repo
+
+By default everything you create lives in the browser's localStorage. To have
+the spec and workspace metadata saved as files inside the project you are
+designing for, point the dev server at that repo at launch:
+
+```bash
+SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev -- -H 127.0.0.1
+```
+
+(The `-H 127.0.0.1` binds the dev server to loopback only — recommended,
+since the store API is unauthenticated by design.)
+
+With the variable set, the app persists into the client repo:
+
+- `<repo>/main.spec.yaml` — the spec itself, raw YAML (committable, diffable,
+  hand-editable outside the tool)
+- `<repo>/.specyard/spec-index.json` — spec title / updated-at metadata
+- `<repo>/.specyard/simulation_history.json` — simulation run history
+- `<repo>/.specyard/custom_presets.json` — custom simulator presets
+
+On load, the repo file wins over any stale browser cache. Add `.specyard/` to
+the client repo's `.gitignore` if you don't want tool metadata committed (the
+spec file itself is meant to be committed).
+
+**Editing the file outside the tool:** safe only while the workspace is
+closed, or before the workspace's first save. The app reads the file on mount;
+if the file changes underneath an open session (external edit, `git checkout`,
+a second app instance), the next autosave is rejected with a conflict instead
+of overwriting — reload the workspace to adopt the external version.
+
+**Network exposure:** the store API has no authentication by design — it is a
+local-dev tool. Do not bind the dev server to a non-localhost interface
+(`next dev -H 0.0.0.0`) or otherwise expose it on an untrusted network while
+`SPEC_YARD_PROJECT_DIR` is set: anyone who can reach the port can read and
+overwrite files under the project directory.
+
+Without `SPEC_YARD_PROJECT_DIR`, behavior is unchanged: localStorage-only
+persistence, no filesystem writes.

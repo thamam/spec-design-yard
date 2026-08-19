@@ -3,10 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Focus Tab Connections Inline Validation', () => {
   test('displays warning badges and styles for architecture violations and missing targets in connections list', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Code Tab and set a spec text with multiple violations
     const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
@@ -68,6 +70,7 @@ describe('Focus Tab Connections Inline Validation', () => {
 
   test('displays warning badges for brick-to-brick and gateway-to-gateway connections in FocusTab', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Code Tab and set spec
     const codeTabBtn = screen.getByRole('tab', { name: /Code/i })

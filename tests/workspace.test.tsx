@@ -7,10 +7,12 @@ import { compileSpecToExcalidrawElements } from '../components/workspace/excalid
 import { lintSpec } from '../lib/linter'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Workspace Split-Pane Spec-Diagram View', () => {
-  test('renders editor panel and canvas panel side-by-side', () => {
+  test('renders editor panel and canvas panel side-by-side', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     // Verify we have an editor container
     const editorContainer = screen.getByTestId('editor-panel')
@@ -21,16 +23,18 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(canvasContainer).toBeInTheDocument()
   })
 
-  test('displays initial YAML spec in the editor', () => {
+  test('displays initial YAML spec in the editor', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     expect(textarea.value).toContain('system:')
     expect(textarea.value).toContain('inbox')
   })
 
-  test('updates editor value on user input', () => {
+  test('updates editor value on user input', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: 'system:\n  name: New Spec' } })
@@ -38,8 +42,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(textarea.value).toBe('system:\n  name: New Spec')
   })
 
-  test('bidirectional sync updates coordinates in text area when coordinates modify', () => {
+  test('bidirectional sync updates coordinates in text area when coordinates modify', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     expect(textarea.value).toContain('inbox')
@@ -223,8 +228,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(orphanText.text).toBe('Missing: missing_stage')
   })
 
-  test('renders quick fix button and updates specText on click', () => {
+  test('renders quick fix button and updates specText on click', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     
@@ -249,8 +255,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(textarea.value).not.toContain('type: InvalidType')
   })
 
-  test('renders autocomplete suggestions when typing type: inside textarea', () => {
+  test('renders autocomplete suggestions when typing type: inside textarea', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     
     // Type a type: prefix
@@ -272,8 +279,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(textarea.value).toContain('type: Store')
   })
 
-  test('renders quick fix button for invalid version and set default version on click', () => {
+  test('renders quick fix button for invalid version and set default version on click', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     
@@ -311,6 +319,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
 
   test('FocusTab property editor updates spec text correctly', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     
     // Switch to Metrics Tab to select the component from the list
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
@@ -385,6 +394,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
 
   test('selecting a component from GridView switches to Focus Tab and updates selectedUnit', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid view on the CanvasPanel
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })

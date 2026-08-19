@@ -3,10 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Outgoing Connections Manager in Focus Tab', () => {
   test('lists existing outgoing connections, supports updating labels, and supports disconnecting them', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab to select the component from the list
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
@@ -65,6 +67,7 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
 
   test('supports adding a new outgoing connection', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab and select digest_stage
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })

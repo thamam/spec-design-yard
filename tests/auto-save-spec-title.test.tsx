@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import { db } from '../lib/db'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Regression guard: the debounced auto-save hardcoded the document title
 // ("External Brain v0.2") instead of deriving it from the spec's system.name.
@@ -21,18 +22,9 @@ describe('Auto-save derives document title from the spec', () => {
     vi.restoreAllMocks()
   })
 
-  const signIn = () => {
-    fireEvent.click(screen.getByRole('button', { name: /Sign In/i }))
-    const emailInput = screen.getByPlaceholderText('tomer@neuronbox.ai') as HTMLInputElement
-    fireEvent.change(emailInput, { target: { value: 'tomer@neuronbox.ai' } })
-    const signInButtons = screen.getAllByRole('button', { name: /Sign In/i })
-    const submitBtn = signInButtons.find(btn => btn.getAttribute('type') === 'submit') || signInButtons[1]
-    fireEvent.click(submitBtn)
-  }
-
   test('saving a spec whose system.name is "My Yard" persists title "My Yard"', async () => {
     render(<Workspace />)
-    signIn()
+    await waitForWorkspaceHydration()
 
     const myYardSpec = `system:
   name: My Yard
@@ -59,7 +51,7 @@ describe('Auto-save derives document title from the spec', () => {
 `)
 
     render(<Workspace />)
-    signIn()
+    await waitForWorkspaceHydration()
 
     // Wait for hydration of the seeded spec
     await waitFor(() => {

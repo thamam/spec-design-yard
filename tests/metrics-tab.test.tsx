@@ -3,10 +3,12 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Workspace Metrics Tab Feature', () => {
-  test('renders Metrics tab in the Editor Panel and shows component counts', () => {
+  test('renders Metrics tab in the Editor Panel and shows component counts', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Locate the Metrics tab button
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -36,8 +38,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.getByText(/0 Gateways/i)).toBeInTheDocument()
   })
 
-  test('clicking on a component in the metrics list selects it', () => {
+  test('clicking on a component in the metrics list selects it', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -55,8 +58,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.getByText(/Selected:/i).textContent).toContain('inbox')
   })
 
-  test('displays diagnostics summary, health status and component warning badges', () => {
+  test('displays diagnostics summary, health status and component warning badges', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -75,8 +79,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(infoIndicator.length).toBeGreaterThan(0)
   })
 
-  test('searching for components by text filters the component directory', () => {
+  test('searching for components by text filters the component directory', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -97,8 +102,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
   })
 
-  test('filtering components by type filters the component directory', () => {
+  test('filtering components by type filters the component directory', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -119,8 +125,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
   })
 
-  test('filtering components by issue severity filters the component directory', () => {
+  test('filtering components by issue severity filters the component directory', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -142,8 +149,9 @@ describe('Workspace Metrics Tab Feature', () => {
     expect(screen.queryByRole('button', { name: /inbox/i })).not.toBeInTheDocument()
   })
 
-  test('displays system metadata block and handles initializing system metadata', () => {
+  test('displays system metadata block and handles initializing system metadata', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -173,6 +181,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('displays connection density index, coupling rating, and hotspot/subgraph metrics', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -218,6 +227,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('displays Single Points of Failure (SPOFs) list and supports selecting them', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -241,6 +251,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('Interactive Flow and Path Tracer calculates paths, displays connection labels, and handles clicks', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -284,6 +295,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('displays actionable architectural recommendations based on system metrics', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
@@ -298,6 +310,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('displays interactive quick-fix action buttons inside architectural recommendations and applies them', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // First go to Code tab to inject a direct Gateway-to-Store connection (which has a quick-fix recommendation)
     const codeTabBtn = screen.getByRole('tab', { name: /Code/i })
@@ -343,6 +356,7 @@ describe('Workspace Metrics Tab Feature', () => {
 
   test('Interactive Flow Simulation simulates path performance and displays cumulative latency, throughput bottlenecks, and success rate', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)

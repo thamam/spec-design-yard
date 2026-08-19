@@ -23,9 +23,10 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
   - `spec-model.ts` — `Spec` types + `parseSpec(text)`; tolerant of partial/invalid YAML (survives mid-keystroke)
   - `reconciler.ts` — canvas↔YAML mediator: `reconcileSpec`, `parsePath` (prototype-pollution guarded), `autoLayoutDiagram`, ~40 `FixType`s
   - `linter.ts` — `lintSpec()` → `Diagnostic[]` (incl. STRIDE rules)
-  - `quick-fixes.ts`, `autocomplete.ts`, `canvas-diff.ts` (Excalidraw scene diffing), `simulation.ts` (packet sim), `spec-store.ts` (persistence seam: localStorage + in-memory fallback)
-  - `db.ts` — thin delegate onto spec-store; **not a real DB** despite the name
-- `components/workspace/` — `workspace-layout.tsx` owns all cross-panel state; `editor-panel.tsx` (left pane), `canvas-panel.tsx` + `excalidraw-canvas.tsx` (right pane), `metrics-tab.tsx` (simulator UI), `auth-panel.tsx` (**cosmetic only — no auth backend**)
+  - `quick-fixes.ts`, `autocomplete.ts`, `canvas-diff.ts` (Excalidraw scene diffing), `simulation.ts` (packet sim), `spec-store.ts` (persistence seam: `SpecStore` interface + localStorage/in-memory implementation)
+  - `remote-sync-store.ts` — the app-wide store instance: wraps `LocalStorageSpecStore` as a write-through cache and mirrors writes to `pages/api/store/[...path].ts` when file mode is on; all consumers must import the store from here, not from `spec-store.ts`
+  - `db.ts` — thin delegate onto the store (incl. `loadFromServer`); **not a real DB** despite the name
+- `components/workspace/` — `workspace-layout.tsx` owns all cross-panel state; `editor-panel.tsx` (left pane), `canvas-panel.tsx` + `excalidraw-canvas.tsx` (right pane), `metrics-tab.tsx` (simulator UI)
 - `pages/index.tsx` → `<WorkspaceLayout/>` (the only routed page)
 
 ## Conventions (enforce, don't dilute)
@@ -38,7 +39,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 ## Gotchas
 
-- `prisma/schema.prisma` exists but **Prisma is not installed or wired** — persistence is localStorage-only
+- Persistence has two modes. Default: localStorage-only. With `SPEC_YARD_PROJECT_DIR=<client-repo> npm run dev`: the store API route (`pages/api/store/[...path].ts`) writes `<repo>/main.spec.yaml` + `<repo>/.specyard/*.json`, and on mount the repo file wins over the browser cache (`loadFromServer` before `setIsHydrated` in `workspace-layout.tsx`). There is no auth on the route by design — local-dev use only; never expose the dev server on an untrusted network with the env var set.
 - The canvas is Excalidraw only — do not add a second canvas library
 - No `next.config.*`, no ESLint/Prettier configs — match existing style manually
 - `components/Workspace.tsx` (PascalCase) is a legacy re-export stub — new components go in `components/workspace/`, kebab-case
@@ -47,7 +48,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 ## Repo overlays (not app code)
 
-- `openspec/` — spec-driven workflow; one living spec (`specs/stride-security/`), completed changes under `changes/archive/`
+- `openspec/` — spec-driven workflow; living specs under `specs/` (`stride-security`, `spec-persistence`), completed changes under `changes/archive/`
 - `_bmad/`, `.agent/`, `.agents/`, `.claude/`, `.codex/`, `.bmad-loop/` — agent-framework installs and orchestration state; excluded from the codegraph index
 - `sketches/` — 4 static HTML design explorations; `design-artifacts/` — empty scaffold dirs
 - `scripts/` — legacy agent tooling (Playwright pixel validation used by CI, v0.dev utilities); not wired into npm scripts

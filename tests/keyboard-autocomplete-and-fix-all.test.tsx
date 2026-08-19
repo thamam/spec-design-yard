@@ -5,6 +5,7 @@ import { reconcileSpec } from '../lib/reconciler'
 import { lintSpec } from '../lib/linter'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
   test('reconcileSpec supports quick-fix-all to atomically apply multiple fixes', () => {
@@ -33,8 +34,9 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     expect(parsed.system.components[1].metadata).toEqual({})
   })
 
-  test('textarea in CodeTab supports arrow keys to navigate and Tab/Enter to apply autocomplete', () => {
+  test('textarea in CodeTab supports arrow keys to navigate and Tab/Enter to apply autocomplete', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
     // Set value to trigger autocomplete for type suggestion
@@ -91,8 +93,9 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     expect(parsed.system.components[0].id).toBe('node_c')
   })
 
-  test('textarea in CodeTab does not apply autocomplete with Enter key unless navigated', () => {
+  test('textarea in CodeTab does not apply autocomplete with Enter key unless navigated', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
     // Case A: No navigation, press Enter. It should NOT apply autocomplete.

@@ -3,10 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Incoming Connections Manager in Focus Tab', () => {
   test('lists incoming connections, supports updating labels, and supports disconnecting them', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab to select digest_stage
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
@@ -76,6 +78,7 @@ describe('Incoming Connections Manager in Focus Tab', () => {
 
   test('supports adding a new incoming connection', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab and select kb_store
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })

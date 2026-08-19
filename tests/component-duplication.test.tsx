@@ -3,10 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Interactive Component Duplication UI Integration', () => {
   test('supports duplicating a component via UI button and auto-selects the clone', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab and select the inbox component
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })

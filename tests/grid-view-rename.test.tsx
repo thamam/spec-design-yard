@@ -3,10 +3,12 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Grid View Interactive Double-Click Renaming', () => {
   test('supports entering renaming mode, validation error feedback, canceling, and successful ID renaming', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })

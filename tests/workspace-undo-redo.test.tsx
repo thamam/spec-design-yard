@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Workspace Undo/Redo Integration', () => {
   beforeEach(() => {
@@ -12,8 +13,12 @@ describe('Workspace Undo/Redo Integration', () => {
     vi.useRealTimers()
   })
 
-  test('integrates useUndoRedo with the workspace UI', () => {
+  test('integrates useUndoRedo with the workspace UI', async () => {
     render(<Workspace />)
+    // waitFor polls on real timers; the fake-timer regime starts after hydration
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
 
     // Verify initial textarea state
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

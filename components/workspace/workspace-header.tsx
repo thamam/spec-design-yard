@@ -11,20 +11,13 @@ import {
   Undo,
   Redo,
 } from "lucide-react"
-import { AuthPanel, UserSession } from "./auth-panel"
 
 export function WorkspaceHeader({
-  session,
-  onLogin,
-  onLogout,
   canUndo = false,
   canRedo = false,
   onUndo,
   onRedo,
 }: {
-  session: UserSession
-  onLogin: (email: string, name: string) => void
-  onLogout: () => void
   canUndo?: boolean
   canRedo?: boolean
   onUndo?: () => void
@@ -142,16 +135,6 @@ export function WorkspaceHeader({
           icon={<SettingsIcon size={13} />}
           label="Settings"
           onClick={() => {}}
-        />
-        <div
-          className="w-px h-4 mx-1"
-          style={{ background: "var(--border-subtle)" }}
-          aria-hidden="true"
-        />
-        <AuthPanel
-          session={session}
-          onLogin={onLogin}
-          onLogout={onLogout}
         />
       </div>
     </header>

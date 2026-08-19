@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Focus Tab Inline Diagnostics & Quick-Fixes', () => {
   test('displays inline linter warnings inside FocusTab and supports applying single quick-fix', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Set YAML to a spec with an unrecognized component type to trigger a warning
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement

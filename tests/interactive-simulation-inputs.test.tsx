@@ -3,10 +3,12 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Interactive Simulation Configuration & Performance Tuning', () => {
   test('allows editing component latency and throughput in FocusTab and updates YAML correctly as integers', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics tab to select digest_stage
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -51,6 +53,7 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
 
   test('custom performance values are correctly utilized in the flow simulation path metrics', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Select digest_stage and set its custom latency to 120 and throughput to 15 (bottleneck!)
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

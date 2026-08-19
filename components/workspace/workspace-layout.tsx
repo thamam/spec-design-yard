@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
-import { UserSession } from "./auth-panel"
 import { db } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
@@ -142,33 +141,46 @@ export function WorkspaceLayout() {
   const [pathSource, setPathSource] = useState<string>("")
   const [pathTarget, setPathTarget] = useState<string>("")
 
-  // User Session & DB storage states
-  const [session, setSession] = useState<UserSession>({ user: null })
   const [isHydrated, setIsHydrated] = useState(false)
 
   const lastLoadedSpecRef = useRef<string | null>(null)
 
-  // Load custom saved spec when user signs in
+  // Hydrate the saved spec on mount. When the app runs against a project dir
+  // (SPEC_YARD_PROJECT_DIR), the repo file is canonical: pull server state
+  // into the store first so a stale localStorage cache never wins, and only
+  // then arm autosave (isHydrated) so cache can't be pushed over the file.
   useEffect(() => {
-    if (session.user) {
+    let cancelled = false
+    const hydrate = async () => {
+      await db.loadFromServer()
+      if (cancelled) return
       const savedDoc = db.getSpec("main")
-      if (savedDoc && savedDoc.yamlContent) {
-        lastLoadedSpecRef.current = savedDoc.yamlContent
-        resetHistory(savedDoc.yamlContent)
-      } else {
-        lastLoadedSpecRef.current = INITIAL_SPEC
-        resetHistory(INITIAL_SPEC)
-      }
+      const loaded = savedDoc && savedDoc.yamlContent ? savedDoc.yamlContent : INITIAL_SPEC
+      lastLoadedSpecRef.current = loaded
+      resetHistory(loaded)
       setIsHydrated(true)
-    } else {
-      setIsHydrated(false)
-      lastLoadedSpecRef.current = null
     }
-  }, [session.user, resetHistory])
+    hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [resetHistory])
 
-  // Save current spec to DB on modification (if signed in and hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
+  // Until hydration resolves, NO mutation path may touch the spec — an early
+  // edit would fork from the built-in template and then be autosaved over the
+  // canonical project file. The textarea is disabled in the UI; every other
+  // path (canvas edits, quick-fixes, renames) is gated here at the source.
+  const guardedSetSpecText = useCallback((
+    val: string | ((prev: string) => string),
+    options?: { isTyping?: boolean; immediate?: boolean }
+  ) => {
+    if (!isHydrated) return
+    setSpecText(val, options)
+  }, [isHydrated, setSpecText])
+
+  // Save current spec to DB on modification (once hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
-    if (session.user && specText && isHydrated) {
+    if (specText && isHydrated) {
       if (specText === lastLoadedSpecRef.current) {
         return
       }
@@ -186,18 +198,11 @@ export function WorkspaceLayout() {
 
       return () => clearTimeout(timer)
     }
-  }, [specText, session.user, isHydrated])
-
-  const handleLogin = useCallback((email: string, name: string) => {
-    setSession({ user: { email, name } })
-  }, [])
-
-  const handleLogout = useCallback(() => {
-    setSession({ user: null })
-  }, [])
+  }, [specText, isHydrated])
 
   // Sync canvas position edits, deletions, and renames back into YAML spec
   const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
+    if (!isHydrated) return
     if (Array.isArray(change)) {
       const updated = reconcileSpec(specText, { type: "coords", payload: change })
       if (updated !== specText) {
@@ -209,7 +214,7 @@ export function WorkspaceLayout() {
         setSpecText(updated, { immediate: true })
       }
     }
-  }, [specText, setSpecText])
+  }, [isHydrated, specText, setSpecText])
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
@@ -264,9 +269,6 @@ export function WorkspaceLayout() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
       <WorkspaceHeader
-        session={session}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
@@ -286,7 +288,7 @@ export function WorkspaceLayout() {
         >
           <EditorPanel
             specText={specText}
-            setSpecText={setSpecText}
+            setSpecText={guardedSetSpecText}
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}
@@ -296,6 +298,7 @@ export function WorkspaceLayout() {
             setPathTarget={setPathTarget}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            isHydrated={isHydrated}
           />
         </div>
 
