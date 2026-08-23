@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# spec-yard: launch (or attach to) the spec-design-yard workspace in
+# file-backed mode against a client repo.
+#
+# Usage: spec-yard [project-dir]   (defaults to the current directory)
+#
+# Install once with: npm run install-cli
+set -euo pipefail
+
+# Resolve the repo root from this script's own location (follows symlinks,
+# so it works when invoked via ~/.local/bin/spec-yard).
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+REPO="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+DIR="${1:-$PWD}"
+URL="http://localhost:3000"
+
+if curl -sf -o /dev/null "$URL"; then
+  echo "spec-yard is already running — opening $URL"
+  echo "note: the running instance keeps whatever project dir it was started with"
+  open "$URL"
+  exit 0
+fi
+
+cd "$REPO"
+export SPEC_YARD_PROJECT_DIR="$DIR"
+
+npm run dev -- -H 127.0.0.1 &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null' EXIT
+
+for _ in $(seq 1 30); do
+  if curl -sf -o /dev/null "$URL"; then
+    echo "spec-yard up at $URL (project dir: $DIR)"
+    open "$URL"
+    break
+  fi
+  sleep 1
+done
+
+wait "$SERVER_PID"

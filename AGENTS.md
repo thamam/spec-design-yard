@@ -5,6 +5,7 @@ Single-page Next.js app: a visual IDE for editing a YAML "system spec" (componen
 ## Commands
 
 - `npm run dev` — dev server
+- `npm run install-cli` — one-time setup: symlinks `bin/spec-yard` into `~/.local/bin`; afterwards `spec-yard [client-repo]` launches file-backed mode from anywhere
 - `npm test` — vitest run (jsdom, `globals: true`, setup in `tests/setup.ts`)
 - `npm run build` — production build; must stay clean
 - `npm run lint` — **do not rely on it**: no ESLint config exists, it prompts interactively
@@ -51,4 +52,5 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 - `openspec/` — spec-driven workflow; living specs under `specs/` (`stride-security`, `spec-persistence`), completed changes under `changes/archive/`
 - `_bmad/`, `.agent/`, `.agents/`, `.claude/`, `.codex/`, `.bmad-loop/` — agent-framework installs and orchestration state; excluded from the codegraph index
 - `sketches/` — 4 static HTML design explorations; `design-artifacts/` — empty scaffold dirs
-- `scripts/` — legacy agent tooling (Playwright pixel validation used by CI, v0.dev utilities); not wired into npm scripts
+- `bin/spec-yard` — the standard CLI launcher (file-backed mode from any client repo); installed to PATH by `scripts/install-cli.sh`
+- `scripts/` — legacy agent tooling (Playwright pixel validation used by CI, v0.dev utilities); only `install-cli.sh` is wired into npm scripts

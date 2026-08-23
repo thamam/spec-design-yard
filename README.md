@@ -14,10 +14,13 @@ Get your design workspace up and running locally in three simple steps:
 # 1. Install dependencies
 npm install
 
-# 2. Run the development server
+# 2. (One-time) put the `spec-yard` launcher on your PATH
+npm run install-cli
+
+# 3. Run the development server
 npm run dev
 
-# 3. Verify the system tests
+# 4. Verify the system tests
 npm run test
 ```
 

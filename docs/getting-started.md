@@ -69,7 +69,21 @@ Runs Vitest in watch mode.
 
 By default everything you create lives in the browser's localStorage. To have
 the spec and workspace metadata saved as files inside the project you are
-designing for, point the dev server at that repo at launch:
+designing for, point the dev server at that repo at launch.
+
+The standard way is the `spec-yard` launcher (installed once with
+`npm run install-cli`, which symlinks `bin/spec-yard` into `~/.local/bin`):
+
+```bash
+cd /path/to/client-repo
+spec-yard            # or: spec-yard /path/to/client-repo
+```
+
+It starts the dev server bound to loopback with `SPEC_YARD_PROJECT_DIR` set,
+waits for it to respond, and opens the workspace in your browser. If a server
+is already running on port 3000, it just opens a tab to the running instance.
+
+The equivalent manual command:
 
 ```bash
 SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev -- -H 127.0.0.1

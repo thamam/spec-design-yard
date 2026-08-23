@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "install-cli": "bash scripts/install-cli.sh"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
