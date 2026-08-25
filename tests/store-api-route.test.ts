@@ -4,8 +4,8 @@ import os from 'os'
 import path from 'path'
 import handler from '../pages/api/store/[...path]'
 
-function mockReq(method: string, pathSegments: string[] | string, body?: any) {
-  return { method, query: { path: pathSegments }, body } as any
+function mockReq(method: string, pathSegments: string[] | string, body?: any, host = 'localhost:3000') {
+  return { method, query: { path: pathSegments }, body, headers: { host } } as any
 }
 
 function mockRes() {
@@ -26,15 +26,32 @@ function mockRes() {
 
 describe('store API route', () => {
   let projectDir: string
+  let configDir: string
 
   beforeEach(() => {
     projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-test-'))
+    // Per-test registry: env-var launches seed the config as a side effect,
+    // and a shared config dir bleeds a deleted project into later tests.
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-test-cfg-'))
+    process.env.SPEC_YARD_CONFIG_DIR = configDir
     process.env.SPEC_YARD_PROJECT_DIR = projectDir
   })
 
   afterEach(() => {
     delete process.env.SPEC_YARD_PROJECT_DIR
     fs.rmSync(projectDir, { recursive: true, force: true })
+    fs.rmSync(configDir, { recursive: true, force: true })
+  })
+
+  test('non-loopback Host is refused before any read or write (DNS-rebinding guard)', () => {
+    const getRes = mockRes()
+    handler(mockReq('GET', ['spec', 'main'], undefined, 'evil.example.com:3000'), getRes)
+    expect(getRes.statusCode).toBe(403)
+
+    const putRes = mockRes()
+    handler(mockReq('PUT', ['spec', 'main'], { title: 'T', yamlContent: 'x' }, 'evil.example.com:3000'), putRes)
+    expect(putRes.statusCode).toBe(403)
+    expect(fs.readdirSync(projectDir)).toEqual([])
   })
 
   test('responds 200 with enabled:false when SPEC_YARD_PROJECT_DIR is unset', () => {
@@ -142,15 +159,19 @@ describe('store API route', () => {
 
 describe('store API route — adversarial hardening', () => {
   let projectDir: string
+  let configDir: string
 
   beforeEach(() => {
     projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-adv-'))
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-adv-cfg-'))
+    process.env.SPEC_YARD_CONFIG_DIR = configDir
     process.env.SPEC_YARD_PROJECT_DIR = projectDir
   })
 
   afterEach(() => {
     delete process.env.SPEC_YARD_PROJECT_DIR
     fs.rmSync(projectDir, { recursive: true, force: true })
+    fs.rmSync(configDir, { recursive: true, force: true })
   })
 
   test('rejects prototype-chain keys without crashing', () => {
@@ -275,15 +296,19 @@ describe('store API route — adversarial hardening', () => {
 
 describe('store API route — legacy index migration', () => {
   let projectDir: string
+  let configDir: string
 
   beforeEach(() => {
     projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-legacy-'))
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-legacy-cfg-'))
+    process.env.SPEC_YARD_CONFIG_DIR = configDir
     process.env.SPEC_YARD_PROJECT_DIR = projectDir
   })
 
   afterEach(() => {
     delete process.env.SPEC_YARD_PROJECT_DIR
     fs.rmSync(projectDir, { recursive: true, force: true })
+    fs.rmSync(configDir, { recursive: true, force: true })
   })
 
   test('legacy entry without rev: GET mints one, bare PUT 409s, PUT with minted rev succeeds', () => {

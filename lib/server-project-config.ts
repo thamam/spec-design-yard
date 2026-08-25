@@ -12,11 +12,11 @@
 //
 // Session state lives on globalThis because Next dev bundles each API route
 // as its own entry — plain module state would be duplicated per route and the
-// store route would never see the picker's switch. The epoch is re-minted on
-// every project/mode change; store PUTs echo it, so a tab still armed on the
-// previous project 409s instead of writing into the new one.
+// store route would never see the picker's switch. The epoch is derived from
+// the active project's identity; store PUTs echo it, so a tab still armed on
+// the previous project 409s instead of writing into the new one.
 
-import { randomUUID } from "crypto"
+import { createHash } from "crypto"
 import fs from "fs"
 import os from "os"
 import path from "path"
@@ -39,13 +39,11 @@ interface PersistedConfig {
 
 interface SessionState {
   selection: { kind: "project"; dir: string } | { kind: "standalone" } | null
-  epoch: string
   envSeeded: boolean
 }
 
 const state: SessionState = ((globalThis as any).__specYardProjectState ??= {
   selection: null,
-  epoch: randomUUID(),
   envSeeded: false,
 })
 
@@ -93,15 +91,26 @@ function recentsFrom(cfg: PersistedConfig): string[] {
 }
 
 /** An env-var launch is recorded once per process, so the next bare launch
- *  resumes the same project. */
+ *  resumes the same project. Only a resolvable directory is persisted — the
+ *  realpath, so the registry never holds a relative or dangling value (the
+ *  session itself still honors the raw env var either way). */
 function seedConfigFromEnv(envDir: string): PersistedConfig {
   const cfg = readConfig()
   if (state.envSeeded) return cfg
+  let realDir: string
+  try {
+    realDir = fs.realpathSync(envDir)
+    if (!fs.statSync(realDir).isDirectory()) return cfg
+  } catch {
+    // Missing dir: don't poison the registry; retry on a later request in
+    // case the dir appears.
+    return cfg
+  }
   state.envSeeded = true
   const seeded: PersistedConfig = {
     mode: "project",
-    activeProject: envDir,
-    recentProjects: bumpRecents(cfg.recentProjects, envDir),
+    activeProject: realDir,
+    recentProjects: bumpRecents(cfg.recentProjects, realDir),
   }
   writeConfig(seeded)
   return seeded
@@ -134,20 +143,33 @@ export function getActiveProjectDir(): string | null {
   return status.mode === "project" ? status.dir : null
 }
 
+/**
+ * The epoch is derived from the active project's identity (its real path),
+ * NOT minted per process: a dev-server restart must not invalidate open
+ * tabs' epochs (that would silently latch them to local-only), while a
+ * switch to a different project must.
+ */
 export function getProjectEpoch(): string {
-  return state.epoch
+  const dir = getActiveProjectDir()
+  let key = dir ?? "standalone"
+  if (dir) {
+    try {
+      key = fs.realpathSync(dir)
+    } catch {
+      // Unresolvable dir: hash the raw value; store writes 500 anyway.
+    }
+  }
+  return createHash("sha256").update(key).digest("hex").slice(0, 16)
 }
 
 export function setActiveProject(dir: string): void {
   state.selection = { kind: "project", dir }
-  state.epoch = randomUUID()
   const cfg = readConfig()
   writeConfig({ mode: "project", activeProject: dir, recentProjects: bumpRecents(cfg.recentProjects, dir) })
 }
 
 export function setStandaloneMode(): void {
   state.selection = { kind: "standalone" }
-  state.epoch = randomUUID()
   const cfg = readConfig()
   writeConfig({ mode: "standalone", activeProject: cfg.activeProject ?? null, recentProjects: recentsFrom(cfg) })
 }
@@ -161,5 +183,4 @@ export function getSuggestedProjectDir(): string {
 export function resetProjectStateForTests(): void {
   state.selection = null
   state.envSeeded = false
-  state.epoch = randomUUID()
 }

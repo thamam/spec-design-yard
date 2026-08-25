@@ -8,6 +8,7 @@ import {
   setActiveProject,
   setStandaloneMode,
 } from "../../lib/server-project-config"
+import { isLoopbackHost } from "../../lib/server-request-guards"
 
 // Project selection for the workspace — the primary way users pick where
 // their specs live (project-first; see lib/server-project-config.ts).
@@ -27,15 +28,6 @@ import {
 // - The target must be an absolute path to an existing, writable directory
 //   on this machine (create:true may mkdir it first — an explicit action).
 // - Every switch re-mints the project epoch (stale-tab writes 409).
-
-function isLoopbackHost(hostHeader: string | undefined): boolean {
-  if (!hostHeader) return false
-  // Strip the port; [::1]:3000 keeps its brackets in the Host header.
-  const host = hostHeader.startsWith("[")
-    ? hostHeader.slice(1, hostHeader.indexOf("]"))
-    : hostHeader.split(":")[0]
-  return host === "localhost" || host === "127.0.0.1" || host === "::1"
-}
 
 function expandHome(dir: string): string {
   if (dir === "~") return os.homedir()

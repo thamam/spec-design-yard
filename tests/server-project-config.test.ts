@@ -57,18 +57,38 @@ describe('project config registry', () => {
     expect(status.source).toBe('config')
   })
 
-  test('SPEC_YARD_PROJECT_DIR wins for the session and seeds the config', () => {
+  test('SPEC_YARD_PROJECT_DIR wins for the session and seeds the config (validated + realpathed)', () => {
+    const envDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-env-'))
+    try {
+      setActiveProject('/tmp/previous')
+      resetProjectStateForTests()
+      process.env.SPEC_YARD_PROJECT_DIR = envDir
+
+      const status = getProjectStatus()
+      expect(status).toMatchObject({ mode: 'project', dir: envDir, source: 'env' })
+
+      // Seeded with the resolved real path: the next bare launch continues there.
+      resetProjectStateForTests()
+      delete process.env.SPEC_YARD_PROJECT_DIR
+      expect(getProjectStatus()).toMatchObject({
+        mode: 'project',
+        dir: fs.realpathSync(envDir),
+        source: 'config',
+      })
+    } finally {
+      fs.rmSync(envDir, { recursive: true, force: true })
+    }
+  })
+
+  test('an env dir that does not exist is NOT persisted (session still uses it)', () => {
     setActiveProject('/tmp/previous')
     resetProjectStateForTests()
-    process.env.SPEC_YARD_PROJECT_DIR = '/tmp/env-project'
+    process.env.SPEC_YARD_PROJECT_DIR = '/tmp/specyard-missing-env-dir-xyz'
 
-    const status = getProjectStatus()
-    expect(status).toMatchObject({ mode: 'project', dir: '/tmp/env-project', source: 'env' })
-
-    // Seeded: the next bare launch continues in the env project.
-    resetProjectStateForTests()
-    delete process.env.SPEC_YARD_PROJECT_DIR
-    expect(getProjectStatus()).toMatchObject({ mode: 'project', dir: '/tmp/env-project', source: 'config' })
+    // Session resolution still honors the env var (the store route will 500
+    // loudly on the missing dir), but the registry must not be poisoned.
+    expect(getProjectStatus()).toMatchObject({ mode: 'project', dir: '/tmp/specyard-missing-env-dir-xyz', source: 'env' })
+    expect(readConfigFile().activeProject).toBe('/tmp/previous')
   })
 
   test('a GUI switch overrides the env var within the session', () => {
@@ -110,14 +130,33 @@ describe('project config registry', () => {
     expect(readConfigFile().activeProject).toBe('/tmp/fresh')
   })
 
-  test('epoch re-mints on every project or mode change', () => {
-    const e1 = getProjectEpoch()
-    expect(getProjectEpoch()).toBe(e1)
-    setActiveProject('/tmp/a')
-    const e2 = getProjectEpoch()
-    expect(e2).not.toBe(e1)
-    setStandaloneMode()
-    const e3 = getProjectEpoch()
-    expect(e3).not.toBe(e2)
+  test('epoch derives from project identity: distinct per project, stable across restarts', () => {
+    const dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-epoch-a-'))
+    const dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-epoch-b-'))
+    try {
+      setActiveProject(dirA)
+      const epochA = getProjectEpoch()
+      expect(typeof epochA).toBe('string')
+
+      // A dev-server restart (session state gone, config remembered) must NOT
+      // change the epoch — otherwise every restart silently latches open tabs
+      // to local-only.
+      resetProjectStateForTests()
+      expect(getProjectEpoch()).toBe(epochA)
+
+      setActiveProject(dirB)
+      const epochB = getProjectEpoch()
+      expect(epochB).not.toBe(epochA)
+
+      setStandaloneMode()
+      expect(getProjectEpoch()).not.toBe(epochB)
+
+      // Returning to a project restores its epoch (same project = same identity).
+      setActiveProject(dirA)
+      expect(getProjectEpoch()).toBe(epochA)
+    } finally {
+      fs.rmSync(dirA, { recursive: true, force: true })
+      fs.rmSync(dirB, { recursive: true, force: true })
+    }
   })
 })

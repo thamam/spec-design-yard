@@ -89,6 +89,34 @@ describe('ProjectPicker — project mode (the default story)', () => {
     expect(puts).toEqual([{ dir: '/Users/dev/proj-beta' }])
   })
 
+  test('create-and-switch after a stale RECENT click targets the recent dir, not the empty input', async () => {
+    const { puts } = installProjectFetch({
+      info: {
+        mode: 'project',
+        dir: '/Users/dev/proj-alpha',
+        exists: true,
+        source: 'config',
+        recents: ['/Users/dev/proj-alpha', '/Users/dev/proj-beta'],
+      },
+      putResponses: [
+        { status: 400, body: { error: 'Directory does not exist', code: 'not-found' } },
+        { status: 200, body: { ok: true, mode: 'project', dir: '/Users/dev/proj-beta' } },
+      ],
+    })
+    const reload = vi.fn()
+    render(<ProjectPicker reload={reload} />)
+
+    fireEvent.click(await screen.findByTestId('project-picker-badge'))
+    // The recent entry's folder was deleted on disk since it was recorded.
+    fireEvent.click(screen.getByText('/Users/dev/proj-beta'))
+    await waitFor(() => expect(screen.getByTestId('project-picker-error')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('project-create-button'))
+    await waitFor(() => expect(reload).toHaveBeenCalled())
+    // Must recreate the dir that failed — not resubmit the (empty) input.
+    expect(puts[1]).toEqual({ dir: '/Users/dev/proj-beta', create: true })
+  })
+
   test('a not-found error surfaces and offers create-and-switch', async () => {
     const { puts } = installProjectFetch({
       info: { mode: 'project', dir: '/Users/dev/proj-alpha', exists: true, source: 'config', recents: [] },
@@ -174,9 +202,22 @@ describe('ProjectPicker — standalone mode (secondary)', () => {
 
 describe('ProjectPicker — degraded', () => {
   test('an unreachable project API degrades to a browser-storage badge', async () => {
+    // Server gone => the store fetch fails too and the app runs local-only,
+    // so "Browser storage" is the truthful label.
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down') }))
     render(<ProjectPicker />)
     const badge = await screen.findByTestId('project-picker-badge')
     await waitFor(() => expect(badge.textContent).toMatch(/browser storage/i))
+  })
+
+  test('a non-OK project API response shows an unknown badge, never a false Browser storage', async () => {
+    // e.g. the workspace was opened via a non-loopback address: /api/project
+    // 403s while the store route may still be writing files — claiming
+    // "Browser storage" would be the opposite of the truth.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403, json: async () => ({ error: 'loopback only' }) }) as any))
+    render(<ProjectPicker />)
+    const badge = await screen.findByTestId('project-picker-badge')
+    await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))
+    expect(badge.textContent).not.toMatch(/browser storage/i)
   })
 })

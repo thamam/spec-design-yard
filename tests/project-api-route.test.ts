@@ -18,7 +18,7 @@ function projectReq(
 function storeReq(method: string, pathSegments: string[], body?: any, epoch?: string) {
   const query: any = { path: pathSegments }
   if (epoch !== undefined) query.epoch = epoch
-  return { method, query, body } as any
+  return { method, query, body, headers: { host: 'localhost:3000' } } as any
 }
 
 function mockRes() {

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto"
 import fs from "fs"
 import path from "path"
 import { getActiveProjectDir, getProjectEpoch } from "../../../lib/server-project-config"
+import { isLoopbackHost } from "../../../lib/server-request-guards"
 
 // File-backed persistence for the workspace store, active only when the app is
 // launched with SPEC_YARD_PROJECT_DIR pointing at a client repo. Keys are
@@ -129,6 +130,13 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
 }
 
 function handle(req: NextApiRequest, res: NextApiResponse) {
+  // File persistence is armed by default (project-first), so this route needs
+  // the same DNS-rebinding defense as the project route — a rebinding page is
+  // same-origin and could otherwise read or overwrite the project's files.
+  if (!isLoopbackHost(req.headers?.host)) {
+    return res.status(403).json({ error: "Store API is loopback-only" })
+  }
+
   // Project-first resolution: session switch > SPEC_YARD_PROJECT_DIR >
   // persisted config (see lib/server-project-config.ts). Null means
   // standalone opt-out or a first run with no project chosen yet.

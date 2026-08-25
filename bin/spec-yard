@@ -24,8 +24,11 @@ URL="http://localhost:3000"
 if curl -sf -o /dev/null "$URL"; then
   # A server is already up: retarget it to this project via the project API
   # (same thing the header picker does), then just open the browser.
-  if curl -sf -o /dev/null -X PUT -H "Content-Type: application/json" \
-      -d "{\"dir\": \"$DIR\"}" "$URL/api/project"; then
+  # JSON-encode the path properly — raw interpolation would corrupt the body
+  # (or inject fields) for paths containing quotes/backslashes.
+  BODY="$(python3 -c 'import json,sys; print(json.dumps({"dir": sys.argv[1]}))' "$DIR" 2>/dev/null || true)"
+  if [ -n "$BODY" ] && curl -sf -o /dev/null -X PUT -H "Content-Type: application/json" \
+      -d "$BODY" "$URL/api/project"; then
     echo "spec-yard is already running — switched it to $DIR"
   else
     echo "spec-yard is already running — could not switch project automatically;"

@@ -15,6 +15,9 @@ type ProjectInfo =
   | { mode: "project"; dir: string; exists: boolean; source: string; recents: string[] }
   | { mode: "standalone"; recents: string[] }
   | { mode: "unconfigured"; suggestedDir: string; recents: string[] }
+  // The project API answered with an error (e.g. 403 for a non-loopback
+  // address): we can't know where writes go, and must never claim we do.
+  | { mode: "unknown"; recents: string[] }
 
 interface SwitchError {
   error: string
@@ -29,6 +32,9 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
   const [info, setInfo] = useState<ProjectInfo | null>(null)
   const [open, setOpen] = useState(false)
   const [inputDir, setInputDir] = useState("")
+  // The dir whose switch failed with not-found — the create button's target
+  // (a stale Recent click never populates the input field).
+  const [failedDir, setFailedDir] = useState<string | null>(null)
   const [error, setError] = useState<SwitchError | null>(null)
   const [busy, setBusy] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -38,9 +44,20 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
   useEffect(() => {
     let cancelled = false
     fetch("/api/project")
-      .then((res) => res.json())
-      .then((body) => {
-        if (cancelled || !body || typeof body !== "object") return
+      .then(async (res) => {
+        if (cancelled) return
+        if (!res.ok) {
+          // 403/500: the store route may still be writing files — claiming
+          // "Browser storage" here would mislabel where the user's data goes.
+          setInfo({ mode: "unknown", recents: [] })
+          return
+        }
+        const body = await res.json().catch(() => null)
+        if (cancelled) return
+        if (!body || typeof body !== "object") {
+          setInfo({ mode: "unknown", recents: [] })
+          return
+        }
         if (body.mode === "project" && typeof body.dir === "string") {
           setInfo({
             mode: "project",
@@ -78,10 +95,11 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
     return () => window.removeEventListener("mousedown", onPointerDown)
   }, [open])
 
-  const putProject = async (payload: Record<string, unknown>) => {
+  const putProject = async (payload: Record<string, unknown>, attemptedDir?: string) => {
     if (busy) return
     setBusy(true)
     setError(null)
+    setFailedDir(null)
     try {
       const res = await fetch("/api/project", {
         method: "PUT",
@@ -91,6 +109,7 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
       const body = await res.json().catch(() => null)
       if (!res.ok) {
         setError(body && typeof body.error === "string" ? body : { error: `Switch failed (${res.status})` })
+        if (body?.code === "not-found" && attemptedDir) setFailedDir(attemptedDir)
         setBusy(false)
         return
       }
@@ -105,16 +124,25 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
   const switchTo = (dir: string, create = false) => {
     const trimmed = dir.trim()
     if (!trimmed) return
-    putProject(create ? { dir: trimmed, create: true } : { dir: trimmed })
+    putProject(create ? { dir: trimmed, create: true } : { dir: trimmed }, trimmed)
   }
 
   const firstRun = info?.mode === "unconfigured"
   const projectMode = info?.mode === "project"
+  const unknown = info?.mode === "unknown"
   const currentDir = projectMode ? (info as any).dir : null
   const recents = (info?.recents ?? []).filter((r) => r !== currentDir)
 
   const badgeLabel =
-    info === null ? "…" : projectMode ? baseName(currentDir) : firstRun ? "Choose project…" : "Browser storage"
+    info === null
+      ? "…"
+      : projectMode
+      ? baseName(currentDir)
+      : firstRun
+      ? "Choose project…"
+      : unknown
+      ? "Storage unknown"
+      : "Browser storage"
 
   return (
     <div ref={rootRef} className="relative">
@@ -122,17 +150,29 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
         type="button"
         data-testid="project-picker-badge"
         onClick={() => setOpen((v) => !v)}
-        title={projectMode ? `Project: ${currentDir}` : firstRun ? "Pick a project folder for your specs" : "Specs live in this browser only"}
+        title={
+          projectMode
+            ? `Project: ${currentDir}`
+            : firstRun
+            ? "Pick a project folder for your specs"
+            : unknown
+            ? "Could not determine where specs are stored"
+            : "Specs live in this browser only"
+        }
         aria-label="Active project"
         aria-expanded={open}
         className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] cursor-pointer max-w-[220px]"
         style={{
           background: "var(--surface-overlay)",
           border: "1px solid var(--border-subtle)",
-          color: projectMode || firstRun ? "var(--accent)" : "var(--foreground-muted)",
+          color: unknown
+            ? "var(--warning, #eab308)"
+            : projectMode || firstRun
+            ? "var(--accent)"
+            : "var(--foreground-muted)",
         }}
       >
-        {projectMode || firstRun ? <FolderIcon size={10} /> : <DatabaseIcon size={10} />}
+        {unknown ? <TriangleAlertIcon size={10} /> : projectMode || firstRun ? <FolderIcon size={10} /> : <DatabaseIcon size={10} />}
         <span className="truncate">{badgeLabel}</span>
         {projectMode && !(info as any).exists && (
           <TriangleAlertIcon size={10} style={{ color: "var(--warning, #eab308)" }} />
@@ -149,6 +189,15 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
             color: "var(--foreground)",
           }}
         >
+          {unknown ? (
+            <div style={{ color: "var(--foreground-muted)" }}>
+              The project service refused this request, so it is unknown where
+              specs are being stored. If you opened the workspace via a network
+              address, use <span className="font-mono">http://localhost:3000</span>{" "}
+              instead — the project APIs only answer loopback requests.
+            </div>
+          ) : (
+            <>
           {projectMode && (
             <>
               <div className="font-medium mb-1">Project folder</div>
@@ -220,11 +269,11 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
               <div data-testid="project-picker-error" style={{ color: "var(--danger, #ef4444)" }}>
                 {error.error}
               </div>
-              {error.code === "not-found" && (
+              {error.code === "not-found" && failedDir && (
                 <button
                   type="button"
                   data-testid="project-create-button"
-                  onClick={() => switchTo(inputDir, true)}
+                  onClick={() => switchTo(failedDir, true)}
                   disabled={busy}
                   className="mt-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
                   style={{
@@ -273,6 +322,8 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
             >
               {firstRun ? "Skip — use browser storage only" : "Use browser storage instead (no project)"}
             </button>
+          )}
+            </>
           )}
         </div>
       )}
