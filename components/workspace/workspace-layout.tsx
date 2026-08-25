@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
-import { db } from "../../lib/db"
+import { db, type SyncState } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
@@ -152,6 +152,11 @@ export function WorkspaceLayout() {
   const [pathTarget, setPathTarget] = useState<string>("")
 
   const [isHydrated, setIsHydrated] = useState(false)
+
+  // Where saves are going (browser vs project file vs halted) — surfaced in
+  // the status bar so a mirroring latch-off is never console-only.
+  const [syncState, setSyncState] = useState<SyncState>(() => db.getSyncState())
+  useEffect(() => db.subscribeSyncState(setSyncState), [])
 
   const lastLoadedSpecRef = useRef<string | null>(null)
 
@@ -376,12 +381,19 @@ export function WorkspaceLayout() {
       </div>
 
       {/* Status bar */}
-      <StatusBar />
+      <StatusBar syncState={syncState} />
     </div>
   )
 }
 
-function StatusBar() {
+function StatusBar({ syncState }: { syncState: SyncState }) {
+  const halted = syncState.status === "halted"
+  const label =
+    syncState.status === "synced"
+      ? "Synced to project"
+      : halted
+      ? syncState.reason || "Saving halted — reload the workspace"
+      : "Browser storage only"
   return (
     <footer
       className="flex items-center justify-between px-4 h-6 shrink-0 text-[11px] select-none"
@@ -391,13 +403,24 @@ function StatusBar() {
         color: "var(--foreground-muted)",
       }}
     >
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5">
+      <div className="flex items-center gap-4 min-w-0">
+        <span className="flex items-center gap-1.5 min-w-0" data-testid="sync-status">
           <span
-            className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ background: "var(--success)" }}
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+            style={{
+              background: halted
+                ? "var(--warning, #eab308)"
+                : syncState.status === "synced"
+                ? "var(--success)"
+                : "var(--foreground-muted)",
+            }}
           />
-          Ready
+          <span
+            className="truncate"
+            style={halted ? { color: "var(--warning, #eab308)", fontWeight: 600 } : undefined}
+          >
+            {label}
+          </span>
         </span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>main.spec.yaml</span>

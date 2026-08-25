@@ -3,9 +3,9 @@
 // lib/remote-sync-store.ts, which mirrors writes to the project files when
 // the app is launched with SPEC_YARD_PROJECT_DIR).
 
-import specStore, { type SpecDocument } from "./remote-sync-store"
+import specStore, { type SpecDocument, type SyncState } from "./remote-sync-store"
 
-export type { SpecDocument }
+export type { SpecDocument, SyncState }
 
 export const db = {
   getSpec(id: string): SpecDocument | null {
@@ -24,5 +24,13 @@ export const db = {
     // store decided file mode is off).
     specStore.arm()
     return active
+  },
+  /** Where saves are going right now (for the status bar). */
+  getSyncState(): SyncState {
+    return specStore.getSyncState()
+  },
+  /** Subscribe to sync-state changes; returns an unsubscribe function. */
+  subscribeSyncState(listener: (s: SyncState) => void): () => void {
+    return specStore.subscribeSyncState(listener)
   },
 }

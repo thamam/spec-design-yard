@@ -23,6 +23,18 @@ import {
   type SpecStore,
 } from "./spec-store"
 
+/**
+ * Where saves are going, for the UI to display.
+ * - "local-only": browser storage by design (standalone/unconfigured) — calm.
+ * - "synced": a project is active and mirroring is healthy.
+ * - "halted": mirroring latched off mid-session (conflict, project switched
+ *   elsewhere, broken store) — edits stay in the browser; reload to resync.
+ */
+export interface SyncState {
+  status: "local-only" | "synced" | "halted"
+  reason?: string
+}
+
 export class RemoteSyncSpecStore implements SpecStore {
   private local = new LocalStorageSpecStore()
   // Flipped when loadFromServer sees file mode off / unreachable, or a
@@ -49,6 +61,9 @@ export class RemoteSyncSpecStore implements SpecStore {
   // simulation run isn't silently discarded. The apply fn re-syncs the local
   // delegate, which pullMeta may have overwritten with server state.
   private pendingMeta = new Map<string, { body: unknown; apply: (v: any) => void }>()
+  // Current sync state + subscribers (plain callbacks — lib stays React-free).
+  private syncState: SyncState = { status: "local-only" }
+  private syncListeners = new Set<(s: SyncState) => void>()
 
   /** Called by the workspace when hydration completes; arms mirroring and
    *  flushes any pre-hydration meta writes on top of the pulled state. */
@@ -59,6 +74,21 @@ export class RemoteSyncSpecStore implements SpecStore {
       this.mirror(url, body, apply)
     })
     this.pendingMeta.clear()
+  }
+
+  getSyncState(): SyncState {
+    return this.syncState
+  }
+
+  /** Returns an unsubscribe function. */
+  subscribeSyncState(listener: (s: SyncState) => void): () => void {
+    this.syncListeners.add(listener)
+    return () => this.syncListeners.delete(listener)
+  }
+
+  private setSyncState(next: SyncState): void {
+    this.syncState = next
+    this.syncListeners.forEach((l) => l(next))
   }
 
   getSpec(id: string): SpecDocument | null {
@@ -124,23 +154,27 @@ export class RemoteSyncSpecStore implements SpecStore {
       // 501 — so standalone mode stays quiet and local-only.
       if (specRes.status === 501) {
         this.fileModeDisabled = true
+        this.setSyncState({ status: "local-only" })
         return false
       }
       if (!specRes.ok) {
         // 5xx: the launch intended file mode but the server is broken (e.g.
-        // typo'd SPEC_YARD_PROJECT_DIR). Loud log, local-only for the session.
+        // missing project dir). Loud log, local-only for the session.
         console.error(`[spec-yard] Store API returned ${specRes.status} — file persistence disabled for this session`)
         this.fileModeDisabled = true
+        this.setSyncState({ status: "halted", reason: "Project store error — saving to browser only. Fix the project and reload." })
         return false
       }
       const body = await specRes.json()
       if (body && body.enabled === false) {
         this.fileModeDisabled = true
+        this.setSyncState({ status: "local-only" })
         return false
       }
       // File mode confirmed on — clear any latch from a previous failed
       // attempt (e.g. a Fast Refresh remount after a transient error).
       this.fileModeDisabled = false
+      this.setSyncState({ status: "synced" })
       this.serverEpoch = body && typeof body.epoch === "string" ? body.epoch : null
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
@@ -167,6 +201,9 @@ export class RemoteSyncSpecStore implements SpecStore {
     } catch (e) {
       console.error("Failed to load spec store from server", e)
       this.fileModeDisabled = true
+      // Server unreachable: the whole app is served by it, so this is either
+      // a dying dev server or a test environment — browser-only is accurate.
+      this.setSyncState({ status: "local-only" })
       return false
     }
     // Meta pulls are best-effort and scoped: a failure here never gates mode.
@@ -260,6 +297,10 @@ export class RemoteSyncSpecStore implements SpecStore {
       // Fall through to latch-off below.
     }
     this.fileModeDisabled = true
+    this.setSyncState({
+      status: "halted",
+      reason: "main.spec.yaml changed outside this session — reload to adopt it. Edits stay in browser storage.",
+    })
     console.error(
       "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
     )
@@ -331,6 +372,10 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   private latchProjectSwitched(): void {
     this.fileModeDisabled = true
+    this.setSyncState({
+      status: "halted",
+      reason: "The active project changed in another tab — reload to rejoin it. Edits stay in browser storage.",
+    })
     console.error(
       "[spec-yard] The active project changed in another tab/window; this session stopped mirroring. Reload the workspace to join the new project."
     )

@@ -438,6 +438,81 @@ describe('RemoteSyncSpecStore project-epoch guard', () => {
   })
 })
 
+describe('RemoteSyncSpecStore sync-state visibility', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('standalone is a calm local-only state, not an alarm', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ enabled: false }) }) as any))
+    const store = new RemoteSyncSpecStore()
+    expect(store.getSyncState().status).toBe('local-only')
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('local-only')
+  })
+
+  test('a successful project load reports synced', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'e1' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('synced')
+  })
+
+  test('a project-switched 409 halts with a reload instruction and notifies subscribers', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        return { ok: false, status: 409, json: async () => ({ conflict: true, reason: 'project-switched' }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    const seen: any[] = []
+    const unsubscribe = store.subscribeSyncState((s) => seen.push(s))
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => {
+      expect(store.getSyncState().status).toBe('halted')
+    })
+    expect(store.getSyncState().reason).toMatch(/reload/i)
+    expect(seen.some((s) => s.status === 'halted')).toBe(true)
+    unsubscribe()
+  })
+
+  test('a genuine external-edit conflict halts with a reload instruction', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      // Reconcile GET sees content that differs from our last write.
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: 'external', rev: 'rX', epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    store.saveSpec('main', 'T', 'mine')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+  })
+
+  test('a broken store (5xx on load) halts loudly rather than posing as standalone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as any))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('halted')
+  })
+})
+
 describe('RemoteSyncSpecStore cache provenance (standalone sketch migration)', () => {
   beforeEach(() => {
     localStorage.clear()
