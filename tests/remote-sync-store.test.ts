@@ -438,6 +438,90 @@ describe('RemoteSyncSpecStore project-epoch guard', () => {
   })
 })
 
+describe('RemoteSyncSpecStore cache provenance (standalone sketch migration)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('a standalone sketch survives into a freshly chosen project', async () => {
+    // Sketch in standalone mode: no server, saves are cache-only and tagged
+    // as standalone work.
+    const standalone = new RemoteSyncSpecStore()
+    standalone.saveSpec('main', 'My Sketch', 'system:\n  name: My Sketch\n')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+
+    // User picks an empty project folder -> reload -> {found:false}.
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-new' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    expect(await store.loadFromServer()).toBe(true)
+
+    // The user's only copy is adopted, not deleted.
+    expect(store.getSpec('main')?.yamlContent).toContain('My Sketch')
+  })
+
+  test('another project\'s cache is still dropped on {found:false}', async () => {
+    localStorage.setItem('spec_main', JSON.stringify({
+      id: 'main', title: 'Project A', yamlContent: 'system:\n  name: Project A\n', updatedAt: '2026-01-01',
+    }))
+    localStorage.setItem('spec_main_origin', 'epoch-project-a')
+
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-project-b' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+
+    expect(store.getSpec('main')).toBeNull()
+    expect(localStorage.getItem('spec_main_origin')).toBeNull()
+  })
+
+  test('a legacy cache with no origin tag is dropped (conservative bleed guard)', async () => {
+    localStorage.setItem('spec_main', JSON.stringify({
+      id: 'main', title: 'Unknown Origin', yamlContent: 'system: {}\n', updatedAt: '2026-01-01',
+    }))
+
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-new' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+
+    expect(store.getSpec('main')).toBeNull()
+  })
+
+  test('project-mode saves and loads tag the cache with the project epoch', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: 'system: {}\n', updatedAt: 't1', rev: 'r1', epoch: 'epoch-1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(localStorage.getItem('spec_main_origin')).toBe('epoch-1')
+
+    store.arm()
+    store.saveSpec('main', 'T', 'system:\n  name: Edited\n')
+    expect(localStorage.getItem('spec_main_origin')).toBe('epoch-1')
+  })
+
+  test('removeSpec clears the origin tag too', () => {
+    const store = new RemoteSyncSpecStore()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+    store.removeSpec('main')
+    expect(localStorage.getItem('spec_main_origin')).toBeNull()
+  })
+})
+
 describe('RemoteSyncSpecStore round-3 fixes', () => {
   beforeEach(() => {
     localStorage.clear()

@@ -67,6 +67,11 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument {
     const doc = this.local.saveSpec(id, title, yamlContent)
+    // Tag the cache with where this content belongs: the active project's
+    // epoch, or "standalone" for browser-only work. loadFromServer uses the
+    // tag to migrate a standalone sketch into a newly chosen project while
+    // still dropping another project's cache (bleed guard).
+    this.setCacheOrigin(id, this.serverEpoch ?? "standalone")
     if (!this.canMirror()) return doc
     this.specPutChain = this.specPutChain.then(() =>
       this.putSpec(`/api/store/spec/${encodeURIComponent(id)}`, { title, yamlContent })
@@ -100,6 +105,7 @@ export class RemoteSyncSpecStore implements SpecStore {
   // mirrored: the project file is never deleted by the store.
   removeSpec(id: string): void {
     this.local.removeSpec(id)
+    this.clearCacheOrigin(id)
   }
 
   /**
@@ -138,12 +144,23 @@ export class RemoteSyncSpecStore implements SpecStore {
       this.serverEpoch = body && typeof body.epoch === "string" ? body.epoch : null
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
+        // "unknown-project" (server sent no epoch) never satisfies the
+        // standalone-adoption check below — fail closed against bleed.
+        this.setCacheOrigin(body.id, this.serverEpoch ?? "unknown-project")
         this.serverRev = typeof body.rev === "string" ? body.rev : null
         this.lastMirroredYaml = body.yamlContent
       } else {
-        // {found:false}: file mode on, nothing stored for THIS project. Drop
-        // the cached spec so another project's spec is never written here.
-        this.local.removeSpec("main")
+        // {found:false}: file mode on, nothing stored for THIS project.
+        // A cache tagged "standalone" is the user's browser-only sketch and
+        // this is their first project — adopt it rather than deleting their
+        // only copy (it is still not written until they edit). Any other
+        // cache (another project's, or untagged legacy) is dropped so it is
+        // never written into this project.
+        const origin = this.getCacheOrigin("main")
+        if (origin !== "standalone" || !this.local.getSpec("main")) {
+          this.local.removeSpec("main")
+          this.clearCacheOrigin("main")
+        }
         this.serverRev = null
         this.lastMirroredYaml = null
       }
@@ -279,6 +296,32 @@ export class RemoteSyncSpecStore implements SpecStore {
     } catch (e) {
       console.error(`Failed to mirror ${url} to server`, e)
     }
+  }
+
+  // Provenance tag for the cached spec (sits beside spec_<id> in
+  // localStorage). Reads/writes are best-effort — a storage failure only
+  // costs the migration convenience, never correctness.
+  private setCacheOrigin(id: string, origin: string): void {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.setItem(`spec_${id}_origin`, origin)
+    } catch {}
+  }
+
+  private getCacheOrigin(id: string): string | null {
+    if (typeof window === "undefined") return null
+    try {
+      return localStorage.getItem(`spec_${id}_origin`)
+    } catch {
+      return null
+    }
+  }
+
+  private clearCacheOrigin(id: string): void {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.removeItem(`spec_${id}_origin`)
+    } catch {}
   }
 
   /** ?epoch= rides every PUT once the server has told us the project epoch. */

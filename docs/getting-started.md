@@ -123,7 +123,9 @@ Either way the folder is recorded as the active project for future launches.
 If you just want to sketch without touching the filesystem, the picker offers
 "Use browser storage instead": specs then live only in the browser's
 localStorage (this is also where the built-in demo spec lives). The choice is
-remembered; opt back in by picking a project folder from the same panel.
+remembered; opt back in by picking a project folder from the same panel — a
+sketch made in browser storage carries over into the first project you pick
+(it lands in `main.spec.yaml` on your next edit).
 
 ### Safety notes
 

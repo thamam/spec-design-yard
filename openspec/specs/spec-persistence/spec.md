@@ -111,8 +111,16 @@ autosave.
 - THEN the editor shows a clearly-labeled blank new spec — never the built-in
   demo content
 - AND nothing is written to the project until the user's first edit
-- AND any localStorage-cached spec (which may belong to a different project)
-  is discarded, never written into this project
+- AND a localStorage-cached spec belonging to a different project (or of
+  unknown origin) is discarded, never written into this project
+
+#### Scenario: Standalone sketch migrates into the first project
+
+- GIVEN the user authored a spec in standalone (browser-only) mode
+- WHEN they select an empty project folder and the workspace reloads
+- THEN the editor shows their sketch, not a blank slate — the only copy of
+  their work is never deleted by choosing a project
+- AND the sketch is written to the project only on their next edit
 
 ### Requirement: Hydration input lockout
 

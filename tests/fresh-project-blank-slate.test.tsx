@@ -103,6 +103,24 @@ describe('fresh project blank slate (file mode, no spec file)', () => {
     })
   })
 
+  test('a standalone sketch is adopted into the first project instead of blanked', async () => {
+    localStorage.setItem('spec_main', JSON.stringify({
+      id: 'main',
+      title: 'My Sketch',
+      yamlContent: 'system:\n  name: My Sketch\n  components: []\n',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }))
+    localStorage.setItem('spec_main_origin', 'standalone')
+    installFetchMock({ fileMode: true })
+
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('My Sketch')
+    expect(textarea.value).not.toContain('# New project')
+  })
+
   test('standalone mode keeps the built-in demo spec', async () => {
     installFetchMock({ fileMode: false })
     render(<Workspace />)
