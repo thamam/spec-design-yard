@@ -86,6 +86,16 @@ const INITIAL_SPEC = `system:
         - target: commit_stage
         - target: inbox`
 
+// What a file-backed project opens with when its repo has no spec yet. The
+// demo above is standalone-only: it must never be written into a client repo
+// uninvited, so fresh projects get this labeled skeleton instead — and it is
+// not autosaved until the user actually edits it.
+const FRESH_PROJECT_SPEC = `# New project — this spec is saved to main.spec.yaml on your first edit.
+system:
+  name: New System
+  components: []
+`
+
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [splitPercent, setSplitPercent] = useState(DEFAULT_SPLIT)
@@ -152,10 +162,18 @@ export function WorkspaceLayout() {
   useEffect(() => {
     let cancelled = false
     const hydrate = async () => {
-      await db.loadFromServer()
+      // true = file mode is on (a project dir is being mirrored to).
+      const fileMode = await db.loadFromServer()
       if (cancelled) return
       const savedDoc = db.getSpec("main")
-      const loaded = savedDoc && savedDoc.yamlContent ? savedDoc.yamlContent : INITIAL_SPEC
+      // No spec anywhere: a file-backed project opens blank (the demo must
+      // never leak into a client repo); standalone keeps the demo.
+      const loaded =
+        savedDoc && savedDoc.yamlContent
+          ? savedDoc.yamlContent
+          : fileMode
+          ? FRESH_PROJECT_SPEC
+          : INITIAL_SPEC
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
       setIsHydrated(true)

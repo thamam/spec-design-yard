@@ -65,56 +65,79 @@ Runs Vitest in watch mode.
 
 ---
 
-## Working on a Client Repo
+## Working in a Project (the default)
 
-By default everything you create lives in the browser's localStorage. To have
-the spec and workspace metadata saved as files inside the project you are
-designing for, point the dev server at that repo at launch.
+Spec-Yard is project-first: your spec lives as files in a project folder you
+choose, and the app remembers that choice (in `~/.specyard/config.json`) so
+every later launch reopens the same project.
 
-The standard way is the `spec-yard` launcher (installed once with
-`npm run install-cli`, which symlinks `bin/spec-yard` into `~/.local/bin`):
+**First launch:** the workspace opens with the project prompt showing a
+suggested folder (`~/spec-yard-projects/my-system`). One click creates it and
+you're working on files. You can type any absolute path instead — for example
+the repo of the system you are designing.
+
+**Every launch after that:** `npm run dev` reopens your last project. The
+header badge always shows the active project folder; click it to see the full
+path, switch to another project, create a new one, or pick from your recent
+projects. Switching reloads the workspace against the new folder's files, and
+any tab still open on the previous project has its saves refused (reload it
+to join the new project).
+
+The active project persists as:
+
+- `<project>/main.spec.yaml` — the spec itself, raw YAML (committable,
+  diffable, hand-editable outside the tool)
+- `<project>/.specyard/spec-index.json` — spec title / updated-at metadata
+- `<project>/.specyard/simulation_history.json` — simulation run history
+- `<project>/.specyard/custom_presets.json` — custom simulator presets
+
+On load, the project file wins over any stale browser cache. Add `.specyard/`
+to the project's `.gitignore` if you don't want tool metadata committed (the
+spec file itself is meant to be committed). A project with no
+`main.spec.yaml` yet opens a labeled blank spec (`# New project …`) — never
+the built-in demo — and writes nothing until your first edit.
+
+### Launching against a specific repo from the terminal
+
+The `spec-yard` launcher (installed once with `npm run install-cli`) opens the
+workspace on a given folder from anywhere:
 
 ```bash
 cd /path/to/client-repo
 spec-yard            # or: spec-yard /path/to/client-repo
 ```
 
-It starts the dev server bound to loopback with `SPEC_YARD_PROJECT_DIR` set,
-waits for it to respond, and opens the workspace in your browser. If a server
-is already running on port 3000, it just opens a tab to the running instance.
-
-The equivalent manual command:
+If no server is running it starts one bound to loopback; if one is already
+running it switches that instance to the folder via the project API — same as
+using the header picker. The equivalent manual command seeds the project via
+an environment variable:
 
 ```bash
 SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev -- -H 127.0.0.1
 ```
 
-(The `-H 127.0.0.1` binds the dev server to loopback only — recommended,
-since the store API is unauthenticated by design.)
+Either way the folder is recorded as the active project for future launches.
 
-With the variable set, the app persists into the client repo:
+### Working without a project (opt-out)
 
-- `<repo>/main.spec.yaml` — the spec itself, raw YAML (committable, diffable,
-  hand-editable outside the tool)
-- `<repo>/.specyard/spec-index.json` — spec title / updated-at metadata
-- `<repo>/.specyard/simulation_history.json` — simulation run history
-- `<repo>/.specyard/custom_presets.json` — custom simulator presets
+If you just want to sketch without touching the filesystem, the picker offers
+"Use browser storage instead": specs then live only in the browser's
+localStorage (this is also where the built-in demo spec lives). The choice is
+remembered; opt back in by picking a project folder from the same panel.
 
-On load, the repo file wins over any stale browser cache. Add `.specyard/` to
-the client repo's `.gitignore` if you don't want tool metadata committed (the
-spec file itself is meant to be committed).
+### Safety notes
 
-**Editing the file outside the tool:** safe only while the workspace is
-closed, or before the workspace's first save. The app reads the file on mount;
-if the file changes underneath an open session (external edit, `git checkout`,
-a second app instance), the next autosave is rejected with a conflict instead
-of overwriting — reload the workspace to adopt the external version.
+**Editing the spec file outside the tool:** safe only while the workspace is
+closed, or before the workspace's first save. The app reads the file on
+mount; if the file changes underneath an open session (external edit,
+`git checkout`, a second app instance), the next autosave is rejected with a
+conflict instead of overwriting — reload the workspace to adopt the external
+version.
 
-**Network exposure:** the store API has no authentication by design — it is a
-local-dev tool. Do not bind the dev server to a non-localhost interface
-(`next dev -H 0.0.0.0`) or otherwise expose it on an untrusted network while
-`SPEC_YARD_PROJECT_DIR` is set: anyone who can reach the port can read and
-overwrite files under the project directory.
-
-Without `SPEC_YARD_PROJECT_DIR`, behavior is unchanged: localStorage-only
-persistence, no filesystem writes.
+**Network exposure:** the store and project APIs have no authentication by
+design — this is a local-dev tool, and any launch can write into the chosen
+project folder. Keep the dev server bound to loopback (`-H 127.0.0.1`; the
+launcher does this) and never expose it on an untrusted network: anyone who
+can reach the port can read and overwrite files under the active project
+directory. The project API additionally refuses non-loopback `Host` headers
+and non-JSON writes.

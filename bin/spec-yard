@@ -18,11 +18,19 @@ done
 REPO="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
 DIR="${1:-$PWD}"
+DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "spec-yard: no such directory: ${1:-$PWD}" >&2; exit 1; }
 URL="http://localhost:3000"
 
 if curl -sf -o /dev/null "$URL"; then
-  echo "spec-yard is already running — opening $URL"
-  echo "note: the running instance keeps whatever project dir it was started with"
+  # A server is already up: retarget it to this project via the project API
+  # (same thing the header picker does), then just open the browser.
+  if curl -sf -o /dev/null -X PUT -H "Content-Type: application/json" \
+      -d "{\"dir\": \"$DIR\"}" "$URL/api/project"; then
+    echo "spec-yard is already running — switched it to $DIR"
+  else
+    echo "spec-yard is already running — could not switch project automatically;"
+    echo "use the project badge in the workspace header to select $DIR"
+  fi
   open "$URL"
   exit 0
 fi

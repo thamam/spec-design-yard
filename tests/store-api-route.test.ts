@@ -72,7 +72,9 @@ describe('store API route', () => {
     const res = mockRes()
     handler(mockReq('GET', ['spec', 'main']), res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ found: false })
+    expect(res.body.found).toBe(false)
+    // The response also carries the project epoch (see project-api-route tests).
+    expect(typeof res.body.epoch).toBe('string')
   })
 
   test('meta round-trip for simulation_history and custom_presets', () => {

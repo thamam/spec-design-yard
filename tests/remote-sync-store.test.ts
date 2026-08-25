@@ -358,6 +358,86 @@ describe('RemoteSyncSpecStore round-2 protocol fixes', () => {
   })
 })
 
+describe('RemoteSyncSpecStore project-epoch guard', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('loadFromServer captures the epoch and spec/meta PUTs carry it as a query param', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-A' } },
+      '/api/store/meta/simulation_history': { status: 200, body: null },
+      '/api/store/meta/custom_presets': { status: 200, body: null },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    store.saveSimulationHistory([{ id: 'r1' }])
+
+    await vi.waitFor(() => {
+      const fetchMock = globalThis.fetch as any
+      const putUrls = fetchMock.mock.calls
+        .filter(([, init]: any[]) => init?.method === 'PUT')
+        .map(([url]: any[]) => String(url))
+      expect(putUrls).toContain('/api/store/spec/main?epoch=epoch-A')
+      expect(putUrls).toContain('/api/store/meta/simulation_history?epoch=epoch-A')
+    })
+  })
+
+  test('no epoch from the server: PUT URLs stay bare', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => {
+      const fetchMock = globalThis.fetch as any
+      const putUrls = fetchMock.mock.calls
+        .filter(([, init]: any[]) => init?.method === 'PUT')
+        .map(([url]: any[]) => String(url))
+      expect(putUrls).toContain('/api/store/spec/main')
+    })
+  })
+
+  test('a project-switched 409 latches mirroring off without a reconcile retry', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let gets = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        return { ok: false, status: 409, json: async () => ({ conflict: true, reason: 'project-switched' }) } as any
+      }
+      gets++
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'other' }) } as any
+    }))
+
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => expect(errSpy).toHaveBeenCalled())
+    expect(errSpy.mock.calls.map(c => String(c[0])).join('\n')).toMatch(/project.*(switched|changed)/i)
+    // No lost-ack reconcile GET: the session must not adopt the new project.
+    expect(gets).toBe(0)
+
+    // Mirroring is latched off.
+    const fetchMock = globalThis.fetch as any
+    fetchMock.mockClear()
+    store.saveSpec('main', 'T2', 'yaml2')
+    await new Promise(r => setTimeout(r, 50))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('RemoteSyncSpecStore round-3 fixes', () => {
   beforeEach(() => {
     localStorage.clear()

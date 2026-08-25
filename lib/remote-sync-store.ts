@@ -33,6 +33,10 @@ export class RemoteSyncSpecStore implements SpecStore {
   // The spec-index rev this session's edits are based on (echoed back as
   // baseRev on PUT). null until the server tells us.
   private serverRev: string | null = null
+  // The project epoch this session hydrated under (?epoch= on every PUT).
+  // The server re-mints it when the picker switches projects, so a tab armed
+  // on the previous project 409s instead of writing into the new one.
+  private serverEpoch: string | null = null
   // The yamlContent of the most recent PUT we attempted — lets a 409 caused
   // by a lost ack be distinguished from a genuine external edit.
   private lastMirroredYaml: string | null = null
@@ -131,6 +135,7 @@ export class RemoteSyncSpecStore implements SpecStore {
       // File mode confirmed on — clear any latch from a previous failed
       // attempt (e.g. a Fast Refresh remount after a transient error).
       this.fileModeDisabled = false
+      this.serverEpoch = body && typeof body.epoch === "string" ? body.epoch : null
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
         this.serverRev = typeof body.rev === "string" ? body.rev : null
@@ -177,12 +182,20 @@ export class RemoteSyncSpecStore implements SpecStore {
     const prevMirrored = this.lastMirroredYaml
     this.lastMirroredYaml = body.yamlContent
     try {
-      const res = await fetch(url, {
+      const res = await fetch(this.withEpoch(url), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...body, baseRev: this.serverRev }),
       })
       if (res.status === 409) {
+        const conflict = await res.json().catch(() => null)
+        if (conflict && conflict.reason === "project-switched") {
+          // The picker retargeted the server in another tab. Never reconcile
+          // here — a lost-ack retry would push THIS project's spec into the
+          // newly selected one.
+          this.latchProjectSwitched()
+          return
+        }
         await this.reconcileAfterConflict(url, body, prevMirrored)
         return
       }
@@ -214,7 +227,7 @@ export class RemoteSyncSpecStore implements SpecStore {
         const current = await res.json().catch(() => null)
         if (current && current.yamlContent === prevMirrored && typeof current.rev === "string") {
           this.serverRev = current.rev
-          const retry = await fetch(url, {
+          const retry = await fetch(this.withEpoch(url), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...body, baseRev: this.serverRev }),
@@ -250,15 +263,34 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   private async putMeta(url: string, body: unknown): Promise<void> {
     try {
-      const res = await fetch(url, {
+      const res = await fetch(this.withEpoch(url), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
+      if (res.status === 409) {
+        const conflict = await res.json().catch(() => null)
+        if (conflict && conflict.reason === "project-switched") {
+          this.latchProjectSwitched()
+          return
+        }
+      }
       if (!res.ok) console.error(`[spec-yard] Mirror to ${url} failed (${res.status}) — data is only in browser storage`)
     } catch (e) {
       console.error(`Failed to mirror ${url} to server`, e)
     }
+  }
+
+  /** ?epoch= rides every PUT once the server has told us the project epoch. */
+  private withEpoch(url: string): string {
+    return this.serverEpoch ? `${url}?epoch=${encodeURIComponent(this.serverEpoch)}` : url
+  }
+
+  private latchProjectSwitched(): void {
+    this.fileModeDisabled = true
+    console.error(
+      "[spec-yard] The active project changed in another tab/window; this session stopped mirroring. Reload the workspace to join the new project."
+    )
   }
 
   private canMirror(): boolean {

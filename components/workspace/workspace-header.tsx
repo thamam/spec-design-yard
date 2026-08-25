@@ -11,6 +11,7 @@ import {
   Undo,
   Redo,
 } from "lucide-react"
+import { ProjectPicker } from "./project-picker"
 
 export function WorkspaceHeader({
   canUndo = false,
@@ -80,6 +81,9 @@ export function WorkspaceHeader({
           <GitBranchIcon size={10} />
           <span>main</span>
         </div>
+
+        {/* Persistence mode + active project (click to switch) */}
+        <ProjectPicker />
       </div>
 
       {/* Center — title */}
