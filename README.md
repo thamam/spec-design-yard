@@ -8,7 +8,7 @@ By mapping architectures from a human-readable **YAML specification**, Spec-Yard
 
 ## 🚀 Quick Start
 
-Get your design workspace up and running locally in three simple steps:
+Get your design workspace up and running locally in four short steps:
 
 ```bash
 # 1. Install dependencies
@@ -25,6 +25,8 @@ npm run test
 ```
 
 Once running, navigate to **[http://localhost:3000](http://localhost:3000)** in your browser to load the workspace.
+
+Spec-Yard is **project-first**: on the very first launch it prompts once for a project folder, and your spec lives there as `main.spec.yaml` (committable, diffable). Every later launch reopens your last project; switch or create projects anytime from the header badge, or open a specific repo with `spec-yard <dir>`. See [Getting Started](./docs/getting-started.md) for details, including the browser-storage opt-out.
 
 ---
 
@@ -65,7 +67,7 @@ As Sentinel maintaining the yard, we adhere to absolute quality gates:
    ```bash
    npm run build
    ```
-3. **Test Integrity:** All tests (currently 378) must pass successfully before merging:
+3. **Test Integrity:** All tests (currently 465) must pass successfully before merging:
    ```bash
    npm run test
    ```
