@@ -7,6 +7,7 @@ Single-page Next.js app: a visual IDE for editing a YAML "system spec" (componen
 - `npm run dev` — dev server
 - `npm run install-cli` — one-time setup: symlinks `bin/spec-yard` into `~/.local/bin`; afterwards `spec-yard [client-repo]` launches file-backed mode from anywhere
 - `npm test` — vitest run (jsdom, `globals: true`, setup in `tests/setup.ts`)
+- `npm run test:e2e` — real-browser scenarios (`scripts/run-e2e.sh`; add a scenario name to run just one: `file-mode`, `first-run`, `standalone`). Needs `playwright` + `playwright install chromium`. Each scenario gets its own dev server on 3109-3111, its own project folders, and its own `SPEC_YARD_CONFIG_DIR` under a temp root — never point it at your own registry or at port 3000. Failing scenarios leave their screenshots in `.e2e-failures/`.
 - `npm run build` — production build; must stay clean
 - `npm run lint` — **do not rely on it**: no ESLint config exists, it prompts interactively
 
@@ -42,12 +43,12 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 
 - Persistence is project-FIRST. The active project folder (`<project>/main.spec.yaml` + `<project>/.specyard/*.json`, written by `pages/api/store/[...path].ts`) resolves via `lib/server-project-config.ts`: session switch > `SPEC_YARD_PROJECT_DIR` (seeds the config) > persisted registry at `~/.specyard/config.json` (`SPEC_YARD_CONFIG_DIR` overrides the location — tests set it in `tests/setup.ts`; NEVER let a test touch the real one) > "unconfigured" (first-run prompt). Standalone/browser-only is an explicit persisted opt-out, not the default. On mount the project file wins over the browser cache (`loadFromServer` before `setIsHydrated` in `workspace-layout.tsx`). No auth on the routes by design — local-dev only; never expose the dev server on an untrusted network.
 - Project selection is GUI-first: header picker (`components/workspace/project-picker.tsx` → `pages/api/project.ts`; loopback-Host + JSON-content-type guarded, absolute/exists/writable validation). `lib/server-project-config.ts` keeps session state on globalThis (plain module state would be duplicated per API-route bundle) and is server-only (imports node `crypto`/`fs`) — never import it from client code. Every switch re-mints a project "epoch"; client PUTs echo it (`?epoch=`) and a stale one 409s (`project-switched`), so a tab on the old project can't clobber the new one. `bin/spec-yard <dir>` retargets a running instance through the same API.
-- Fresh projects (`{found:false}`) open with the labeled blank `FRESH_PROJECT_SPEC`, never the `INITIAL_SPEC` demo, and nothing is autosaved until the user edits. The demo lives only in the browser-storage opt-out — it must never be written into a project folder uninvited.
+- Fresh projects (`{found:false}`) open with the labeled blank `FRESH_PROJECT_SPEC`, never the `INITIAL_SPEC` demo, and nothing is autosaved until the user edits. So does a first run, which the store distinguishes from an opt-out via `{enabled:false, mode}` — the demo appears only after the user explicitly chooses browser storage, and must never be written into a project folder uninvited.
 - The canvas is Excalidraw only — do not add a second canvas library
 - No `next.config.*`, no ESLint/Prettier configs — match existing style manually
 - `components/Workspace.tsx` (PascalCase) is a legacy re-export stub — new components go in `components/workspace/`, kebab-case
 - `_bmad-output/project-context.md` is the detailed agent rulebook (43 rules: dep pins, Excalidraw sync guards, undo semantics, NaN/ghost-component traps) — read it before non-trivial canvas/reconciler work
-- CI (`.github/workflows/screenshot-validation.yml`) does pixel validation only; it does **not** run tests — run `npm test` yourself
+- CI (`.github/workflows/screenshot-validation.yml`) does pixel validation only; it does **not** run tests — run `npm test` yourself, and `npm run test:e2e` after anything touching persistence, hydration, or the project picker (mocked fetches have missed real first-run regressions)
 
 ## Repo overlays (not app code)
 
