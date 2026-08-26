@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { randomUUID } from "crypto"
 import fs from "fs"
 import path from "path"
+import { writeFileAtomic } from "../../../lib/server-atomic-write"
 import { getActiveProjectDir, getProjectEpoch } from "../../../lib/server-project-config"
 import { isLoopbackHost } from "../../../lib/server-request-guards"
 
@@ -89,15 +90,6 @@ function resolveIndexPath(realRoot: string): string | null {
   return file
 }
 
-/** Tmp files stage in the sidecar so a crash never litters the repo root. */
-function writeFileAtomic(file: string, contents: string, stagingDir: string) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.mkdirSync(stagingDir, { recursive: true })
-  const tmp = path.join(stagingDir, `.tmp-${path.basename(file)}-${process.pid}`)
-  fs.writeFileSync(tmp, contents, "utf8")
-  fs.renameSync(tmp, file)
-}
-
 /**
  * Missing or corrupted index is an empty index; an unreadable-but-present
  * index is a fault — treating it as empty would make the PUT path treat a
@@ -157,6 +149,9 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET" && req.method !== "PUT") {
     return res.status(405).json({ error: "Method not allowed" })
   }
+  // Derived from the realpath we just resolved, so the whole request costs a
+  // single project resolution.
+  const epoch = getProjectEpoch(realRoot)
 
   // Project-epoch guard: the client echoes the epoch it hydrated under (query
   // param). After a picker switch the epoch changes, so a tab still armed on
@@ -164,7 +159,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
   // no epoch is allowed — hand-rolled loopback requests were always trusted;
   // this guard targets stale in-app sessions, not curl.
   const claimedEpoch = req.query.epoch
-  if (req.method === "PUT" && typeof claimedEpoch === "string" && claimedEpoch !== getProjectEpoch()) {
+  if (req.method === "PUT" && typeof claimedEpoch === "string" && claimedEpoch !== epoch) {
     return res.status(409).json({ conflict: true, reason: "project-switched" })
   }
 
@@ -190,7 +185,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         // console). EACCES/EISDIR/EIO mean a spec exists but can't be read —
         // answering found:false there would let autosave overwrite a file we
         // failed to read, so those are 500s.
-        if (e?.code === "ENOENT") return res.status(200).json({ found: false, epoch: getProjectEpoch() })
+        if (e?.code === "ENOENT") return res.status(200).json({ found: false, epoch })
         return res.status(500).json({ error: "Failed to read spec file" })
       }
       const index = readSpecIndex(indexPath)
@@ -207,7 +202,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         yamlContent: contents,
         updatedAt: index[SPEC_ID]?.updatedAt || null,
         rev: index[SPEC_ID]?.rev || null,
-        epoch: getProjectEpoch(),
+        epoch,
       })
     }
     try {

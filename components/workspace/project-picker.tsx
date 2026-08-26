@@ -127,17 +127,19 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
     putProject(create ? { dir: trimmed, create: true } : { dir: trimmed }, trimmed)
   }
 
+  // Narrow once through the union member itself — booleans derived from
+  // info.mode do not carry the narrowing into the JSX below.
+  const project = info?.mode === "project" ? info : null
   const firstRun = info?.mode === "unconfigured"
-  const projectMode = info?.mode === "project"
   const unknown = info?.mode === "unknown"
-  const currentDir = projectMode ? (info as any).dir : null
+  const currentDir = project?.dir ?? null
   const recents = (info?.recents ?? []).filter((r) => r !== currentDir)
 
   const badgeLabel =
     info === null
       ? "…"
-      : projectMode
-      ? baseName(currentDir)
+      : project
+      ? baseName(project.dir)
       : firstRun
       ? "Choose project…"
       : unknown
@@ -151,8 +153,8 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
         data-testid="project-picker-badge"
         onClick={() => setOpen((v) => !v)}
         title={
-          projectMode
-            ? `Project: ${currentDir}`
+          project
+            ? `Project: ${project.dir}`
             : firstRun
             ? "Pick a project folder for your specs"
             : unknown
@@ -167,14 +169,14 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
           border: "1px solid var(--border-subtle)",
           color: unknown
             ? "var(--warning, #eab308)"
-            : projectMode || firstRun
+            : project || firstRun
             ? "var(--accent)"
             : "var(--foreground-muted)",
         }}
       >
-        {unknown ? <TriangleAlertIcon size={10} /> : projectMode || firstRun ? <FolderIcon size={10} /> : <DatabaseIcon size={10} />}
+        {unknown ? <TriangleAlertIcon size={10} /> : project || firstRun ? <FolderIcon size={10} /> : <DatabaseIcon size={10} />}
         <span className="truncate">{badgeLabel}</span>
-        {projectMode && !(info as any).exists && (
+        {project && !project.exists && (
           <TriangleAlertIcon size={10} style={{ color: "var(--warning, #eab308)" }} />
         )}
       </button>
@@ -198,19 +200,19 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
             </div>
           ) : (
             <>
-          {projectMode && (
+          {project && (
             <>
               <div className="font-medium mb-1">Project folder</div>
               <div
                 className="font-mono text-[11px] break-all rounded px-2 py-1.5 mb-1"
                 style={{ background: "var(--surface-overlay)", color: "var(--foreground)" }}
               >
-                {currentDir}
+                {project.dir}
               </div>
               <div className="mb-2" style={{ color: "var(--foreground-muted)" }}>
                 Specs are saved to <span className="font-mono">main.spec.yaml</span> in this folder
               </div>
-              {!(info as any).exists && (
+              {!project.exists && (
                 <div className="mb-2" style={{ color: "var(--warning, #eab308)" }}>
                   This directory does not exist — pick another folder below.
                 </div>
@@ -229,7 +231,7 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
           )}
 
           <label className="block mb-1" style={{ color: "var(--foreground-muted)" }} htmlFor="project-dir-input">
-            {projectMode ? "Switch to another project" : "Work in a project folder"}
+            {project ? "Switch to another project" : "Work in a project folder"}
           </label>
           <div className="flex gap-1.5 mb-2">
             <input

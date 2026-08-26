@@ -4,44 +4,19 @@ import React from 'react'
 import Workspace from '../components/Workspace'
 import { db } from '../lib/db'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { installWorkspaceFetch, projectReply } from './workspace-fetch-double'
 
 // File mode with NO spec file yet ({found:false}) must open a clearly-labeled
 // blank spec — never the built-in "External Brain" demo, and never autosave
 // anything into the fresh repo until the user actually edits.
 
 function installFetchMock(opts: { fileMode: boolean }) {
-  const puts: { url: string; body: any }[] = []
-  const fetchMock = vi.fn(async (input: any, init?: any) => {
-    const url = String(input)
-    if (init?.method === 'PUT') {
-      puts.push({ url, body: JSON.parse(init.body) })
-      return { ok: true, status: 200, json: async () => ({ ok: true, rev: 'r1' }) } as any
-    }
-    if (url.startsWith('/api/store/spec/main')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () =>
-          opts.fileMode ? { found: false, epoch: 'epoch-1' } : { enabled: false },
-      } as any
-    }
-    if (url.startsWith('/api/store/meta/')) {
-      return { ok: true, status: 200, json: async () => null } as any
-    }
-    if (url.startsWith('/api/project')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () =>
-          opts.fileMode
-            ? { mode: 'project', dir: '/tmp/fresh-project', exists: true, source: 'config', recents: [] }
-            : { mode: 'standalone', recents: [] },
-      } as any
-    }
-    return { ok: false, status: 404, json: async () => ({}) } as any
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  return { puts }
+  return opts.fileMode
+    ? installWorkspaceFetch({
+        spec: { body: { found: false, epoch: 'epoch-1' } },
+        project: projectReply('/tmp/fresh-project'),
+      })
+    : installWorkspaceFetch({ spec: { body: { enabled: false } } })
 }
 
 describe('fresh project blank slate (file mode, no spec file)', () => {

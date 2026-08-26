@@ -236,17 +236,12 @@ export class RemoteSyncSpecStore implements SpecStore {
     const prevMirrored = this.lastMirroredYaml
     this.lastMirroredYaml = body.yamlContent
     try {
-      const res = await fetch(this.withEpoch(url), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, baseRev: this.serverRev }),
-      })
+      const res = await this.putJson(url, { ...body, baseRev: this.serverRev })
       if (res.status === 409) {
-        const conflict = await res.json().catch(() => null)
-        if (conflict && conflict.reason === "project-switched") {
-          // The picker retargeted the server in another tab. Never reconcile
-          // here — a lost-ack retry would push THIS project's spec into the
-          // newly selected one.
+        // The picker retargeted the server in another tab. Never reconcile
+        // there — a lost-ack retry would push THIS project's spec into the
+        // newly selected one.
+        if (await this.isProjectSwitch(res)) {
           this.latchProjectSwitched()
           return
         }
@@ -257,8 +252,7 @@ export class RemoteSyncSpecStore implements SpecStore {
         console.error(`[spec-yard] Spec save failed (${res.status}) — latest edits are only in browser storage`)
         return
       }
-      const ack = await res.json().catch(() => null)
-      if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+      await this.adoptAckRev(res)
     } catch (e) {
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
     }
@@ -281,14 +275,9 @@ export class RemoteSyncSpecStore implements SpecStore {
         const current = await res.json().catch(() => null)
         if (current && current.yamlContent === prevMirrored && typeof current.rev === "string") {
           this.serverRev = current.rev
-          const retry = await fetch(this.withEpoch(url), {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, baseRev: this.serverRev }),
-          })
+          const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
           if (retry.ok) {
-            const ack = await retry.json().catch(() => null)
-            if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+            await this.adoptAckRev(retry)
             return
           }
         }
@@ -321,17 +310,10 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   private async putMeta(url: string, body: unknown): Promise<void> {
     try {
-      const res = await fetch(this.withEpoch(url), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (res.status === 409) {
-        const conflict = await res.json().catch(() => null)
-        if (conflict && conflict.reason === "project-switched") {
-          this.latchProjectSwitched()
-          return
-        }
+      const res = await this.putJson(url, body)
+      if (res.status === 409 && (await this.isProjectSwitch(res))) {
+        this.latchProjectSwitched()
+        return
       }
       if (!res.ok) console.error(`[spec-yard] Mirror to ${url} failed (${res.status}) — data is only in browser storage`)
     } catch (e) {
@@ -365,9 +347,29 @@ export class RemoteSyncSpecStore implements SpecStore {
     } catch {}
   }
 
-  /** ?epoch= rides every PUT once the server has told us the project epoch. */
-  private withEpoch(url: string): string {
-    return this.serverEpoch ? `${url}?epoch=${encodeURIComponent(this.serverEpoch)}` : url
+  /** The one shape every mirror write takes: JSON envelope, and ?epoch= once
+   *  the server has told us which project this session is bound to (a stale
+   *  epoch 409s instead of writing into a project the user switched away
+   *  from). */
+  private putJson(url: string, payload: unknown): Promise<Response> {
+    const target = this.serverEpoch ? `${url}?epoch=${encodeURIComponent(this.serverEpoch)}` : url
+    return fetch(target, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /** Consumes the 409 body: true when the picker retargeted the server. */
+  private async isProjectSwitch(res: Response): Promise<boolean> {
+    const conflict: any = await res.json().catch(() => null)
+    return !!conflict && conflict.reason === "project-switched"
+  }
+
+  /** Chain the next PUT on the rev the server just minted. */
+  private async adoptAckRev(res: Response): Promise<void> {
+    const ack: any = await res.json().catch(() => null)
+    if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
   }
 
   private latchProjectSwitched(): void {

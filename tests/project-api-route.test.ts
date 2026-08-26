@@ -5,37 +5,7 @@ import path from 'path'
 import projectHandler from '../pages/api/project'
 import storeHandler from '../pages/api/store/[...path]'
 import { resetProjectStateForTests } from '../lib/server-project-config'
-
-function projectReq(
-  method: string,
-  opts: { body?: any; host?: string; contentType?: string } = {}
-) {
-  const headers: Record<string, string> = { host: opts.host ?? 'localhost:3000' }
-  if (opts.body !== undefined) headers['content-type'] = opts.contentType ?? 'application/json'
-  return { method, query: {}, body: opts.body, headers } as any
-}
-
-function storeReq(method: string, pathSegments: string[], body?: any, epoch?: string) {
-  const query: any = { path: pathSegments }
-  if (epoch !== undefined) query.epoch = epoch
-  return { method, query, body, headers: { host: 'localhost:3000' } } as any
-}
-
-function mockRes() {
-  const res: any = {
-    statusCode: 200,
-    body: undefined,
-    status(code: number) {
-      res.statusCode = code
-      return res
-    },
-    json(payload: any) {
-      res.body = payload
-      return res
-    },
-  }
-  return res
-}
+import { mockRes, projectReq, storeReq } from './api-test-doubles'
 
 let configDir: string
 let projectDir: string
@@ -240,7 +210,7 @@ describe('store route project-epoch guard', () => {
 
     const putRes = mockRes()
     storeHandler(
-      storeReq('PUT', ['spec', 'main'], { title: 'Old Tab', yamlContent: 'system: {}\n' }, staleEpoch),
+      storeReq('PUT', ['spec', 'main'], { title: 'Old Tab', yamlContent: 'system: {}\n' }, { epoch: staleEpoch }),
       putRes
     )
     expect(putRes.statusCode).toBe(409)
@@ -249,7 +219,7 @@ describe('store route project-epoch guard', () => {
 
     // Meta PUTs are epoch-guarded too — sidecar bleed is still bleed.
     const metaRes = mockRes()
-    storeHandler(storeReq('PUT', ['meta', 'simulation_history'], [{ id: 'old' }], staleEpoch), metaRes)
+    storeHandler(storeReq('PUT', ['meta', 'simulation_history'], [{ id: 'old' }], { epoch: staleEpoch }), metaRes)
     expect(metaRes.statusCode).toBe(409)
     expect(fs.existsSync(path.join(otherDir, '.specyard', 'simulation_history.json'))).toBe(false)
   })
@@ -261,7 +231,7 @@ describe('store route project-epoch guard', () => {
 
     const putRes = mockRes()
     storeHandler(
-      storeReq('PUT', ['spec', 'main'], { title: 'New Tab', yamlContent: 'system: {}\n' }, getRes.body.epoch),
+      storeReq('PUT', ['spec', 'main'], { title: 'New Tab', yamlContent: 'system: {}\n' }, { epoch: getRes.body.epoch }),
       putRes
     )
     expect(putRes.statusCode).toBe(200)
@@ -281,7 +251,7 @@ describe('store route project-epoch guard', () => {
 
     const putRes = mockRes()
     storeHandler(
-      storeReq('PUT', ['spec', 'main'], { title: 'Old', yamlContent: 'system: {}\n' }, staleEpoch),
+      storeReq('PUT', ['spec', 'main'], { title: 'Old', yamlContent: 'system: {}\n' }, { epoch: staleEpoch }),
       putRes
     )
     expect(putRes.statusCode).toBe(409)

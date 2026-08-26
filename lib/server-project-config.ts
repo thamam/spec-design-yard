@@ -20,6 +20,7 @@ import { createHash } from "crypto"
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { writeFileAtomic } from "./server-atomic-write"
 
 export type PersistenceMode = "project" | "standalone" | "unconfigured"
 
@@ -72,10 +73,7 @@ function readConfig(): PersistedConfig {
  *  never break a request — the session keeps working un-remembered. */
 function writeConfig(cfg: PersistedConfig): void {
   try {
-    fs.mkdirSync(configDir(), { recursive: true })
-    const tmp = path.join(configDir(), `.tmp-config-${process.pid}`)
-    fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), "utf8")
-    fs.renameSync(tmp, configPath())
+    writeFileAtomic(configPath(), JSON.stringify(cfg, null, 2), configDir())
   } catch (e) {
     console.error("[spec-yard] Failed to persist project config", e)
   }
@@ -149,14 +147,20 @@ export function getActiveProjectDir(): string | null {
  * tabs' epochs (that would silently latch them to local-only), while a
  * switch to a different project must.
  */
-export function getProjectEpoch(): string {
-  const dir = getActiveProjectDir()
-  let key = dir ?? "standalone"
-  if (dir) {
-    try {
-      key = fs.realpathSync(dir)
-    } catch {
-      // Unresolvable dir: hash the raw value; store writes 500 anyway.
+export function getProjectEpoch(resolvedDir?: string): string {
+  let key = resolvedDir
+  if (key === undefined) {
+    // No caller-supplied path: resolve the active project ourselves. Callers
+    // that already realpathed it (the store route does, for its containment
+    // checks) pass it in, so one request costs one resolution, not three.
+    const dir = getActiveProjectDir()
+    key = dir ?? "standalone"
+    if (dir) {
+      try {
+        key = fs.realpathSync(dir)
+      } catch {
+        // Unresolvable dir: hash the raw value; store writes 500 anyway.
+      }
     }
   }
   return createHash("sha256").update(key).digest("hex").slice(0, 16)

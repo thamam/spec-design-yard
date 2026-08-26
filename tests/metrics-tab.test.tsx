@@ -28,8 +28,10 @@ describe('Workspace Metrics Tab Feature', () => {
     // Bricks: b1_schema, b2_ledger, b4_context, b5_prompt, b6_verify, b7_consolidate (6 bricks)
     // Total: 11 components
     
-    expect(screen.getByText(/Total Components:/i)).toBeInTheDocument()
-    expect(screen.getByText(/11/i)).toBeInTheDocument()
+    // Scoped to the stat card: a bare /11/ also matches the wall-clock stamp
+    // rendered elsewhere on the page (it failed for two hours every day).
+    const totalCard = screen.getByText(/Total Components:/i).closest('div')!
+    expect(within(totalCard).getByText('11')).toBeInTheDocument()
 
     // Verify type counts
     expect(screen.getByText(/3 Stages/i)).toBeInTheDocument()

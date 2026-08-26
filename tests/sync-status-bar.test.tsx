@@ -4,45 +4,18 @@ import React from 'react'
 import Workspace from '../components/Workspace'
 import { db } from '../lib/db'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { installWorkspaceFetch, projectReply } from './workspace-fetch-double'
 
 // Review finding: a mirroring latch-off (external conflict, project switched
 // in another tab) was console-only — the workspace kept looking healthy while
 // edits went to browser storage only. The status bar must say where saves go.
 
 function installFetch(opts: { fileMode: boolean; putStatus?: number; putBody?: any }) {
-  const fetchMock = vi.fn(async (input: any, init?: any) => {
-    const url = String(input)
-    if (init?.method === 'PUT') {
-      const status = opts.putStatus ?? 200
-      return {
-        ok: status < 300,
-        status,
-        json: async () => opts.putBody ?? { ok: true, rev: 'r1' },
-      } as any
-    }
-    if (url.startsWith('/api/store/spec/main')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => (opts.fileMode ? { found: false, epoch: 'e1' } : { enabled: false }),
-      } as any
-    }
-    if (url.startsWith('/api/store/meta/')) {
-      return { ok: true, status: 200, json: async () => null } as any
-    }
-    if (url.startsWith('/api/project')) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () =>
-          opts.fileMode
-            ? { mode: 'project', dir: '/tmp/proj', exists: true, source: 'config', recents: [] }
-            : { mode: 'standalone', recents: [] },
-      } as any
-    }
-    return { ok: false, status: 404, json: async () => ({}) } as any
+  installWorkspaceFetch({
+    spec: { body: opts.fileMode ? { found: false, epoch: 'e1' } : { enabled: false } },
+    project: opts.fileMode ? projectReply('/tmp/proj') : undefined,
+    put: opts.putStatus === undefined ? undefined : { status: opts.putStatus, body: opts.putBody },
   })
-  vi.stubGlobal('fetch', fetchMock)
 }
 
 describe('status bar sync visibility', () => {
