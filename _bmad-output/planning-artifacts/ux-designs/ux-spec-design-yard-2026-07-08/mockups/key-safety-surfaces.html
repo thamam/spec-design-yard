@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec-Yard — key screen: data-safety surfaces</title>
+
+<!-- ============================================================================
+     SPINE SECTIONS ILLUSTRATED  (spines win on any conflict — DESIGN.md / EXPERIENCE.md)
+
+     This key screen renders the three trust-critical overlays that fire in the
+     COMMON case (extract-prd FR4: "agents editing while the workspace is open is the
+     common case"). All three stem from one external-edit event on main.spec.yaml.
+
+     § EXPERIENCE.md › Component Patterns › "Conflict prompt (FR4)"
+         focus-trapped modal; initial focus on the non-destructive Cancel; Esc = Cancel;
+         "Reload — discards your edits" / "Keep and overwrite — replaces the disk file"
+         labeled distinctly in words, not colour; focus returns to editor on close.
+     § EXPERIENCE.md › Component Patterns › "Sync-health chip + data-loss toast"
+         three MVP detectors (unmapped canvas content, stale positions, partial-picture);
+         chip silent-when-honest / stateful-on-drift; popover of per-drift resolve actions;
+         PRECEDENCE: conflict prompt is modal and WINS — toast + drift-chip queue behind it
+         and are re-evaluated after the reload/keep choice.
+     § EXPERIENCE.md › Component Patterns › "Save semantics (FR3)"
+         dirty dot = buffer ahead of disk (the state the conflict guards).
+     § EXPERIENCE.md › Voice and Tone (do/don't table)
+         "Changed on disk. Reload or keep your edits?"  ·
+         "Diagram has content the spec doesn't — it will be lost on reload."
+     § EXPERIENCE.md › State Patterns › "Conflict (external edit)"
+     § EXPERIENCE.md › Accessibility Floor
+         toasts in aria-live (assertive for data-loss), never steal focus, action+dismiss
+         keyboard-reachable, mirrored to a diagnostics/sync entry so they survive the timeout;
+         conflict prompt focus-trapped w/ safe Cancel; sync chip keyboard-operable.
+     § DESIGN.md › Components  (toast · sync-health-chip · button-primary · quick-fix-button ·
+         diagnostics-strip · status-bar · module-symbol · component-node · type-chip ·
+         member-count-chip · diagnostic-badge · boundary-pin)
+     § DESIGN.md › Colors / Elevation & Depth (floating shadow = modal, popover, toast only) /
+         Shapes (radii) — every hex below is a post-remediation DESIGN.md token.
+     ============================================================================ -->
+
+<style>
+:root{
+  /* ---- surfaces ---- */
+  --background:#191919; --surface:#202020; --surface-raised:#232322;
+  --surface-elevated:#2a2a29; --surface-strong:#2f2f2f;
+  --surface-canvas:#1c1b1a; --surface-canvas-dots:#262624;
+  /* ---- borders / lines ---- */
+  --border:#2e2d2b; --border-node:#6e6d68; --border-pin:#454440; --connection:#6e6c67;
+  /* ---- text ---- */
+  --fg:#e6e4e0; --fg-body:#c8c6c1; --fg-muted:#9b9a97; --fg-dim:#737270;
+  /* ---- accent ---- */
+  --accent:#3794ff; --accent-hover:#4fb3ff; --accent-dim:#122a40; --accent-strong:#007acc;
+  /* ---- semantic ---- */
+  --success:#8fae8b; --success-dim:#1f2d24;
+  --warning:#d0a04a; --warning-dim:#3a2f1b;
+  --danger:#ef6d70; --danger-dim:#3a1f21;
+  --info:#7f9fbf; --info-dim:#1e2b38;
+  /* ---- type hues ---- */
+  --gw:#2dd4bf; --gw-dim:#16302c; --stage:#a78bfa; --stage-dim:#241f38;
+  --store:#4ade80; --store-dim:#16301f; --brick:#f472b6; --brick-dim:#35202c;
+  /* ---- yaml syntax ---- */
+  --sx-key:#9db4cd; --sx-val:#c8c6c1; --sx-num:#c2a878; --sx-punc:#83827b;
+  /* ---- radii ---- */
+  --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px; --r-full:9999px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#141312; color:var(--fg-body);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased; padding:44px 40px 80px;
+}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+.board{max-width:1480px;margin:0 auto;}
+
+/* ---- board header ---- */
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:10px;}
+h1{font-size:25px;font-weight:600;color:var(--fg);letter-spacing:-.01em;margin-bottom:10px;}
+.lede{max-width:820px;color:var(--fg-body);font-size:14px;margin-bottom:16px;}
+.legend{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:12px;color:var(--fg-dim);margin-bottom:8px;}
+.legend b{color:var(--fg-muted);font-weight:500;}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+.tokline{font-size:11.5px;color:var(--fg-dim);margin-bottom:30px;}
+
+.section-h{display:flex;align-items:baseline;gap:12px;margin:40px 0 4px;}
+.section-n{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--accent);border:1px solid var(--border);border-radius:var(--r-full);padding:2px 10px;}
+.section-t{font-size:17px;font-weight:600;color:var(--fg);}
+.section-d{max-width:860px;font-size:13px;color:var(--fg-muted);margin:6px 0 18px;}
+.cap{font-size:12px;color:var(--fg-dim);margin:12px 2px 6px;max-width:1100px;}
+.cap b{color:var(--fg-muted);font-weight:500;}
+.scrollwrap{overflow-x:auto;}
+
+/* ============================ browser frame ============================ */
+.frame{width:1400px;border:1px solid #35342f;border-radius:var(--r-lg);overflow:hidden;background:var(--background);box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.chrome{height:38px;background:#2a2a28;border-bottom:1px solid #35342f;display:flex;align-items:center;padding:0 14px;position:relative;}
+.lights{display:flex;gap:7px;}
+.lights i{width:11px;height:11px;border-radius:50%;}
+.lights i:nth-child(1){background:#c0555a;} .lights i:nth-child(2){background:#c39a3f;} .lights i:nth-child(3){background:#5a9d54;}
+.url{position:absolute;left:50%;transform:translateX(-50%);background:#1c1b1a;border:1px solid #35342f;border-radius:var(--r-sm);padding:3px 30px;font-size:11.5px;color:var(--fg-muted);}
+
+/* titlebar */
+.titlebar{height:34px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;font-size:12px;color:var(--fg-body);position:relative;}
+.brand{font-weight:600;letter-spacing:.02em;color:var(--fg);}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:14px;color:var(--fg-muted);font-size:12px;}
+
+/* main */
+.main{display:flex;height:600px;position:relative;}
+.rail{width:40px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px;}
+.rail a{width:40px;height:36px;display:flex;align-items:center;justify-content:center;border-left:2px solid transparent;}
+.rail a.on{border-left-color:var(--accent);}
+
+/* editor */
+.editor{width:498px;background:var(--background);border-right:1px solid var(--border);display:flex;flex-direction:column;}
+.code{flex:1;overflow:hidden;padding-top:8px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px;line-height:20px;}
+.cl{display:flex;white-space:pre;}
+.cl i{width:40px;flex:none;text-align:right;padding-right:14px;color:var(--fg-dim);font-style:normal;user-select:none;}
+.cl .t{color:var(--sx-val);}
+.cl.cur{background:var(--surface);}
+.k{color:var(--sx-key);} .s{color:var(--sx-val);} .n{color:var(--sx-num);} .p{color:var(--sx-punc);}
+.tg{color:var(--gw);} .tt{color:var(--stage);} .ts{color:var(--store);} .tb{color:var(--brick);}
+.warn{text-decoration:underline wavy var(--warning) 1px;text-underline-offset:3px;}
+
+/* diagnostics strip (collapsed) */
+.diag{height:30px;flex:none;border-top:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:9px;padding:0 12px;font-size:12px;color:var(--fg-muted);}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;}
+.diag .chev{margin-left:auto;color:var(--fg-dim);}
+
+/* canvas */
+.canvas{flex:1;position:relative;background:var(--surface-canvas);background-image:radial-gradient(circle,var(--surface-canvas-dots) 1px,transparent 1px);background-size:22px 22px;overflow:hidden;}
+.crumb{position:absolute;top:12px;left:14px;font-size:12px;color:var(--fg-muted);background:rgba(28,27,26,.85);border:1px solid var(--border);border-radius:var(--r-md);padding:4px 10px;}
+.crumb b{color:var(--fg);font-weight:500;}
+.ctools{position:absolute;top:12px;right:14px;display:flex;background:var(--surface-elevated);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;font-size:12px;}
+.ctools .seg{display:flex;align-items:center;gap:6px;padding:5px 11px;color:var(--fg-body);border-right:1px solid var(--border);}
+.ctools .seg:last-child{border-right:none;}
+
+/* nodes */
+.node{position:absolute;background:var(--surface-raised);}
+.module{border:1.5px solid var(--border-node);border-radius:11px 6px 10px 7px/7px 10px 6px 12px;padding:12px 14px;}
+.module .nm{font-size:13px;font-weight:600;color:var(--fg);}
+.module .sub{font-size:11px;color:var(--fg-muted);margin-top:4px;}
+.mchip{position:absolute;right:9px;bottom:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--fg-muted);background:var(--surface-elevated);border-radius:var(--r-full);padding:2px 9px;}
+.badge{position:absolute;top:-10px;right:-8px;font-size:11px;font-weight:600;border-radius:var(--r-sm);padding:1px 7px;display:flex;align-items:center;gap:4px;}
+.badge.w{color:var(--warning);background:var(--warning-dim);}
+.comp{border:1.5px solid var(--border-node);border-radius:9px 6px 10px 6px/6px 10px 5px 9px;padding:10px 12px;}
+.comp .nm{font-size:12.5px;font-weight:600;color:var(--fg);}
+.tchip{display:inline-flex;align-items:center;margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;border-radius:var(--r-full);padding:1px 8px;}
+.comp.gw{border-color:var(--gw);} .comp.gw .tchip{color:var(--gw);background:var(--gw-dim);}
+.comp.br{border-color:var(--brick);} .comp.br .tchip{color:var(--brick);background:var(--brick-dim);}
+
+/* pins */
+.pin{position:absolute;width:11px;height:11px;background:var(--surface);border:1.5px solid var(--border-pin);z-index:3;}
+.pin.exp{border-color:var(--accent);background:var(--accent-dim);border-radius:var(--r-full);}
+.pinlbl{position:absolute;font-size:10px;color:var(--fg-muted);z-index:3;}
+
+/* edges */
+.edges{position:absolute;inset:0;z-index:2;pointer-events:none;}
+.elbl{position:absolute;z-index:3;transform:translate(-50%,-50%);font-size:10.5px;color:var(--fg-muted);background:var(--surface-canvas);border:1px solid var(--border);border-radius:var(--r-sm);padding:1px 7px;white-space:nowrap;}
+
+/* sync-health chip */
+.sync{position:absolute;right:14px;bottom:14px;z-index:6;display:inline-flex;align-items:center;gap:7px;font-size:12px;border-radius:var(--r-full);padding:5px 12px;cursor:default;}
+.sync.ok{color:var(--success);background:var(--success-dim);}
+.sync.drift{color:var(--warning);background:var(--warning-dim);}
+.sync .cnt{font-family:ui-monospace,Menlo,monospace;font-weight:600;}
+
+/* status bar */
+.statusbar{height:26px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;font-size:12px;padding:0 12px;gap:14px;color:var(--fg-muted);}
+.statusbar .path{font-family:ui-monospace,Menlo,monospace;color:var(--fg-muted);}
+.statusbar .dirty{display:inline-flex;align-items:center;gap:6px;color:var(--fg-body);}
+.statusbar .dirty i{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+.statusbar .right{margin-left:auto;display:flex;gap:16px;}
+.statusbar .amark{width:8px;height:8px;border-radius:2px;background:var(--accent-strong);}
+
+/* ============================ overlays ============================ */
+.dim{position:absolute;inset:0;background:rgba(8,8,7,.62);z-index:20;}
+
+/* conflict modal */
+.modal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;width:470px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);
+  box-shadow:0 28px 70px rgba(0,0,0,.66);overflow:hidden;}
+.modal-head{padding:20px 22px 4px;}
+.modal-icn{display:flex;align-items:center;gap:9px;color:var(--fg-muted);font-size:12px;margin-bottom:12px;}
+.modal-icn .g{width:24px;height:24px;border-radius:var(--r-md);background:var(--surface-elevated);display:flex;align-items:center;justify-content:center;}
+.modal-title{font-size:15px;font-weight:600;color:var(--fg);line-height:1.45;}
+.modal-body{padding:12px 22px 4px;font-size:13px;color:var(--fg-body);}
+.whatchanged{margin:12px 0 4px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;}
+.wc-row{display:flex;gap:12px;padding:9px 12px;font-size:12.5px;}
+.wc-row+.wc-row{border-top:1px solid var(--border);}
+.wc-row .lab{width:96px;flex:none;color:var(--fg-muted);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;}
+.wc-row .val{color:var(--fg-body);}
+.modal-acts{padding:16px 22px 20px;display:flex;flex-direction:column;gap:9px;}
+.btn{height:32px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface-elevated);
+  color:var(--fg-body);font:500 13px/1 system-ui,sans-serif;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;cursor:default;}
+.btn .conseq{font-weight:400;font-size:11.5px;color:var(--fg-muted);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#0b1a2e;}
+.btn.primary .conseq{color:#0b1a2e;opacity:.72;}
+.btn.focused{outline:2px solid var(--accent);outline-offset:2px;}
+.btn.primary.focused{outline-offset:2px;box-shadow:0 0 0 4px rgba(55,148,255,.28);}
+.destructive-row{display:flex;gap:9px;}
+.destructive-row .btn{flex:1;justify-content:center;text-align:center;flex-direction:column;gap:2px;height:auto;padding:9px 12px;}
+.modal-foot{border-top:1px solid var(--border);background:var(--background);padding:9px 22px;font-size:11.5px;color:var(--fg-dim);display:flex;align-items:center;gap:8px;}
+.modal-foot kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--fg-muted);background:var(--surface-strong);border:1px solid var(--border-pin);border-radius:var(--r-sm);padding:1px 6px;}
+
+/* drift popover */
+.popover{position:absolute;right:14px;bottom:52px;z-index:30;width:392px;
+  background:var(--surface-elevated);border:1px solid var(--border-pin);border-radius:var(--r-lg);
+  box-shadow:0 20px 50px rgba(0,0,0,.55);overflow:hidden;}
+.pop-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--fg);font-weight:600;}
+.pop-head .cnt{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--warning);background:var(--warning-dim);border-radius:var(--r-full);padding:2px 9px;font-size:11px;}
+.drift{display:flex;gap:11px;padding:12px 14px;align-items:flex-start;}
+.drift+.drift{border-top:1px solid var(--border);}
+.drift .mk{width:16px;height:16px;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;}
+.drift .body{flex:1;min-width:0;}
+.drift .txt{font-size:12.5px;color:var(--fg-body);line-height:1.45;}
+.drift .txt .loss{color:var(--warning);}
+.drift .resolve{margin-top:8px;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;
+  background:var(--surface-strong);border:1px solid var(--border-pin);border-radius:var(--r-md);
+  color:var(--accent);font:500 12px/1 system-ui,sans-serif;cursor:default;}
+.drift .resolve.focused{outline:2px solid var(--accent);outline-offset:2px;background:var(--accent-dim);}
+.drift .second{margin-left:8px;color:var(--fg-muted);font-size:12px;}
+.pop-foot{border-top:1px solid var(--border);background:var(--surface);padding:8px 14px;font-size:11px;color:var(--fg-dim);}
+.pop-foot kbd{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--fg-muted);background:var(--surface-strong);border:1px solid var(--border-pin);border-radius:var(--r-sm);padding:1px 5px;margin:0 1px;}
+
+/* data-loss toast */
+.toast-region{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);z-index:30;width:452px;}
+.toast{background:var(--surface-elevated);border:1px solid var(--border-pin);border-radius:var(--r-lg);
+  box-shadow:0 18px 44px rgba(0,0,0,.5);padding:13px 14px;display:flex;gap:12px;align-items:flex-start;}
+.toast .mk{width:18px;height:18px;flex:none;margin-top:1px;}
+.toast .body{flex:1;min-width:0;}
+.toast .txt{font-size:13px;color:var(--fg-body);line-height:1.45;}
+.toast .txt .loss{color:var(--warning);}
+.toast .row2{margin-top:9px;display:flex;align-items:center;gap:16px;}
+.toast .act{color:var(--accent);font:500 12.5px/1 system-ui,sans-serif;cursor:default;}
+.toast .act.dismiss{color:var(--fg-muted);}
+.toast .qtag{margin-left:auto;font-size:10.5px;color:var(--fg-muted);background:var(--surface-strong);border:1px solid var(--border-pin);border-radius:var(--r-full);padding:2px 9px;}
+.toast .close{color:var(--fg-dim);font-size:14px;line-height:1;cursor:default;padding:2px;}
+.queuenote{margin-top:9px;font-size:11.5px;color:var(--fg-dim);text-align:center;line-height:1.5;}
+.queuenote b{color:var(--fg-muted);font-weight:500;}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="eyebrow">spec-yard · key screen · data-safety surfaces</div>
+  <h1>The three trust-critical overlays</h1>
+  <p class="lede">One external-edit event on <span class="mono">main.spec.yaml</span> — the common case, a coding agent writing the spec while the workspace is open — can trip all three at once. The spine fixes their precedence: the conflict prompt is modal and wins; the data-loss toast and the drift chip queue behind it and re-check after the reload/keep choice.</p>
+  <div class="legend">
+    <b>type hues (DESIGN.md)</b>
+    <span><i class="sw" style="background:#2dd4bf"></i>Gateway</span>
+    <span><i class="sw" style="background:#a78bfa"></i>Stage</span>
+    <span><i class="sw" style="background:#4ade80"></i>Store</span>
+    <span><i class="sw" style="background:#f472b6"></i>Brick</span>
+    <span style="margin-left:8px;"><i class="sw" style="background:#d0a04a"></i>drift / warning</span>
+    <span><i class="sw" style="background:#3794ff"></i>accent</span>
+  </div>
+  <p class="tokline mono">tokens: surface #202020 · surface-elevated #2a2a29 · toast border-pin #454440 · sync ok #8fae8b/#1f2d24 · sync drift #d0a04a/#3a2f1b · accent #3794ff · modal r-xl 12px · floating shadow = modal/popover/toast only</p>
+
+  <!-- ======================================================================
+       SECTION 1 — CONFLICT PROMPT (focus-trapped modal over dimmed workspace)
+       ====================================================================== -->
+  <div class="section-h">
+    <span class="section-n">1</span>
+    <span class="section-t">Conflict prompt — focus-trapped modal</span>
+  </div>
+  <p class="section-d">The file changed on disk while edits were pending. Both choices are irreversible, so the prompt is a focus-trapped modal: initial focus sits on the non-destructive <b>Cancel</b> (which writes nothing), <span class="mono">Esc</span> maps to it, and the two destructive actions are labeled distinctly in words — never by colour alone. The workspace behind is dimmed; the drift chip and toast wait behind the modal.</p>
+
+  <div class="scrollwrap">
+  <div class="frame">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="url">spec-yard.local/acme-checkout</div>
+    </div>
+    <div class="titlebar">
+      <span class="brand">Spec-Yard</span>
+      <span class="tb-right"><span>Help</span></span>
+    </div>
+
+    <div class="main">
+      <div class="rail">
+        <a class="on" title="files"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.3" stroke-linejoin="round"><path d="M4.5 2.5H9L12 5.5v8H4.5z"/><path d="M9 2.5v3h3"/></svg></a>
+      </div>
+
+      <!-- editor -->
+      <div class="editor">
+        <div class="code">
+          <div class="cl"><i>1</i><span class="t"><span class="k">system</span><span class="p">:</span></span></div>
+          <div class="cl"><i>2</i><span class="t">  <span class="k">name</span><span class="p">:</span> <span class="s">acme-checkout</span></span></div>
+          <div class="cl"><i>3</i><span class="t">  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+          <div class="cl"><i>4</i><span class="t"></span></div>
+          <div class="cl"><i>5</i><span class="t"><span class="k">modules</span><span class="p">:</span></span></div>
+          <div class="cl"><i>6</i><span class="t">  <span class="k">payments</span><span class="p">:</span></span></div>
+          <div class="cl"><i>7</i><span class="t">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="s">payment-api</span><span class="p">]</span></span></div>
+          <div class="cl"><i>8</i><span class="t">    <span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>9</i><span class="t">      <span class="k">payment-api</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>10</i><span class="t">      <span class="k">ledger</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>11</i><span class="t">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+          <div class="cl cur"><i>12</i><span class="t">        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></span></div>
+          <div class="cl"><i>13</i><span class="t"></span></div>
+          <div class="cl"><i>14</i><span class="t"><span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>15</i><span class="t">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+          <div class="cl"><i>16</i><span class="t">    <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></span></div>
+          <div class="cl"><i>17</i><span class="t">    <span class="k">connections</span><span class="p">:</span></span></div>
+          <div class="cl"><i>18</i><span class="t">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="s warn">payments.payment-api</span></span></div>
+          <div class="cl"><i>19</i><span class="t">        <span class="k">label</span><span class="p">:</span> <span class="s">charge requests</span></span></div>
+          <div class="cl"><i>20</i><span class="t">  <span class="k">audit-log</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tb">Brick</span> <span class="p">}</span></span></div>
+        </div>
+        <div class="diag">
+          <i class="dot" style="background:var(--warning)"></i>
+          <span>3 diagnostics · 1 warning · 2 info — 1 quick-fixable</span>
+          <span class="chev">▴</span>
+        </div>
+      </div>
+
+      <!-- canvas -->
+      <div class="canvas">
+        <div class="crumb"><b>System</b></div>
+        <div class="ctools">
+          <div class="seg">Static&nbsp;▾</div>
+          <div class="seg" title="fit to screen">⤢</div>
+        </div>
+
+        <svg class="edges" viewBox="0 0 820 600" preserveAspectRatio="none">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6e6c67"/></marker></defs>
+          <path d="M198 178 C 240 172, 285 168, 322 166" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah1)"/>
+          <path d="M470 214 C 520 262, 545 318, 566 372" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah1)"/>
+          <path d="M556 456 C 452 470, 330 470, 244 466" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah1)"/>
+        </svg>
+        <div class="elbl" style="left:258px;top:168px;">charge requests</div>
+        <div class="elbl" style="left:534px;top:300px;">verifies customer</div>
+        <div class="elbl" style="left:398px;top:462px;">auth events</div>
+
+        <div class="node comp gw" style="left:44px;top:150px;width:154px;height:58px;transform:rotate(-.4deg);">
+          <div class="nm">web-gateway</div><div class="tchip">Gateway</div>
+        </div>
+        <i class="pin" style="left:192px;top:174px;"></i>
+
+        <div class="node module" style="left:330px;top:98px;width:222px;height:150px;transform:rotate(.25deg);">
+          <div class="nm">payments</div><div class="sub">module · sealed</div>
+          <span class="mchip">6 members</span><span class="badge w">⚠ 1</span>
+        </div>
+        <i class="pin exp" style="left:324px;top:160px;"></i>
+        <span class="pinlbl" style="left:342px;top:159px;">payment-api</span>
+        <i class="pin" style="left:466px;top:242px;"></i>
+
+        <div class="node module" style="left:558px;top:378px;width:200px;height:120px;transform:rotate(-.3deg);">
+          <div class="nm">identity</div><div class="sub">module · sealed</div>
+          <span class="mchip">4 members</span>
+        </div>
+        <i class="pin" style="left:648px;top:372px;"></i>
+        <i class="pin" style="left:552px;top:434px;"></i>
+
+        <div class="node comp br" style="left:90px;top:438px;width:150px;height:56px;transform:rotate(.4deg);">
+          <div class="nm">audit-log</div><div class="tchip">Brick</div>
+        </div>
+        <i class="pin" style="left:238px;top:460px;"></i>
+
+        <div class="sync drift" title="drift — queued behind the prompt">⚠ <span class="cnt">3</span> drifts</div>
+      </div>
+
+      <!-- dim scrim + focus-trapped modal -->
+      <div class="dim"></div>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cf-title">
+        <div class="modal-head">
+          <div class="modal-icn">
+            <span class="g"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.5"/><path d="M13 2.5V5h-2.5"/></svg></span>
+            <span>External change · main.spec.yaml</span>
+          </div>
+          <div class="modal-title" id="cf-title">main.spec.yaml changed on disk.<br>Reload or keep your edits?</div>
+        </div>
+        <div class="modal-body">
+          <div class="whatchanged">
+            <div class="wc-row"><span class="lab">on disk</span><span class="val">Changed after you opened it — commonly a coding agent editing the spec.</span></div>
+            <div class="wc-row"><span class="lab">your buffer</span><span class="val">Edits not yet saved, ahead of disk. Reloading discards them.</span></div>
+          </div>
+        </div>
+        <div class="modal-acts">
+          <div class="btn primary focused">
+            <span>Cancel — keep editing</span>
+            <span class="conseq">writes nothing</span>
+          </div>
+          <div class="destructive-row">
+            <div class="btn"><span>Reload</span><span class="conseq">discards your edits</span></div>
+            <div class="btn"><span>Keep and overwrite</span><span class="conseq">replaces the disk file</span></div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span>Focus is trapped here.</span>
+          <kbd>Esc</kbd><span>keeps your edits</span>
+          <span style="margin-left:auto;">focus returns to the editor on close</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="path">acme-checkout/main.spec.yaml</span>
+      <span class="dirty"><i></i>Unsaved</span>
+      <span class="right"><span>YAML</span><span>spec 1.4.0</span><span>Ln 18, Col 30</span><span class="amark" title="status accent (graphical only)"></span></span>
+    </div>
+  </div>
+  </div>
+  <p class="cap"><b>Section 1.</b> The modal owns the surface: dim scrim over the acme-checkout workspace, initial focus on the accent <b>Cancel</b> (the safe path — a persistent focus ring, never suppressed). <span class="mono">Esc</span> = Cancel. The two destructive buttons carry their consequence in words. The status bar keeps the <b>dirty dot + "Unsaved"</b> label; the drift chip reads <span class="mono">⚠ 3 drifts</span> but stays behind the modal (precedence).</p>
+
+  <!-- ======================================================================
+       SECTION 2 — SYNC-HEALTH CHIP EXPANDED (drift popover at the corner chip)
+       ====================================================================== -->
+  <div class="section-h">
+    <span class="section-n">2</span>
+    <span class="section-t">Sync-health chip — expanded drift popover</span>
+  </div>
+  <p class="section-d">Silent when honest, stateful on drift. Here the corner chip is in its <b>drift</b> state (warning-dim fill, warning text, a drift count); focusing it and pressing <span class="mono">Enter</span> expands a floating popover of the three MVP detectors — unmapped canvas content, partial-picture, stale positions — each with its own resolve action. The workspace stays live; nothing is dimmed.</p>
+
+  <div class="scrollwrap">
+  <div class="frame">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="url">spec-yard.local/acme-checkout</div>
+    </div>
+    <div class="titlebar">
+      <span class="brand">Spec-Yard</span>
+      <span class="tb-right"><span>Help</span></span>
+    </div>
+
+    <div class="main">
+      <div class="rail">
+        <a class="on" title="files"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.3" stroke-linejoin="round"><path d="M4.5 2.5H9L12 5.5v8H4.5z"/><path d="M9 2.5v3h3"/></svg></a>
+      </div>
+
+      <div class="editor">
+        <div class="code">
+          <div class="cl"><i>1</i><span class="t"><span class="k">system</span><span class="p">:</span></span></div>
+          <div class="cl"><i>2</i><span class="t">  <span class="k">name</span><span class="p">:</span> <span class="s">acme-checkout</span></span></div>
+          <div class="cl"><i>3</i><span class="t">  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+          <div class="cl"><i>4</i><span class="t"></span></div>
+          <div class="cl"><i>5</i><span class="t"><span class="k">modules</span><span class="p">:</span></span></div>
+          <div class="cl"><i>6</i><span class="t">  <span class="k">payments</span><span class="p">:</span></span></div>
+          <div class="cl"><i>7</i><span class="t">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="s">payment-api</span><span class="p">]</span></span></div>
+          <div class="cl"><i>8</i><span class="t">    <span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>9</i><span class="t">      <span class="k">payment-api</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>10</i><span class="t">      <span class="k">ledger</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>11</i><span class="t">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+          <div class="cl"><i>12</i><span class="t">        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></span></div>
+          <div class="cl"><i>13</i><span class="t"></span></div>
+          <div class="cl"><i>14</i><span class="t"><span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>15</i><span class="t">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+          <div class="cl"><i>16</i><span class="t">    <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></span></div>
+          <div class="cl"><i>17</i><span class="t">    <span class="k">connections</span><span class="p">:</span></span></div>
+          <div class="cl"><i>18</i><span class="t">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="s warn">payments.payment-api</span></span></div>
+          <div class="cl"><i>19</i><span class="t">        <span class="k">label</span><span class="p">:</span> <span class="s">charge requests</span></span></div>
+          <div class="cl"><i>20</i><span class="t">  <span class="k">audit-log</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tb">Brick</span> <span class="p">}</span></span></div>
+        </div>
+        <div class="diag">
+          <i class="dot" style="background:var(--warning)"></i>
+          <span>3 diagnostics · 1 warning · 2 info — 1 quick-fixable</span>
+          <span class="chev">▴</span>
+        </div>
+      </div>
+
+      <div class="canvas">
+        <div class="crumb"><b>System</b></div>
+        <div class="ctools">
+          <div class="seg">Static&nbsp;▾</div>
+          <div class="seg" title="layers — 1 type hidden">Layers · 1 hidden</div>
+        </div>
+
+        <svg class="edges" viewBox="0 0 820 600" preserveAspectRatio="none">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6e6c67"/></marker></defs>
+          <path d="M198 178 C 240 172, 285 168, 322 166" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <path d="M470 214 C 520 262, 545 318, 566 372" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah2)"/>
+        </svg>
+        <div class="elbl" style="left:258px;top:168px;">charge requests</div>
+        <div class="elbl" style="left:534px;top:300px;">verifies customer</div>
+
+        <div class="node comp gw" style="left:44px;top:150px;width:154px;height:58px;transform:rotate(-.4deg);">
+          <div class="nm">web-gateway</div><div class="tchip">Gateway</div>
+        </div>
+        <i class="pin" style="left:192px;top:174px;"></i>
+
+        <div class="node module" style="left:330px;top:98px;width:222px;height:150px;transform:rotate(.25deg);">
+          <div class="nm">payments</div><div class="sub">module · sealed</div>
+          <span class="mchip">6 members</span><span class="badge w">⚠ 1</span>
+        </div>
+        <i class="pin exp" style="left:324px;top:160px;"></i>
+        <span class="pinlbl" style="left:342px;top:159px;">payment-api</span>
+        <i class="pin" style="left:466px;top:242px;"></i>
+
+        <div class="node module" style="left:558px;top:378px;width:200px;height:120px;transform:rotate(-.3deg);">
+          <div class="nm">identity</div><div class="sub">module · sealed</div>
+          <span class="mchip">4 members</span>
+        </div>
+        <i class="pin" style="left:648px;top:372px;"></i>
+
+        <!-- drift popover anchored above the corner chip -->
+        <div class="popover" role="dialog" aria-label="Sync health — 3 drifts">
+          <div class="pop-head">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#d0a04a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 1.6 13h12.8z"/><path d="M8 6.4v3.2"/><circle cx="8" cy="11.6" r=".5" fill="#d0a04a" stroke="none"/></svg>
+            <span>Diagram and spec have drifted</span>
+            <span class="cnt">3</span>
+          </div>
+
+          <div class="drift">
+            <span class="mk"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#d0a04a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 1.6 13h12.8z"/><path d="M8 6.4v3.2"/><circle cx="8" cy="11.6" r=".5" fill="#d0a04a" stroke="none"/></svg></span>
+            <div class="body">
+              <div class="txt"><span class="loss">Diagram has content the spec doesn't</span> — it will be lost on reload.</div>
+              <span class="resolve focused">Write to spec</span>
+              <span class="second">Discard</span>
+            </div>
+          </div>
+
+          <div class="drift">
+            <span class="mk"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8s2-4.5 5.5-4.5S13.5 8 13.5 8s-2 4.5-5.5 4.5S2.5 8 2.5 8z"/><path d="M3 3l10 10"/></svg></span>
+            <div class="body">
+              <div class="txt">2 components hidden by layer visibility — this view shows part of the spec.</div>
+              <span class="resolve">Show all layers</span>
+            </div>
+          </div>
+
+          <div class="drift">
+            <span class="mk"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg></span>
+            <div class="body">
+              <div class="txt">Positions not yet written back to the spec.</div>
+              <span class="resolve">Write positions</span>
+            </div>
+          </div>
+
+          <div class="pop-foot"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>↵</kbd> resolve · <kbd>Esc</kbd> close</div>
+        </div>
+
+        <div class="sync drift" aria-expanded="true">⚠ <span class="cnt">3</span> drifts</div>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="path">acme-checkout/main.spec.yaml</span>
+      <span class="dirty"><i></i>Unsaved</span>
+      <span class="right"><span>YAML</span><span>spec 1.4.0</span><span>Ln 18, Col 30</span><span class="amark" title="status accent (graphical only)"></span></span>
+    </div>
+  </div>
+  </div>
+  <p class="cap"><b>Section 2.</b> The chip is a pill with a number, not a bare dot — <span class="mono">⚠ 3 drifts</span> in drift tokens. The popover floats (soft shadow), one row per detector. The data-loss row leads and marks the loss in warning; its resolve is <b>Write to spec</b> with <b>Discard</b> as the explicit secondary. Partial-picture and stale-positions follow with their own resolves. Arrow-through / <span class="mono">Esc</span>-close is keyboard-reachable.</p>
+
+  <!-- ======================================================================
+       SECTION 3 — DATA-LOSS TOAST (active nudge, aria-live assertive, queued)
+       ====================================================================== -->
+  <div class="section-h">
+    <span class="section-n">3</span>
+    <span class="section-t">Data-loss toast — the active nudge</span>
+  </div>
+  <p class="section-d">Drift that risks losing work raises a toast on top of the chip. It renders in an <span class="mono">aria-live="assertive"</span> region, never steals focus, and keeps its action and dismiss keyboard-reachable. Because a conflict prompt is up in the common case, the toast is shown here in its <b>queued</b> state — held behind the modal and re-checked after the reload/keep choice, and mirrored to the sync entry so it survives the timeout.</p>
+
+  <div class="scrollwrap">
+  <div class="frame">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="url">spec-yard.local/acme-checkout</div>
+    </div>
+    <div class="titlebar">
+      <span class="brand">Spec-Yard</span>
+      <span class="tb-right"><span>Help</span></span>
+    </div>
+
+    <div class="main">
+      <div class="rail">
+        <a class="on" title="files"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.3" stroke-linejoin="round"><path d="M4.5 2.5H9L12 5.5v8H4.5z"/><path d="M9 2.5v3h3"/></svg></a>
+      </div>
+
+      <div class="editor">
+        <div class="code">
+          <div class="cl"><i>1</i><span class="t"><span class="k">system</span><span class="p">:</span></span></div>
+          <div class="cl"><i>2</i><span class="t">  <span class="k">name</span><span class="p">:</span> <span class="s">acme-checkout</span></span></div>
+          <div class="cl"><i>3</i><span class="t">  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+          <div class="cl"><i>4</i><span class="t"></span></div>
+          <div class="cl"><i>5</i><span class="t"><span class="k">modules</span><span class="p">:</span></span></div>
+          <div class="cl"><i>6</i><span class="t">  <span class="k">payments</span><span class="p">:</span></span></div>
+          <div class="cl"><i>7</i><span class="t">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="s">payment-api</span><span class="p">]</span></span></div>
+          <div class="cl"><i>8</i><span class="t">    <span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>9</i><span class="t">      <span class="k">payment-api</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>10</i><span class="t">      <span class="k">ledger</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span> <span class="p">}</span></span></div>
+          <div class="cl"><i>11</i><span class="t">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+          <div class="cl"><i>12</i><span class="t">        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></span></div>
+          <div class="cl"><i>13</i><span class="t"></span></div>
+          <div class="cl"><i>14</i><span class="t"><span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>15</i><span class="t">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+          <div class="cl"><i>16</i><span class="t">    <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></span></div>
+          <div class="cl"><i>17</i><span class="t">    <span class="k">connections</span><span class="p">:</span></span></div>
+          <div class="cl"><i>18</i><span class="t">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="s warn">payments.payment-api</span></span></div>
+          <div class="cl"><i>19</i><span class="t">        <span class="k">label</span><span class="p">:</span> <span class="s">charge requests</span></span></div>
+          <div class="cl"><i>20</i><span class="t">  <span class="k">audit-log</span><span class="p">:</span> <span class="p">{</span> <span class="k">type</span><span class="p">:</span> <span class="tb">Brick</span> <span class="p">}</span></span></div>
+        </div>
+        <div class="diag">
+          <i class="dot" style="background:var(--warning)"></i>
+          <span>3 diagnostics · 1 warning · 2 info — 1 quick-fixable</span>
+          <span class="chev">▴</span>
+        </div>
+      </div>
+
+      <div class="canvas">
+        <div class="crumb"><b>System</b></div>
+        <div class="ctools">
+          <div class="seg">Static&nbsp;▾</div>
+          <div class="seg" title="fit to screen">⤢</div>
+        </div>
+
+        <svg class="edges" viewBox="0 0 820 600" preserveAspectRatio="none">
+          <defs><marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6e6c67"/></marker></defs>
+          <path d="M198 178 C 240 172, 285 168, 322 166" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah3)"/>
+          <path d="M470 214 C 520 262, 545 318, 566 372" fill="none" stroke="#6e6c67" stroke-width="1.5" marker-end="url(#ah3)"/>
+        </svg>
+        <div class="elbl" style="left:258px;top:168px;">charge requests</div>
+        <div class="elbl" style="left:534px;top:300px;">verifies customer</div>
+
+        <div class="node comp gw" style="left:44px;top:150px;width:154px;height:58px;transform:rotate(-.4deg);">
+          <div class="nm">web-gateway</div><div class="tchip">Gateway</div>
+        </div>
+        <i class="pin" style="left:192px;top:174px;"></i>
+
+        <div class="node module" style="left:330px;top:98px;width:222px;height:150px;transform:rotate(.25deg);">
+          <div class="nm">payments</div><div class="sub">module · sealed</div>
+          <span class="mchip">6 members</span><span class="badge w">⚠ 1</span>
+        </div>
+        <i class="pin exp" style="left:324px;top:160px;"></i>
+        <span class="pinlbl" style="left:342px;top:159px;">payment-api</span>
+        <i class="pin" style="left:466px;top:242px;"></i>
+
+        <div class="node module" style="left:558px;top:378px;width:200px;height:120px;transform:rotate(-.3deg);">
+          <div class="nm">identity</div><div class="sub">module · sealed</div>
+          <span class="mchip">4 members</span>
+        </div>
+        <i class="pin" style="left:648px;top:372px;"></i>
+
+        <!-- data-loss toast (assertive live region, never steals focus, queued) -->
+        <div class="toast-region" aria-live="assertive" role="alert">
+          <div class="toast">
+            <span class="mk"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#d0a04a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 1.6 13h12.8z"/><path d="M8 6.4v3.2"/><circle cx="8" cy="11.6" r=".5" fill="#d0a04a" stroke="none"/></svg></span>
+            <div class="body">
+              <div class="txt"><span class="loss">Diagram has content the spec doesn't</span> — it will be lost on reload.</div>
+              <div class="row2">
+                <span class="act">Write to spec</span>
+                <span class="act dismiss">Dismiss</span>
+                <span class="qtag">Queued</span>
+              </div>
+            </div>
+            <span class="close">×</span>
+          </div>
+          <div class="queuenote">Held while the reload prompt is open — it re-checks after you choose.<br><b>Mirrored to the sync entry</b>, so it survives the toast timeout.</div>
+        </div>
+
+        <div class="sync drift">⚠ <span class="cnt">3</span> drifts</div>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="path">acme-checkout/main.spec.yaml</span>
+      <span class="dirty"><i></i>Unsaved</span>
+      <span class="right"><span>YAML</span><span>spec 1.4.0</span><span>Ln 18, Col 30</span><span class="amark" title="status accent (graphical only)"></span></span>
+    </div>
+  </div>
+  </div>
+  <p class="cap"><b>Section 3.</b> Toast tokens: surface-elevated fill, border-pin hairline, foreground-body text, accent action, soft shadow. It nudges without stealing focus; <b>Write to spec</b> is the loss-preventing action, <b>Dismiss</b> is reachable, and the <span class="mono">Queued</span> tag plus caption make the precedence honest — it waits behind the modal and is mirrored to the sync entry so a timeout never drops the warning.</p>
+
+</div><!-- .board -->
+</body>
+</html>

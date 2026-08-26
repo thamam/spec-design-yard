@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec-Yard — direction: VS Code kin</title>
+<style>
+/* ============================================================
+   DIRECTION BOARD — "VS Code kin"
+   All hex values used in this document:
+
+   BOARD CHROME
+   #141414  board page background
+   #e8e8e8  board headings
+   #b9b9b9  board body text
+   #7a7a7a  board muted / captions
+   #3a3a3a  browser frame border
+   #2a2a2c  browser chrome bar
+   #1f1f1f  browser url pill
+   #f2555a  traffic light red (dimmed)
+   #f7b62d  traffic light amber (dimmed)
+   #3ec54b  traffic light green (dimmed)
+
+   APP SURFACES (VS Code family)
+   #1e1e1e  editor background
+   #252526  panel / palette / toolbar surface
+   #333333  activity rail, kbd chip background
+   #323233  title bar
+   #1a1a1a  canvas background
+   #2c2c2c  canvas dot-grid dots
+   #3c3c3c  hairline borders (primary)
+   #454545  hairline borders (raised surfaces)
+   #464646  kbd chip border
+   #2a2a2a  current-line highlight
+
+   TEXT
+   #cccccc  primary UI text, dirty-state dot
+   #9d9d9d  secondary text
+   #858585  line numbers
+   #6f6f6f  faint text
+   #b6b6b6  icon strokes
+   #b0b0b0  kbd chip text
+
+   ACCENT (restrained blue)
+   #3794ff  accent, Gateway type, focus border, active rail bar
+   #094771  list selection (palette selected row)
+   #007acc  status bar
+   #4fb3ff  palette match highlight
+   #10263d  exposed-pin fill
+   #7f93a8  pin label text
+
+   DIAGNOSTICS (amber)
+   #cca700  warning dot, squiggle
+   #4a3f1d  badge background
+   #8c7326  badge border
+   #e6c874  badge text
+
+   SYNC (quiet green)
+   #89d185  sync chip text
+   #1f2d24  sync chip background
+   #2e4436  sync chip border
+
+   YAML SYNTAX (Dark+ family)
+   #9cdcfe  keys
+   #ce9178  string scalars
+   #b5cea8  numbers
+   #d4d4d4  punctuation
+
+   COMPONENT TYPE COLORS
+   #3794ff  Gateway (blue)
+   #c586c0  Stage   (violet)
+   #4ec9b0  Store   (teal)
+   #d7ba7d  Brick   (sand)
+
+   CANVAS NODES
+   #8f9296  module stroke (sketch grey)
+   #232427  module fill
+   #e3e3e3  node name text
+   #8a8a8a  connection arrows
+   #a9a9a9  breadcrumb text
+   #aeafad  palette caret
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #141414;
+  color: #b9b9b9;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding: 44px 40px 72px;
+}
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* ---------- board header ---------- */
+.board { max-width: 1480px; margin: 0 auto; }
+.eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #7a7a7a; margin-bottom: 10px; }
+h1 { font-size: 26px; font-weight: 650; color: #e8e8e8; letter-spacing: -.01em; margin-bottom: 10px; }
+.rationale { max-width: 760px; color: #b9b9b9; font-size: 13.5px; margin-bottom: 14px; }
+.legend { display: flex; gap: 18px; align-items: center; font-size: 11px; color: #7a7a7a; margin-bottom: 30px; }
+.legend b { color: #9d9d9d; font-weight: 500; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.cap { font-size: 11px; color: #7a7a7a; margin: 10px 2px 34px; }
+.scrollwrap { overflow-x: auto; }
+
+/* ---------- browser frame ---------- */
+.frame { width: 1400px; border: 1px solid #3a3a3a; border-radius: 8px; overflow: hidden; background: #1e1e1e; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+.chrome { height: 38px; background: #2a2a2c; border-bottom: 1px solid #3a3a3a; display: flex; align-items: center; padding: 0 14px; position: relative; }
+.lights { display: flex; gap: 7px; }
+.lights i { width: 11px; height: 11px; border-radius: 50%; }
+.lights i:nth-child(1) { background: #f2555a; }
+.lights i:nth-child(2) { background: #f7b62d; }
+.lights i:nth-child(3) { background: #3ec54b; }
+.url { position: absolute; left: 50%; transform: translateX(-50%); background: #1f1f1f; border: 1px solid #3a3a3a; border-radius: 4px; padding: 3px 26px; font-size: 11px; color: #8f8f8f; }
+
+/* ---------- app: title bar ---------- */
+.titlebar { height: 36px; background: #323233; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; padding: 0 12px; font-size: 12px; color: #cccccc; position: relative; }
+.brand { font-weight: 600; letter-spacing: .02em; }
+.doc { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 7px; color: #9d9d9d; }
+.doc b { color: #cccccc; font-weight: 500; }
+.dirty { width: 7px; height: 7px; border-radius: 50%; background: #cccccc; }
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: 14px; color: #9d9d9d; }
+.tb-right svg { display: block; }
+
+/* ---------- app: main ---------- */
+.main { display: flex; height: 700px; }
+
+/* activity rail */
+.rail { width: 40px; background: #333333; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; align-items: center; padding-top: 6px; gap: 2px; }
+.rail a { width: 40px; height: 38px; display: flex; align-items: center; justify-content: center; border-left: 2px solid transparent; }
+.rail a.on { border-left-color: #3794ff; }
+.rail a.on svg { stroke: #e7e7e7; }
+.rail svg { stroke: #9a9a9a; }
+
+/* editor pane */
+.editor { width: 540px; background: #1e1e1e; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; }
+.code { flex: 1; overflow: hidden; padding-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; line-height: 19px; }
+.cl { display: flex; white-space: pre; }
+.cl i { width: 44px; flex: none; text-align: right; padding-right: 16px; color: #858585; font-style: normal; user-select: none; }
+.cl span { color: #d4d4d4; }
+.cl.cur { background: #2a2a2a; }
+.k { color: #9cdcfe; } .s { color: #ce9178; } .n { color: #b5cea8; } .p { color: #d4d4d4; }
+.tg { color: #3794ff; } .tt { color: #c586c0; } .ts { color: #4ec9b0; } .tb { color: #d7ba7d; }
+.warn { text-decoration: underline wavy #cca700 1px; text-underline-offset: 3px; }
+
+/* diagnostics strip (collapsed) */
+.diag { height: 28px; flex: none; border-top: 1px solid #3c3c3c; background: #252526; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 11.5px; color: #9d9d9d; }
+.diag .amber { width: 8px; height: 8px; border-radius: 50%; background: #cca700; }
+.diag svg { margin-left: auto; stroke: #6f6f6f; }
+
+/* canvas */
+.canvas { flex: 1; position: relative; background: #1a1a1a; background-image: radial-gradient(circle, #2c2c2c 1px, transparent 1px); background-size: 22px 22px; overflow: hidden; }
+.crumb { position: absolute; top: 10px; left: 12px; font-size: 11.5px; color: #a9a9a9; background: rgba(30,30,30,.85); border: 1px solid #333333; border-radius: 3px; padding: 3px 9px; }
+.ctools { position: absolute; top: 10px; right: 12px; display: flex; align-items: stretch; background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; overflow: hidden; }
+.ctools .seg { display: flex; align-items: center; gap: 6px; padding: 5px 9px; font-size: 11.5px; color: #c8c8c8; border-right: 1px solid #3c3c3c; }
+.ctools .seg:last-child { border-right: none; }
+.ctools svg { stroke: #a8a8a8; display: block; }
+.sync { position: absolute; right: 12px; bottom: 12px; font-size: 11px; color: #89d185; background: #1f2d24; border: 1px solid #2e4436; border-radius: 3px; padding: 3px 9px; }
+
+/* nodes — sketchy but restrained */
+.node { position: absolute; border-style: solid; }
+.module { background: #232427; border: 1.5px solid #8f9296; border-radius: 12px 5px 11px 6px / 6px 11px 5px 13px; padding: 12px 14px; }
+.module .nm { font-size: 12.5px; font-weight: 600; color: #e3e3e3; }
+.module .sub { font-size: 10px; color: #7c7c7c; margin-top: 3px; }
+.chip { position: absolute; right: 9px; bottom: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; color: #b3b3b3; background: #333333; border: 1px solid #454545; border-radius: 3px; padding: 1px 6px; }
+.badge { position: absolute; top: -9px; right: -9px; font-size: 10px; font-weight: 600; color: #e6c874; background: #4a3f1d; border: 1px solid #8c7326; border-radius: 3px; padding: 1px 6px; }
+.comp { padding: 11px 13px; border-width: 1.5px; }
+.comp .nm { font-size: 12px; font-weight: 600; color: #e3e3e3; }
+.comp .ty { font-size: 10px; margin-top: 2px; }
+.c-gw { border-color: #3794ff; background: rgba(55,148,255,.07); border-radius: 10px 5px 12px 6px / 6px 12px 5px 10px; }
+.c-gw .ty { color: #3794ff; }
+.c-br { border-color: #d7ba7d; background: rgba(215,186,125,.06); border-radius: 6px 11px 5px 12px / 12px 5px 11px 6px; }
+.c-br .ty { color: #d7ba7d; }
+
+/* interface pins */
+.pin { position: absolute; width: 11px; height: 11px; background: #1e1e1e; border: 1.5px solid #8f9296; z-index: 3; }
+.pin.exp { border-color: #3794ff; background: #10263d; }
+.pinlbl { position: absolute; font-size: 9.5px; color: #7f93a8; z-index: 3; }
+
+/* edges */
+.edges { position: absolute; top: 0; left: 0; width: 820px; height: 700px; z-index: 2; }
+.elbl { position: absolute; z-index: 3; transform: translate(-50%, -50%); font-size: 10.5px; color: #9d9d9d; background: #1a1a1a; border: 1px solid #333333; border-radius: 3px; padding: 1px 7px; white-space: nowrap; }
+
+/* status bar */
+.statusbar { height: 24px; background: #007acc; color: rgba(255,255,255,.92); display: flex; align-items: center; font-size: 11.5px; padding: 0 12px; gap: 18px; }
+.statusbar .right { margin-left: auto; display: flex; gap: 18px; }
+
+/* ============================================================
+   STATE VARIANT — command palette open
+   ============================================================ */
+.frame.small { width: 940px; }
+.mini-main { display: flex; height: 470px; position: relative; }
+.mini-rail { width: 28px; background: #333333; border-right: 1px solid #3c3c3c; }
+.mini-editor { width: 310px; background: #1e1e1e; border-right: 1px solid #3c3c3c; padding: 16px 20px; }
+.skl { height: 8px; border-radius: 2px; background: #383838; margin-bottom: 11px; }
+.skl.b { background: #3d4a5a; } .skl.o { background: #55483a; }
+.mini-canvas { flex: 1; position: relative; background: #1a1a1a; background-image: radial-gradient(circle, #2c2c2c 1px, transparent 1px); background-size: 22px 22px; }
+.ghost { position: absolute; border: 1.5px solid #4b4b4b; background: #262626; border-radius: 10px 5px 11px 6px / 6px 11px 5px 10px; }
+.mini-status { height: 20px; background: #007acc; }
+.dim { position: absolute; inset: 0; background: rgba(10,10,10,.55); z-index: 5; }
+
+.palette { position: absolute; top: 42px; left: 50%; transform: translateX(-50%); width: 540px; z-index: 10; background: #252526; border: 1px solid #454545; border-radius: 4px; box-shadow: 0 14px 40px rgba(0,0,0,.6); overflow: hidden; }
+.pal-input { margin: 8px; border: 1px solid #3794ff; background: #3c3c3c; border-radius: 2px; padding: 6px 9px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: #cccccc; display: flex; align-items: center; }
+.caret { display: inline-block; width: 2px; height: 15px; background: #aeafad; margin-left: 1px; }
+.pal-row { display: flex; align-items: center; padding: 7px 14px; font-size: 12.5px; color: #cccccc; }
+.pal-row .kb { margin-left: auto; display: flex; gap: 4px; }
+.pal-row.sel { background: #094771; color: #ffffff; }
+.hl { color: #4fb3ff; font-weight: 600; }
+.pal-row.sel .hl { color: #4fb3ff; }
+kbd { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; color: #b0b0b0; background: #333333; border: 1px solid #464646; border-radius: 3px; padding: 1px 6px; }
+.pal-hint { border-top: 1px solid #3c3c3c; padding: 5px 14px; font-size: 10.5px; color: #7c7c7c; }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="eyebrow">spec-yard · design direction board · 03</div>
+  <h1>VS Code kin</h1>
+  <p class="rationale">The professional instrument. Cool charcoal surfaces, hairline borders, and one restrained blue keep the chrome silent so the spec and the diagram carry all the contrast — density is earned through rigorous alignment, not decoration. Every affordance sits where an editor-native architect's hands already expect it: you already know how to use this.</p>
+  <div class="legend">
+    <b>type colors</b>
+    <span><i class="sw" style="background:#3794ff"></i>gateway</span>
+    <span><i class="sw" style="background:#c586c0"></i>stage</span>
+    <span><i class="sw" style="background:#4ec9b0"></i>store</span>
+    <span><i class="sw" style="background:#d7ba7d"></i>brick</span>
+  </div>
+
+  <!-- ================= HERO ================= -->
+  <div class="scrollwrap">
+  <div class="frame">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="url">spec-yard.local/acme-checkout</div>
+    </div>
+
+    <!-- title bar -->
+    <div class="titlebar">
+      <span class="brand">Spec-Yard</span>
+      <span class="doc"><span>acme-checkout&nbsp;/&nbsp;<b>main.spec.yaml</b></span><i class="dirty"></i></span>
+      <span class="tb-right">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#b6b6b6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5 3.5 6.5l3 3"/><path d="M3.5 6.5H10a3.5 3.5 0 0 1 0 7H8"/></svg>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#b6b6b6" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(16,0) scale(-1,1)"><path d="M6.5 3.5 3.5 6.5l3 3"/><path d="M3.5 6.5H10a3.5 3.5 0 0 1 0 7H8"/></g></svg>
+        <span>Help</span>
+      </span>
+    </div>
+
+    <div class="main">
+      <!-- file rail -->
+      <div class="rail">
+        <a class="on" title="files"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke-width="1.3" stroke-linejoin="round"><path d="M4.5 2.5H9L12 5.5v8H4.5z"/><path d="M9 2.5v3h3"/></svg></a>
+        <a title="search"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="3.7"/><path d="M9.8 9.8 13 13"/></svg></a>
+      </div>
+
+      <!-- yaml editor -->
+      <div class="editor">
+        <div class="code">
+          <div class="cl"><i>1</i><span><span class="k">system</span><span class="p">:</span></span></div>
+          <div class="cl"><i>2</i><span>  <span class="k">name</span><span class="p">:</span> <span class="s">acme-checkout</span></span></div>
+          <div class="cl"><i>3</i><span>  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+          <div class="cl"><i>4</i><span></span></div>
+          <div class="cl"><i>5</i><span><span class="k">modules</span><span class="p">:</span></span></div>
+          <div class="cl"><i>6</i><span>  <span class="k">payments</span><span class="p">:</span></span></div>
+          <div class="cl"><i>7</i><span>    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="s">payment-api</span><span class="p">]</span></span></div>
+          <div class="cl"><i>8</i><span>    <span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>9</i><span>      <span class="k">payment-api</span><span class="p">:</span></span></div>
+          <div class="cl"><i>10</i><span>        <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></span></div>
+          <div class="cl"><i>11</i><span>      <span class="k">ledger</span><span class="p">:</span></span></div>
+          <div class="cl"><i>12</i><span>        <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span></span></div>
+          <div class="cl"><i>13</i><span>      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+          <div class="cl"><i>14</i><span>        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></span></div>
+          <div class="cl"><i>15</i><span>        <span class="k">connections</span><span class="p">:</span></span></div>
+          <div class="cl cur"><i>16</i><span>          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="s warn">ledger</span></span></div>
+          <div class="cl"><i>17</i><span>            <span class="k">label</span><span class="p">:</span> <span class="s">writes entries</span></span></div>
+          <div class="cl"><i>18</i><span></span></div>
+          <div class="cl"><i>19</i><span><span class="k">components</span><span class="p">:</span></span></div>
+          <div class="cl"><i>20</i><span>  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+          <div class="cl"><i>21</i><span>    <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></span></div>
+          <div class="cl"><i>22</i><span>    <span class="k">connections</span><span class="p">:</span></span></div>
+          <div class="cl"><i>23</i><span>      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="s">payments.payment-api</span></span></div>
+          <div class="cl"><i>24</i><span>        <span class="k">label</span><span class="p">:</span> <span class="s">charge requests</span></span></div>
+          <div class="cl"><i>25</i><span>  <span class="k">audit-log</span><span class="p">:</span></span></div>
+          <div class="cl"><i>26</i><span>    <span class="k">type</span><span class="p">:</span> <span class="tb">Brick</span></span></div>
+        </div>
+        <!-- collapsed diagnostics strip -->
+        <div class="diag">
+          <i class="amber"></i>
+          <span>3 issues · 1 quick-fixable</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+        </div>
+      </div>
+
+      <!-- canvas -->
+      <div class="canvas">
+        <div class="crumb">System</div>
+        <div class="ctools">
+          <div class="seg">Static&nbsp;▾</div>
+          <div class="seg" title="fit to screen"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/></svg></div>
+          <div class="seg" title="fullscreen"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9.5 6.5M2.5 13.5l4-4"/></svg></div>
+        </div>
+
+        <!-- edges (pin-to-pin) -->
+        <svg class="edges" viewBox="0 0 820 700" preserveAspectRatio="none">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#8a8a8a"/>
+            </marker>
+          </defs>
+          <path d="M209 181 C 244 175, 283 170, 314 168.5" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#ah)"/>
+          <path d="M432 258 C 455 306, 508 324, 562 347 S 632 380, 648 390" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#ah)"/>
+          <path d="M549 460 C 462 480, 356 486, 258 490" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#ah)"/>
+        </svg>
+        <div class="elbl" style="left:260px; top:172px;">charge requests</div>
+        <div class="elbl" style="left:540px; top:331px;">verifies customer</div>
+        <div class="elbl" style="left:402px; top:483px;">auth events</div>
+
+        <!-- loose component: web-gateway -->
+        <div class="node comp c-gw" style="left:52px; top:150px; width:156px; height:64px; transform:rotate(-0.5deg);">
+          <div class="nm">web-gateway</div>
+          <div class="ty">gateway</div>
+        </div>
+        <i class="pin" style="left:202px; top:176px;"></i>
+
+        <!-- module: payments -->
+        <div class="node module" style="left:322px; top:104px; width:230px; height:148px; transform:rotate(0.25deg);">
+          <div class="nm">payments</div>
+          <div class="sub">module · sealed</div>
+          <span class="chip">6</span>
+          <span class="badge">2 ⚠</span>
+        </div>
+        <i class="pin exp" style="left:316px; top:162px;"></i>
+        <span class="pinlbl" style="left:334px; top:162px;">payment-api</span>
+        <i class="pin" style="left:426px; top:246px;"></i>
+        <i class="pin" style="left:546px; top:162px;"></i>
+
+        <!-- module: identity -->
+        <div class="node module" style="left:556px; top:396px; width:206px; height:124px; transform:rotate(-0.3deg);">
+          <div class="nm">identity</div>
+          <div class="sub">module · sealed</div>
+          <span class="chip">4</span>
+        </div>
+        <i class="pin" style="left:650px; top:390px;"></i>
+        <i class="pin" style="left:550px; top:452px;"></i>
+
+        <!-- loose component: audit-log -->
+        <div class="node comp c-br" style="left:98px; top:462px; width:152px; height:58px; transform:rotate(0.4deg);">
+          <div class="nm">audit-log</div>
+          <div class="ty">brick</div>
+        </div>
+        <i class="pin" style="left:244px; top:485px;"></i>
+
+        <div class="sync">✓ in sync</div>
+      </div>
+    </div>
+
+    <!-- status bar -->
+    <div class="statusbar">
+      <span>acme-checkout</span>
+      <span>yaml</span>
+      <span class="right">
+        <span>ln 16, col 27</span>
+        <span>spaces 2</span>
+        <span>utf-8</span>
+        <span>spec 1.4.0</span>
+      </span>
+    </div>
+  </div>
+  </div>
+  <div class="cap">hero — workspace: yaml editor left, module canvas right, static view. this direction keeps chrome at hairline weight so content owns the screen.</div>
+
+  <!-- ================= STATE VARIANT ================= -->
+  <div class="scrollwrap">
+  <div class="frame small">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="url">spec-yard.local/acme-checkout</div>
+    </div>
+    <div class="titlebar" style="height:30px;">
+      <span class="brand" style="font-size:11px;">Spec-Yard</span>
+      <span class="doc" style="font-size:11px;"><span>acme-checkout&nbsp;/&nbsp;<b>main.spec.yaml</b></span><i class="dirty" style="width:6px;height:6px;"></i></span>
+    </div>
+
+    <div class="mini-main">
+      <div class="mini-rail"></div>
+      <div class="mini-editor">
+        <div class="skl" style="width:34%"></div>
+        <div class="skl b" style="width:62%; margin-left:8%"></div>
+        <div class="skl o" style="width:48%; margin-left:8%"></div>
+        <div class="skl" style="width:28%"></div>
+        <div class="skl b" style="width:56%; margin-left:8%"></div>
+        <div class="skl" style="width:70%; margin-left:16%"></div>
+        <div class="skl b" style="width:44%; margin-left:24%"></div>
+        <div class="skl o" style="width:58%; margin-left:24%"></div>
+        <div class="skl" style="width:36%; margin-left:16%"></div>
+        <div class="skl b" style="width:52%; margin-left:24%"></div>
+        <div class="skl" style="width:30%"></div>
+        <div class="skl o" style="width:64%; margin-left:8%"></div>
+        <div class="skl b" style="width:42%; margin-left:8%"></div>
+      </div>
+      <div class="mini-canvas">
+        <div class="ghost" style="left:70px; top:80px; width:150px; height:92px;"></div>
+        <div class="ghost" style="left:320px; top:200px; width:170px; height:100px;"></div>
+        <div class="ghost" style="left:120px; top:300px; width:110px; height:48px;"></div>
+      </div>
+
+      <!-- dim + palette -->
+      <div class="dim"></div>
+      <div class="palette">
+        <div class="pal-input mono">descend into…<span class="caret"></span></div>
+        <div class="pal-row sel"><span><span class="hl">Descend into</span> payments</span></div>
+        <div class="pal-row"><span>Fit diagram to screen</span><span class="kb"><kbd>⇧1</kbd></span></div>
+        <div class="pal-row"><span>Toggle details drawer</span><span class="kb"><kbd>⌘J</kbd></span></div>
+        <div class="pal-row"><span>Run simulation on current view</span></div>
+        <div class="pal-row"><span>Insert template: Queue worker</span></div>
+        <div class="pal-hint">↑↓ navigate · ↵ run · esc dismiss</div>
+      </div>
+    </div>
+    <div class="mini-status"></div>
+  </div>
+  </div>
+  <div class="cap">state variant — command palette open over the dimmed workspace: type-ahead command surface with keybindings, selection in the direction's single blue.</div>
+
+</div>
+</body>
+</html>

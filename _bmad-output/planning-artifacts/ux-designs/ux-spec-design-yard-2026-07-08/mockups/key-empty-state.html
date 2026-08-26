@@ -1,0 +1,629 @@
+<style>
+/* ============================================================
+   SPEC-YARD — KEY SCREEN: THE PURPOSEFUL EMPTY STATE (FR15 / FR13)
+   Self-contained, offline, no JS, system fonts. Dark-only by design.
+
+   SPINE SECTIONS GOVERNING THIS SCREEN
+   ------------------------------------------------------------
+   DESIGN.md
+     · Colors / Typography / Layout & Spacing / Shapes  (token source — exact hexes)
+     · Elevation & Depth (docked flat; soft shadow only on floating layers —
+       here the library palette flyout, the first-run tip, the greeting card)
+     · Components: library-palette · button-primary · component-node · type-chip ·
+       diagnostics-strip · sync-health-chip · view-switcher · breadcrumb ·
+       status-bar · file-rail · editor
+   EXPERIENCE.md
+     · State Patterns — "Empty project" row: never a blank editor; greet with a
+       bundled sample offer + guided "create your first component" + a prominent
+       library palette (the template picker IS the palette).
+     · State Patterns — "Onboarding" row + FR13 first-run tip: dismissible,
+       dismissed state saved in config, re-enable from Help.
+     · Component Patterns — Library palette (dual entry; auto-opened & prominent
+       in the empty state, returns to closed-by-default once the project has content).
+     · Information Architecture — at-rest lean-default chrome (editor · canvas ·
+       collapsed diagnostics strip · status bar · breadcrumb · sync-health chip ·
+       collapsed file rail). NO accreted top header.
+     · Voice and Tone — plain, calm, no exclamation marks, no jargon; the sample
+       offer sits in the "See a worked example" register; the demo is read-only
+       and OUTSIDE the user's folder so it never pollutes user files.
+   Content: brand-new project folder "checkout-redesign" — TRULY EMPTY, seeded only
+   with a minimal starter main.spec.yaml skeleton. SPINES win on conflict.
+   NOTE (from key-lean-default): SVG presentation attributes need LITERAL hexes —
+   CSS var() does not resolve inside stroke/fill.
+   ============================================================ */
+
+  :root{
+    --background:#191919; --surface:#202020; --surface-raised:#232322;
+    --surface-elevated:#2a2a29; --surface-strong:#2f2f2f;
+    --surface-canvas:#1c1b1a; --surface-canvas-dots:#262624;
+    --border:#2e2d2b; --border-node:#6e6d68; --border-pin:#454440; --connection:#6e6c67;
+    --foreground:#e6e4e0; --foreground-body:#c8c6c1; --foreground-muted:#9b9a97; --foreground-dim:#737270;
+    --accent:#3794ff; --accent-hover:#4fb3ff; --accent-dim:#122a40; --accent-strong:#007acc;
+    --success:#8fae8b; --success-dim:#1f2d24; --warning:#d0a04a; --warning-dim:#3a2f1b;
+    --danger:#ef6d70; --danger-dim:#3a1f21; --info:#7f9fbf; --info-dim:#1e2b38;
+    --type-gateway:#2dd4bf; --type-stage:#a78bfa; --type-store:#4ade80; --type-brick:#f472b6;
+    --type-gateway-dim:#16302c; --type-stage-dim:#241f38; --type-store-dim:#16301f; --type-brick-dim:#35202c;
+    --syntax-key:#9db4cd; --syntax-value:#c8c6c1; --syntax-number:#c2a878; --syntax-punctuation:#83827b;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px; --r-full:9999px;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{
+    background:#141312; color:var(--foreground-body);
+    font-family:var(--font-ui); font-size:14px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:48px 40px 96px;
+  }
+  .page{ max-width:1520px; margin:0 auto; }
+  .eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--foreground-dim); margin:0 0 10px 3px;
+  }
+  .sec-title{ font-size:15px; font-weight:600; color:var(--foreground); margin:0 0 4px 3px; letter-spacing:0.01em; }
+  .sec-note{ font-size:13px; color:var(--foreground-muted); margin:0 0 18px 3px; max-width:900px; }
+  .scrollwrap{ overflow-x:auto; padding-bottom:6px; }
+  section.block{ margin-bottom:64px; }
+
+  /* ---------- browser frame ---------- */
+  .browser{
+    width:1440px; border-radius:12px; overflow:hidden;
+    background:var(--surface);
+    box-shadow:0 28px 70px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+    position:relative;
+  }
+  .chrome{
+    height:40px; display:flex; align-items:center; gap:12px; padding:0 16px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+  }
+  .lights{ display:flex; gap:8px; }
+  .lights span{ width:11px; height:11px; border-radius:var(--r-full); }
+  .l-r{ background:#b06a62; } .l-y{ background:#bfa15e; } .l-g{ background:#7f9d78; }
+  .urlbar{
+    flex:0 1 460px; margin:0 auto; height:24px; border-radius:var(--r-md);
+    background:var(--background); color:var(--foreground-dim);
+    font-family:var(--font-mono); font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chrome-spacer{ width:56px; }
+
+  /* ---------- app frame (NO top header — lean default) ---------- */
+  .app{ background:var(--background); display:flex; flex-direction:column; }
+  .body{ display:flex; height:720px; }
+
+  /* collapsed file rail — a thin toggle, not the list */
+  .rail{
+    width:44px; flex:0 0 44px; background:var(--surface);
+    border-right:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; gap:6px; padding-top:12px;
+  }
+  .rail-btn{
+    width:32px; height:32px; border-radius:var(--r-md);
+    display:flex; align-items:center; justify-content:center; color:var(--foreground-muted);
+  }
+  .rail-btn.active{ background:var(--accent-dim); color:var(--accent); }
+  .rail-btn svg{ display:block; }
+
+  /* ---------- editor pane ---------- */
+  .editor-pane{
+    width:540px; flex:0 0 540px; display:flex; flex-direction:column;
+    background:var(--background); border-right:1px solid var(--border);
+  }
+  .editor{ flex:1; overflow:hidden; padding:14px 0 8px; }
+  .cl{ display:flex; height:22px; line-height:22px; }
+  .cl.cur{ background:var(--surface); }
+  .ln{
+    width:52px; flex:0 0 52px; text-align:right; padding-right:18px;
+    color:var(--foreground-dim); font-family:var(--font-mono); font-size:12px; user-select:none;
+  }
+  .code{ white-space:pre; font-family:var(--font-mono); font-size:13px; color:var(--foreground-body); }
+  .k{ color:var(--syntax-key); }
+  .v{ color:var(--syntax-value); }
+  .n{ color:var(--syntax-number); }
+  .p{ color:var(--syntax-punctuation); }
+  .c{ color:var(--foreground-dim); font-style:italic; }         /* YAML comment — supplementary */
+  .caret{ display:inline-block; width:1.5px; height:14px; background:var(--accent); vertical-align:-2px; }
+
+  /* collapsed diagnostics strip */
+  .diagstrip{
+    height:36px; flex:0 0 36px; background:var(--surface);
+    border-top:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; padding:0 16px;
+    font-size:12px; color:var(--foreground-muted);
+  }
+  .diag-dot{ width:8px; height:8px; border-radius:var(--r-full); background:var(--success); flex:0 0 8px; }
+  .diagstrip .chev{ margin-left:auto; color:var(--foreground-dim); display:flex; }
+
+  /* ---------- canvas ---------- */
+  .canvas{
+    flex:1; position:relative; overflow:hidden;
+    background-color:var(--surface-canvas);
+    background-image:radial-gradient(circle, var(--surface-canvas-dots) 1px, transparent 1.3px);
+    background-size:24px 24px;
+  }
+  .breadcrumb{
+    position:absolute; top:14px; left:16px; z-index:4;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(28,27,26,0.86); border:1px solid var(--border);
+    border-radius:var(--r-md); padding:5px 11px;
+    font-size:13px; color:var(--foreground);
+  }
+  .breadcrumb svg{ display:block; color:var(--foreground-muted); }
+  .canvas-toolbar{
+    position:absolute; top:14px; right:16px; z-index:7;
+    display:flex; align-items:center; gap:4px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r-lg); padding:4px;
+  }
+  .view-switch{
+    display:flex; align-items:center; gap:9px;
+    background:var(--surface-elevated); border-radius:var(--r-md);
+    padding:6px 10px; font-size:13px; font-weight:500; color:var(--foreground-body);
+  }
+  .view-switch .mark{ width:6px; height:6px; border-radius:var(--r-full); background:var(--accent); }
+  .view-switch .car{ color:var(--foreground-dim); font-size:10px; }
+  .tool-ic{
+    width:30px; height:30px; border-radius:var(--r-md);
+    display:flex; align-items:center; justify-content:center; color:var(--foreground-muted);
+  }
+  .tool-ic svg{ display:block; }
+
+  /* nodes — restrained sketch: sub-degree tilt, low-roughness border */
+  .node{ position:absolute; z-index:3; background:var(--surface-raised); box-shadow:none; }
+  .compo{
+    border:1.5px solid var(--border-node); border-radius:9px 11px 8px 10px / 10px 8px 11px 9px;
+    padding:12px 14px; display:flex; flex-direction:column; gap:8px;
+  }
+  .compo.gateway{ border-color:var(--type-gateway); }
+  .compo.stage{ border-color:var(--type-stage); }
+  .compo.store{ border-color:var(--type-store); }
+  .compo.brick{ border-color:var(--type-brick); }
+  .compo-name{ font-family:var(--font-mono); font-size:13px; color:var(--foreground); }
+  .type-chip{
+    align-self:flex-start; font-family:var(--font-mono); font-size:12px;
+    padding:2px 10px; border-radius:var(--r-full);
+  }
+  .type-chip.gateway{ background:var(--type-gateway-dim); color:var(--type-gateway); }
+  .type-chip.stage{ background:var(--type-stage-dim); color:var(--type-stage); }
+  .type-chip.store{ background:var(--type-store-dim); color:var(--type-store); }
+  .type-chip.brick{ background:var(--type-brick-dim); color:var(--type-brick); }
+  .pin{
+    position:absolute; width:10px; height:10px; border-radius:var(--r-full);
+    background:var(--surface-elevated); border:1.5px solid var(--border-pin); z-index:4;
+  }
+
+  /* ---------- primary button (button-primary token) ---------- */
+  .btn-primary{
+    background:var(--accent); color:#0b1a2e; border:none;
+    border-radius:var(--r-md); height:32px; padding:0 15px;
+    font-family:var(--font-ui); font-size:13px; font-weight:600;
+    display:inline-flex; align-items:center; gap:8px; cursor:default;
+  }
+  .btn-primary svg{ display:block; }
+
+  /* ---------- empty-state greeting card (guided create-first) ---------- */
+  .greet{
+    position:absolute; z-index:5; top:214px; left:120px; width:356px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
+    box-shadow:0 20px 52px rgba(0,0,0,0.42);
+    padding:22px 22px 20px;
+  }
+  .greet-eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--foreground-dim); margin-bottom:9px;
+  }
+  .greet-title{ font-size:15px; font-weight:600; color:var(--foreground); margin-bottom:8px; letter-spacing:0.01em; }
+  .greet-body{ font-size:13px; line-height:1.5; color:var(--foreground-body); margin-bottom:16px; }
+  .greet-actions{ display:flex; align-items:center; gap:12px; }
+  .greet-hint{ font-size:12px; color:var(--foreground-muted); }
+  .greet-divider{ height:1px; background:var(--border); margin:18px 0 14px; }
+  /* sample offer — "See a worked example" register, unobtrusive */
+  .sample{ display:flex; align-items:flex-start; gap:10px; }
+  .sample-ic{ color:var(--foreground-muted); display:flex; flex:0 0 auto; margin-top:1px; }
+  .sample-ic svg{ display:block; }
+  .sample-text{ font-size:13px; line-height:1.45; }
+  .sample-link{ color:var(--accent); font-weight:500; }
+  .sample-note{ color:var(--foreground-muted); }
+
+  /* ---------- first-run tip (FR13) — popover register, dismissible ---------- */
+  .tip{
+    position:absolute; z-index:6; top:18px; left:22px; width:308px;
+    background:var(--surface-elevated); border:1px solid var(--border-pin);
+    border-radius:var(--r-lg); box-shadow:0 16px 40px rgba(0,0,0,0.45);
+    padding:13px 14px 12px;
+  }
+  .tip::before{
+    content:''; position:absolute; left:-7px; top:22px; width:0; height:0;
+    border-top:7px solid transparent; border-bottom:7px solid transparent;
+    border-right:7px solid var(--border-pin);
+  }
+  .tip::after{
+    content:''; position:absolute; left:-6px; top:22px; width:0; height:0;
+    border-top:7px solid transparent; border-bottom:7px solid transparent;
+    border-right:7px solid var(--surface-elevated);
+  }
+  .tip-top{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .tip-ic{ display:flex; color:var(--foreground-muted); flex:0 0 auto; }
+  .tip-ic svg{ display:block; }
+  .tip-title{ font-size:13px; font-weight:600; color:var(--foreground); flex:1; }
+  .tip-x{
+    width:20px; height:20px; border-radius:var(--r-sm); border:none; background:transparent;
+    color:var(--foreground-muted); display:flex; align-items:center; justify-content:center; cursor:default;
+  }
+  .tip-x svg{ display:block; }
+  .tip-body{ font-size:12px; line-height:1.5; color:var(--foreground-body); margin-bottom:9px; }
+  .tip-note{ font-size:12px; color:var(--foreground-muted); }
+
+  /* ---------- guided next-nudge (section 2) — quiet callout, no dismiss chrome ---------- */
+  .nudge{
+    position:absolute; z-index:5; width:290px;
+    background:var(--surface-elevated); border:1px solid var(--border-pin);
+    border-radius:var(--r-lg); box-shadow:0 14px 36px rgba(0,0,0,0.4);
+    padding:12px 14px;
+  }
+  .nudge::before{
+    content:''; position:absolute; top:-7px; left:34px; width:0; height:0;
+    border-left:7px solid transparent; border-right:7px solid transparent;
+    border-bottom:7px solid var(--border-pin);
+  }
+  .nudge::after{
+    content:''; position:absolute; top:-6px; left:34px; width:0; height:0;
+    border-left:7px solid transparent; border-right:7px solid transparent;
+    border-bottom:7px solid var(--surface-elevated);
+  }
+  .nudge-top{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+  .nudge-ic{ display:flex; color:var(--foreground-muted); }
+  .nudge-ic svg{ display:block; }
+  .nudge-title{ font-size:13px; font-weight:600; color:var(--foreground); }
+  .nudge-body{ font-size:12px; line-height:1.5; color:var(--foreground-body); }
+
+  /* ---------- library palette flyout (OPEN, prominent in empty state) ---------- */
+  .palette{
+    position:absolute; z-index:6; top:12px; right:12px; bottom:12px; width:254px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
+    box-shadow:0 20px 52px rgba(0,0,0,0.5);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .palette-head{ padding:14px 16px 11px; border-bottom:1px solid var(--border); }
+  .palette-title{ font-size:14px; font-weight:600; color:var(--foreground); }
+  .palette-sub{ font-size:12px; line-height:1.4; color:var(--foreground-muted); margin-top:4px; }
+  .palette-body{ padding:12px; overflow-y:auto; flex:1; }
+  .palette-group{
+    font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--foreground-dim); margin:4px 4px 8px;
+  }
+  .palette-group.spaced{ margin-top:14px; }
+  .tmpl{
+    display:flex; align-items:center; gap:10px;
+    background:var(--surface-raised); border:1px solid var(--border);
+    border-radius:var(--r-md); padding:9px 11px; margin-bottom:8px;
+  }
+  .tmpl .grip{ display:flex; flex:0 0 auto; }
+  .tmpl .grip svg{ display:block; }
+  .tmpl .swatch{ width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+  .swatch.gateway{ background:var(--type-gateway); }
+  .swatch.stage{ background:var(--type-stage); }
+  .swatch.store{ background:var(--type-store); }
+  .swatch.brick{ background:var(--type-brick); }
+  .tmpl .mod-ic{ display:flex; flex:0 0 auto; }
+  .tmpl .mod-ic svg{ display:block; }
+  .tmpl .t-name{ font-family:var(--font-mono); font-size:13px; color:var(--foreground); flex:1; }
+  .tmpl .t-meta{ font-family:var(--font-mono); font-size:12px; color:var(--foreground-muted); white-space:nowrap; }
+
+  /* ---------- library palette closed handle (section 2 — returns to closed) ---------- */
+  .palette-handle{
+    position:absolute; z-index:6; top:50%; right:0; transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--border); border-right:none;
+    border-radius:8px 0 0 8px; padding:14px 9px;
+    color:var(--foreground-muted);
+  }
+  .palette-handle svg{ display:block; }
+  .palette-handle .ph-label{
+    writing-mode:vertical-rl; text-orientation:mixed; transform:rotate(180deg);
+    font-size:12px; font-weight:500; letter-spacing:0.03em; color:var(--foreground-body);
+  }
+
+  /* sync-health chip — silent when honest */
+  .sync-chip{
+    position:absolute; z-index:5;
+    display:flex; align-items:center; gap:7px;
+    background:var(--success-dim); border-radius:var(--r-full);
+    padding:5px 12px; font-size:12px; color:var(--success);
+  }
+  .sync-chip.bl{ left:16px; bottom:14px; }
+  .sync-chip.br{ right:16px; bottom:14px; }
+  .sync-chip svg{ display:block; }
+
+  /* ---------- status bar ---------- */
+  .statusbar{
+    height:30px; flex:0 0 30px; background:var(--surface);
+    border-top:1px solid var(--border);
+    display:flex; align-items:center;
+    font-size:12px; color:var(--foreground-muted);
+  }
+  .sb-accent{ width:4px; height:100%; background:var(--accent-strong); flex:0 0 4px; }
+  .sb-path{ font-family:var(--font-mono); font-size:12px; color:var(--foreground-muted); padding-left:14px; }
+  .sb-right{ margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:16px; }
+  .sb-saved{ color:var(--foreground-muted); }
+  .dirty-dot{ width:8px; height:8px; border-radius:var(--r-full); background:var(--accent); }
+  .sb-unsaved{ color:var(--foreground-body); }
+</style>
+
+<div class="page">
+
+  <!-- ================= SECTION 1 — brand-new project, first open ================= -->
+  <section class="block">
+    <div class="eyebrow">Spec-Yard · key screen · FR15 / FR13</div>
+    <h1 class="sec-title">Brand-new project, first open — the purposeful empty state</h1>
+    <p class="sec-note">A fresh, empty folder. Never a blank editor: the editor is seeded with a minimal starter <code style="font-family:var(--font-mono)">main.spec.yaml</code> skeleton, the canvas offers a guided "create your first component," the library palette is auto-opened as the visible authoring path, and an unobtrusive offer leads to a read-only worked example that leaves the folder untouched. A dismissible first-run tip explains the core loop.</p>
+
+    <div class="scrollwrap">
+      <div class="browser">
+        <div class="chrome">
+          <div class="lights"><span class="l-r"></span><span class="l-y"></span><span class="l-g"></span></div>
+          <div class="urlbar">spec-yard · checkout-redesign</div>
+          <div class="chrome-spacer"></div>
+        </div>
+
+        <div class="app">
+          <div class="body">
+
+            <!-- collapsed file rail (thin toggle) -->
+            <div class="rail">
+              <span class="rail-btn active" title="Files">
+                <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 2.5H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6z"/><path d="M10 2.5V6h3.5"/>
+                </svg>
+              </span>
+            </div>
+
+            <!-- editor pane — seeded starter skeleton -->
+            <div class="editor-pane">
+              <div class="editor">
+                <div class="cl"><span class="ln">1</span><span class="code"><span class="k">system</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">2</span><span class="code">  <span class="k">name</span><span class="p">:</span> <span class="v">checkout-redesign</span></span></div>
+                <div class="cl"><span class="ln">3</span><span class="code">  <span class="k">version</span><span class="p">:</span> <span class="n">0.1.0</span></span></div>
+                <div class="cl"><span class="ln">4</span><span class="code"> </span></div>
+                <div class="cl"><span class="ln">5</span><span class="code"><span class="c"># This project has no components yet.</span></span></div>
+                <div class="cl"><span class="ln">6</span><span class="code"><span class="c"># Add one below, or drag a template from</span></span></div>
+                <div class="cl"><span class="ln">7</span><span class="code"><span class="c"># the library on the right.</span></span></div>
+                <div class="cl"><span class="ln">8</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+                <div class="cl cur"><span class="ln">9</span><span class="code">  <span class="caret"></span></span></div>
+              </div>
+
+              <!-- collapsed diagnostics strip — nothing to lint yet -->
+              <div class="diagstrip">
+                <span class="diag-dot"></span>
+                <span>All checks passing</span>
+                <span class="chev">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg>
+                </span>
+              </div>
+            </div>
+
+            <!-- canvas — empty, guided -->
+            <div class="canvas">
+
+              <div class="breadcrumb">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="1.5" width="4" height="4" rx="1"/><rect x="7.5" y="1.5" width="4" height="4" rx="1"/><rect x="1.5" y="7.5" width="4" height="4" rx="1"/><rect x="7.5" y="7.5" width="4" height="4" rx="1"/></svg>
+                System
+              </div>
+
+              <div class="canvas-toolbar">
+                <span class="view-switch"><span class="mark"></span>Static <span class="car">▾</span></span>
+                <span class="tool-ic" title="Fit diagram to screen">
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3"/><path d="M10 2h3v3"/><path d="M13 10v3h-3"/><path d="M5 13H2v-3"/></svg>
+                </span>
+              </div>
+
+              <!-- first-run tip (FR13) — anchored to the core loop, dismissible -->
+              <div class="tip">
+                <div class="tip-top">
+                  <span class="tip-ic">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.5h4"/><path d="M6.5 11.2a4 4 0 1 1 3 0"/><path d="M6.5 11.2h3"/></svg>
+                  </span>
+                  <span class="tip-title">Editor and canvas stay in step</span>
+                  <button class="tip-x" title="Dismiss">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+                  </button>
+                </div>
+                <p class="tip-body">Type YAML on the left; the diagram on the right redraws to match. Change either side and the other follows.</p>
+                <span class="tip-note">Re-enable tips from Help.</span>
+              </div>
+
+              <!-- guided greeting card — "create your first component" + sample offer -->
+              <div class="greet">
+                <div class="greet-eyebrow">Empty project</div>
+                <div class="greet-title">Create your first component</div>
+                <p class="greet-body">Nothing here yet. Add one component to begin, or drag a template from the library on the right.</p>
+                <div class="greet-actions">
+                  <button class="btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#0b1a2e" stroke-width="1.7" stroke-linecap="round"><path d="M7 2.5v9M2.5 7h9"/></svg>
+                    Create your first component
+                  </button>
+                </div>
+                <div class="greet-divider"></div>
+                <div class="sample">
+                  <span class="sample-ic">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5A1 1 0 0 1 3.5 2.5h3l1.5 1.5h4.5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1z"/></svg>
+                  </span>
+                  <p class="sample-text"><span class="sample-link">See a worked example</span><br><span class="sample-note">Opens a read-only demo project. Your folder stays empty.</span></p>
+                </div>
+              </div>
+
+              <!-- library palette flyout — OPEN and prominent in the empty state -->
+              <div class="palette">
+                <div class="palette-head">
+                  <div class="palette-title">Library</div>
+                  <div class="palette-sub">Drag a template onto the canvas, or use Insert template in the editor.</div>
+                </div>
+                <div class="palette-body">
+                  <div class="palette-group">Components</div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="swatch gateway"></span>
+                    <span class="t-name">Gateway</span>
+                    <span class="t-meta">external ingress</span>
+                  </div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="swatch stage"></span>
+                    <span class="t-name">Stage</span>
+                    <span class="t-meta">processing</span>
+                  </div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="swatch store"></span>
+                    <span class="t-name">Store</span>
+                    <span class="t-meta">persistence</span>
+                  </div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="swatch brick"></span>
+                    <span class="t-name">Brick</span>
+                    <span class="t-meta">utility</span>
+                  </div>
+
+                  <div class="palette-group spaced">Modules</div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="mod-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#9b9a97" stroke-width="1.3"><rect x="1.5" y="1.5" width="11" height="11" rx="2"/><path d="M1.5 5.5h11"/></svg></span>
+                    <span class="t-name">Auth module</span>
+                    <span class="t-meta">3 components</span>
+                  </div>
+                  <div class="tmpl">
+                    <span class="grip"><svg width="8" height="14" viewBox="0 0 8 14" fill="#737270"><circle cx="2" cy="2" r="1.15"/><circle cx="6" cy="2" r="1.15"/><circle cx="2" cy="7" r="1.15"/><circle cx="6" cy="7" r="1.15"/><circle cx="2" cy="12" r="1.15"/><circle cx="6" cy="12" r="1.15"/></svg></span>
+                    <span class="mod-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#9b9a97" stroke-width="1.3"><rect x="1.5" y="1.5" width="11" height="11" rx="2"/><path d="M1.5 5.5h11"/></svg></span>
+                    <span class="t-name">Queue module</span>
+                    <span class="t-meta">2 components</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- sync-health chip (silent when honest); bottom-left to clear the open palette -->
+              <div class="sync-chip bl">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 5 9.5l5.5-6"/></svg>
+                In sync
+              </div>
+            </div>
+          </div>
+
+          <!-- status bar: true folder path; freshly seeded file is clean (no dirty dot) -->
+          <div class="statusbar">
+            <span class="sb-accent"></span>
+            <span class="sb-path">~/projects/checkout-redesign/main.spec.yaml</span>
+            <span class="sb-right">
+              <span class="sb-saved">Saved</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SECTION 2 — first component created, seconds later ================= -->
+  <section class="block">
+    <div class="eyebrow">Alternate state · onboarding continues</div>
+    <h1 class="sec-title">First component created — the guided flow's next nudge</h1>
+    <p class="sec-note">The same project, seconds later. One Gateway now exists in both the YAML and the canvas. The greeting is gone; a quiet nudge points to the next step. The first-run tip has been dismissed (it stays dismissed, re-enabled from Help), and the library palette has returned to closed-by-default now that the project has content — a labeled handle on the canvas edge reopens it.</p>
+
+    <div class="scrollwrap">
+      <div class="browser">
+        <div class="chrome">
+          <div class="lights"><span class="l-r"></span><span class="l-y"></span><span class="l-g"></span></div>
+          <div class="urlbar">spec-yard · checkout-redesign</div>
+          <div class="chrome-spacer"></div>
+        </div>
+
+        <div class="app">
+          <div class="body">
+
+            <div class="rail">
+              <span class="rail-btn active" title="Files">
+                <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6z"/><path d="M10 2.5V6h3.5"/></svg>
+              </span>
+            </div>
+
+            <!-- editor pane — one component authored -->
+            <div class="editor-pane">
+              <div class="editor">
+                <div class="cl"><span class="ln">1</span><span class="code"><span class="k">system</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">2</span><span class="code">  <span class="k">name</span><span class="p">:</span> <span class="v">checkout-redesign</span></span></div>
+                <div class="cl"><span class="ln">3</span><span class="code">  <span class="k">version</span><span class="p">:</span> <span class="n">0.1.0</span></span></div>
+                <div class="cl"><span class="ln">4</span><span class="code"> </span></div>
+                <div class="cl"><span class="ln">5</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">6</span><span class="code">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+                <div class="cl cur"><span class="ln">7</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Gateway</span><span class="caret"></span></span></div>
+                <div class="cl"><span class="ln">8</span><span class="code">  </span></div>
+              </div>
+
+              <div class="diagstrip">
+                <span class="diag-dot"></span>
+                <span>All checks passing</span>
+                <span class="chev">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg>
+                </span>
+              </div>
+            </div>
+
+            <!-- canvas — one Gateway node + guided nudge -->
+            <div class="canvas">
+              <div class="breadcrumb">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="1.5" width="4" height="4" rx="1"/><rect x="7.5" y="1.5" width="4" height="4" rx="1"/><rect x="1.5" y="7.5" width="4" height="4" rx="1"/><rect x="7.5" y="7.5" width="4" height="4" rx="1"/></svg>
+                System
+              </div>
+
+              <div class="canvas-toolbar">
+                <span class="view-switch"><span class="mark"></span>Static <span class="car">▾</span></span>
+                <span class="tool-ic" title="Fit diagram to screen">
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3"/><path d="M10 2h3v3"/><path d="M13 10v3h-3"/><path d="M5 13H2v-3"/></svg>
+                </span>
+              </div>
+
+              <!-- the first created component: web-gateway (Gateway) -->
+              <div class="node compo gateway" style="left:200px; top:210px; width:200px; height:84px; transform:rotate(0.35deg);">
+                <span class="compo-name">web-gateway</span>
+                <span class="type-chip gateway">Gateway</span>
+                <span class="pin" style="right:-6px; top:32px;"></span>
+              </div>
+
+              <!-- guided next-nudge — suggest a second component / connection -->
+              <div class="nudge" style="left:200px; top:320px;">
+                <div class="nudge-top">
+                  <span class="nudge-ic">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#9b9a97" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2.2 2.2"/></svg>
+                  </span>
+                  <span class="nudge-title">One component so far</span>
+                </div>
+                <p class="nudge-body">Add a second component, then draw a connection between them from web-gateway's pin.</p>
+              </div>
+
+              <!-- library palette CLOSED — returned to closed-by-default; handle reopens it -->
+              <div class="palette-handle" title="Open library">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3 4.5 7l4 4"/></svg>
+                <span class="ph-label">Library</span>
+              </div>
+
+              <!-- sync-health chip (silent when honest); palette is closed, so bottom-right -->
+              <div class="sync-chip br">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 5 9.5l5.5-6"/></svg>
+                In sync
+              </div>
+            </div>
+          </div>
+
+          <!-- status bar: buffer just ahead of disk during the ~1s save debounce -->
+          <div class="statusbar">
+            <span class="sb-accent"></span>
+            <span class="sb-path">~/projects/checkout-redesign/main.spec.yaml</span>
+            <span class="sb-right">
+              <span class="dirty-dot" title="Buffer is ahead of disk"></span>
+              <span class="sb-unsaved">Unsaved</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

@@ -1,0 +1,778 @@
+<style>
+/* ============================================================
+   SPEC-YARD — KEY SCREEN: THE LIBRARY PALETTE (dual entry, one registry)
+   Self-contained, offline, no JS, system fonts. Dark-only by design.
+
+   SPINE SECTIONS GOVERNING THIS SCREEN
+   ------------------------------------------------------------
+   DESIGN.md
+     · Colors / Typography / Layout & Spacing / Shapes  (token source — exact hexes)
+     · Elevation & Depth (docked flat; soft shadow only on the floating library
+       palette flyout and the editor-entry picker)
+     · Components: library-palette (edge flyout · surface · items surface-raised ·
+       hover surface-elevated · floating shadow) · module-symbol · component-node ·
+       type-chip · member-count-chip · diagnostic-badge · interface/boundary-pin ·
+       breadcrumb · view-switcher · status-bar · file-rail · editor (accent-dim
+       line-highlight)
+   EXPERIENCE.md
+     · Component Patterns — Library palette — dual entry: ONE template registry,
+       TWO entry points. Canvas = drag a template from the edge flyout onto the
+       canvas (lands in the current module when descended, wired via interface
+       pins). Editor = the "Insert template" action writes the SAME boilerplate
+       YAML at the cursor. "The template picker IS the palette — there is no
+       separate picker surface."
+     · Open trigger (remediated) — flyout is closed by default, opened by a
+       labeled handle on the canvas edge (click, or the "Insert template" command);
+       auto-open only in the empty state. This project has content → opened by the
+       handle, shown here.
+     · Command Inventory — Files & authoring: "Insert template…" (the committed
+       editor-entry trigger, mirrored on the picker header).
+     · Voice and Tone — plain, no exclamation marks, no jargon; "connection" never
+       "flow"; descriptions on cards are voice-checked.
+     · Accessibility Floor — the editor "Insert template" command is the committed
+       keyboard equivalent of the edge flyout; picker keeps ↵ / esc reachable.
+
+   DROP-FEEDBACK NOTE (load-bearing)
+   ------------------------------------------------------------
+   The spine (EXPERIENCE.md · Library palette — dual entry) commits ONLY that a
+   dragged template "lands in the current module when descended, wired through
+   interface pins." It is SILENT on any drop preview / snap line / insertion
+   marker / valid-drop highlight. Per brief, Section 1 therefore shows the ghost
+   of the dragged card ONLY (a translucent copy following the cursor, neutral
+   dashed outline — the dragged element, not a drop affordance). No snap line,
+   drop-zone highlight, or insertion preview is invented on the canvas.
+
+   Content: acme-checkout · System scope (top level) · modules payments / identity ·
+   components web-gateway (Gateway) / audit-log (Brick). SPINES win on conflict.
+   Registry (boilerplate spec): "API front" (Gateway+Stage) · "Queue worker"
+   (Stage+Brick) · "Storage set" (Store+Brick) · "Observability" (Brick pair).
+   ============================================================ */
+
+  :root{
+    --background:#191919; --surface:#202020; --surface-raised:#232322;
+    --surface-elevated:#2a2a29; --surface-strong:#2f2f2f;
+    --surface-canvas:#1c1b1a; --surface-canvas-dots:#262624;
+    --border:#2e2d2b; --border-node:#6e6d68; --border-pin:#454440; --connection:#6e6c67;
+    --foreground:#e6e4e0; --foreground-body:#c8c6c1; --foreground-muted:#9b9a97; --foreground-dim:#737270;
+    --accent:#3794ff; --accent-hover:#4fb3ff; --accent-dim:#122a40; --accent-strong:#007acc;
+    --success:#8fae8b; --success-dim:#1f2d24; --warning:#d0a04a; --warning-dim:#3a2f1b;
+    --danger:#ef6d70; --danger-dim:#3a1f21; --info:#7f9fbf; --info-dim:#1e2b38;
+    --type-gateway:#2dd4bf; --type-stage:#a78bfa; --type-store:#4ade80; --type-brick:#f472b6;
+    --type-gateway-dim:#16302c; --type-stage-dim:#241f38; --type-store-dim:#16301f; --type-brick-dim:#35202c;
+    --syntax-key:#9db4cd; --syntax-value:#c8c6c1; --syntax-number:#c2a878; --syntax-punctuation:#83827b;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:12px; --r-full:9999px;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{
+    background:#141312; color:var(--foreground-body);
+    font-family:var(--font-ui); font-size:14px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:48px 40px 96px;
+  }
+  .page{ max-width:1520px; margin:0 auto; }
+  .eyebrow{
+    font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--foreground-dim); margin:0 0 10px 3px;
+  }
+  .sec-title{ font-size:15px; font-weight:600; color:var(--foreground); margin:0 0 4px 3px; letter-spacing:0.01em; }
+  .sec-note{ font-size:13px; color:var(--foreground-muted); margin:0 0 18px 3px; max-width:940px; }
+  .scrollwrap{ overflow-x:auto; padding-bottom:6px; }
+  section.block{ margin-bottom:64px; }
+
+  /* ---------- browser frame ---------- */
+  .browser{
+    width:1440px; border-radius:12px; overflow:hidden;
+    background:var(--surface);
+    box-shadow:0 28px 70px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+    position:relative;
+  }
+  .chrome{
+    height:40px; display:flex; align-items:center; gap:12px; padding:0 16px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+  }
+  .lights{ display:flex; gap:8px; }
+  .lights span{ width:11px; height:11px; border-radius:var(--r-full); }
+  .l-r{ background:#b06a62; } .l-y{ background:#bfa15e; } .l-g{ background:#7f9d78; }
+  .urlbar{
+    flex:0 1 460px; margin:0 auto; height:24px; border-radius:var(--r-md);
+    background:var(--background); color:var(--foreground-dim);
+    font-family:var(--font-mono); font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chrome-spacer{ width:56px; }
+
+  /* ---------- app frame (NO top header — lean default) ---------- */
+  .app{ background:var(--background); display:flex; flex-direction:column; }
+  .body{ display:flex; height:720px; }
+
+  /* collapsed file rail — a thin toggle, not the list */
+  .rail{
+    width:44px; flex:0 0 44px; background:var(--surface);
+    border-right:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; gap:6px; padding-top:12px;
+  }
+  .rail-btn{
+    width:32px; height:32px; border-radius:var(--r-md);
+    display:flex; align-items:center; justify-content:center; color:var(--foreground-muted);
+  }
+  .rail-btn.active{ background:var(--accent-dim); color:var(--accent); }
+  .rail-btn svg{ display:block; }
+
+  /* ---------- editor pane ---------- */
+  .editor-pane{
+    width:540px; flex:0 0 540px; display:flex; flex-direction:column;
+    background:var(--background); border-right:1px solid var(--border);
+  }
+  .editor{ flex:1; overflow:hidden; padding:14px 0 8px; }
+  .cl{ display:flex; height:22px; line-height:22px; }
+  .cl.cur{ background:var(--surface); }
+  .cl.ins{ background:var(--accent-dim); }          /* editor line-highlight — the just-inserted block */
+  .ln{
+    width:52px; flex:0 0 52px; text-align:right; padding-right:18px;
+    color:var(--foreground-dim); font-family:var(--font-mono); font-size:12px; user-select:none;
+  }
+  .code{ white-space:pre; font-family:var(--font-mono); font-size:13px; color:var(--foreground-body); }
+  .k{ color:var(--syntax-key); }
+  .v{ color:var(--syntax-value); }
+  .n{ color:var(--syntax-number); }
+  .p{ color:var(--syntax-punctuation); }
+  .c{ color:var(--foreground-dim); }                /* YAML comment */
+  .caret{ display:inline-block; width:1.5px; height:15px; background:var(--accent); vertical-align:-2px; margin-left:1px; }
+
+  /* collapsed diagnostics strip */
+  .diagstrip{
+    height:36px; flex:0 0 36px; background:var(--surface);
+    border-top:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; padding:0 16px;
+    font-size:12px; color:var(--foreground-muted);
+  }
+  .diag-dot{ width:8px; height:8px; border-radius:var(--r-full); background:var(--warning); flex:0 0 8px; }
+  .diagstrip .chev{ margin-left:auto; color:var(--foreground-dim); display:flex; }
+
+  /* ---------- canvas ---------- */
+  .canvas{
+    flex:1; position:relative; overflow:hidden;
+    background-color:var(--surface-canvas);
+    background-image:radial-gradient(circle, var(--surface-canvas-dots) 1px, transparent 1.3px);
+    background-size:24px 24px;
+  }
+  .breadcrumb{
+    position:absolute; top:14px; left:16px; z-index:4;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(28,27,26,0.86); border:1px solid var(--border);
+    border-radius:var(--r-md); padding:5px 11px;
+    font-size:13px; color:var(--foreground);
+  }
+  .breadcrumb svg{ display:block; color:var(--foreground-muted); }
+  .canvas-toolbar{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:4;
+    display:flex; align-items:center; gap:4px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r-lg); padding:4px;
+  }
+  .view-switch{
+    display:flex; align-items:center; gap:9px;
+    background:var(--surface-elevated); border-radius:var(--r-md);
+    padding:6px 10px; font-size:13px; font-weight:500; color:var(--foreground-body);
+  }
+  .view-switch .mark{ width:6px; height:6px; border-radius:var(--r-full); background:var(--accent); }
+  .view-switch .car{ color:var(--foreground-dim); font-size:10px; }
+  .tool-ic{
+    width:30px; height:30px; border-radius:var(--r-md);
+    display:flex; align-items:center; justify-content:center; color:var(--foreground-muted);
+  }
+  .tool-ic svg{ display:block; }
+
+  .edges{ position:absolute; inset:0; z-index:1; pointer-events:none; }
+  .edge-label{
+    position:absolute; z-index:2;
+    background:var(--surface-canvas); color:var(--foreground-muted);
+    font-size:12px; padding:2px 8px; border-radius:var(--r-md); white-space:nowrap;
+  }
+
+  /* nodes — restrained sketch: sub-degree tilt, low-roughness border */
+  .node{ position:absolute; z-index:3; background:var(--surface-raised); box-shadow:none; }
+  .module{
+    border:1.5px solid var(--border-node);
+    border-radius:11px 8px 10px 9px / 8px 10px 8px 11px;
+  }
+  .mod-head{ display:flex; align-items:center; gap:9px; padding:13px 14px 0; }
+  .mod-name{ font-size:15px; font-weight:600; color:var(--foreground); }
+  .member-chip{
+    margin-left:auto;
+    background:var(--surface-elevated); color:var(--foreground-muted);
+    font-family:var(--font-mono); font-size:12px;
+    padding:2px 10px; border-radius:var(--r-full);
+  }
+  .mod-sub{ padding:5px 14px 0; font-size:12px; color:var(--foreground-dim); }
+  .diag-badge{
+    position:absolute; top:-10px; right:14px;
+    display:flex; align-items:center; gap:5px;
+    font-family:var(--font-mono); font-size:12px; font-weight:500;
+    padding:2px 8px; border-radius:var(--r-sm);
+    background:var(--warning-dim); color:var(--warning);
+  }
+  .diag-badge .g{ font-family:var(--font-ui); font-size:11px; }
+  .enter-aff{
+    position:absolute; bottom:10px; right:10px;
+    width:26px; height:26px; border-radius:var(--r-md);
+    background:var(--surface-elevated); color:var(--foreground-muted);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .enter-aff svg{ display:block; }
+
+  /* interface / connection pins */
+  .pin{
+    position:absolute; width:10px; height:10px; border-radius:var(--r-full);
+    background:var(--surface-elevated); border:1.5px solid var(--border-pin); z-index:4;
+  }
+  .pin.exposed{ background:var(--accent-dim); border-color:var(--accent); }
+  .pin-label{
+    position:absolute; z-index:4;
+    font-family:var(--font-mono); font-size:12px; color:var(--foreground-muted);
+  }
+
+  /* component node */
+  .compo{
+    border:1.5px solid var(--border-node); border-radius:9px 11px 8px 10px / 10px 8px 11px 9px;
+    padding:12px 14px; display:flex; flex-direction:column; gap:8px;
+  }
+  .compo.gateway{ border-color:var(--type-gateway); }
+  .compo.brick{ border-color:var(--type-brick); }
+  .compo-name{ font-family:var(--font-mono); font-size:13px; color:var(--foreground); }
+  .type-chip{
+    align-self:flex-start; font-family:var(--font-mono); font-size:12px;
+    padding:2px 10px; border-radius:var(--r-full);
+  }
+  .type-chip.gateway{ background:var(--type-gateway-dim); color:var(--type-gateway); }
+  .type-chip.brick{ background:var(--type-brick-dim); color:var(--type-brick); }
+
+  /* sync-health chip — silent when honest */
+  .sync-chip{
+    position:absolute; right:288px; bottom:14px; z-index:4;
+    display:flex; align-items:center; gap:7px;
+    background:var(--success-dim); border-radius:var(--r-full);
+    padding:5px 12px; font-size:12px; color:var(--success);
+  }
+  .sync-chip.free{ right:16px; }
+  .sync-chip svg{ display:block; }
+
+  /* ---------- status bar ---------- */
+  .statusbar{
+    height:30px; flex:0 0 30px; background:var(--surface);
+    border-top:1px solid var(--border);
+    display:flex; align-items:center;
+    font-size:12px; color:var(--foreground-muted);
+  }
+  .sb-accent{ width:4px; height:100%; background:var(--accent-strong); flex:0 0 4px; }
+  .sb-path{ font-family:var(--font-mono); font-size:12px; color:var(--foreground-muted); padding-left:14px; }
+  .sb-right{ margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:16px; }
+  .dirty-dot{ width:8px; height:8px; border-radius:var(--r-full); background:var(--accent); }
+  .sb-unsaved{ color:var(--foreground-body); }
+
+  /* ============================================================
+     LIBRARY PALETTE — edge flyout (floating → soft shadow)
+     ============================================================ */
+  .flyout{
+    position:absolute; top:0; right:0; bottom:0; width:272px; z-index:6;
+    background:var(--surface); border-left:1px solid var(--border);
+    box-shadow:-20px 0 48px rgba(0,0,0,0.42);
+    display:flex; flex-direction:column;
+  }
+  .flyout-head{ padding:15px 16px 11px; border-bottom:1px solid var(--border); }
+  .flyout-title{ font-size:13px; font-weight:600; color:var(--foreground); letter-spacing:0.01em; }
+  .flyout-sub{ font-size:12px; color:var(--foreground-muted); margin-top:4px; line-height:1.4; }
+  .flyout-list{
+    padding:12px; display:flex; flex-direction:column; gap:10px; overflow:auto;
+  }
+  /* labeled handle on the canvas edge — the open trigger */
+  .flyout-handle{
+    position:absolute; top:50%; left:-27px; transform:translateY(-50%);
+    width:27px; padding:11px 0; border-radius:var(--r-md) 0 0 var(--r-md);
+    background:var(--surface); border:1px solid var(--border); border-right:none;
+    color:var(--foreground-muted);
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .flyout-handle .htxt{ writing-mode:vertical-rl; transform:rotate(180deg); }
+  .flyout-handle svg{ display:block; }
+
+  /* template card (registry entry) — surface-raised, hover surface-elevated */
+  .tpl-card{
+    background:var(--surface-raised); border:1px solid var(--border);
+    border-radius:var(--r-md); padding:11px 12px 12px;
+    display:flex; flex-direction:column; gap:9px; position:relative;
+  }
+  .tpl-card.hover{ background:var(--surface-elevated); }
+  .tpl-card.dragging{ opacity:0.4; border-style:dashed; }   /* the lifted source card */
+  .tpl-top{ display:flex; align-items:center; gap:9px; }
+  .tpl-grip{ color:var(--foreground-dim); display:flex; }
+  .tpl-grip svg{ display:block; }
+  .tpl-name{ font-size:13px; font-weight:600; color:var(--foreground); }
+  .tpl-mini{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .mini-node{
+    font-family:var(--font-mono); font-size:11px; line-height:1;
+    padding:3px 8px; border-radius:var(--r-sm); border:1px solid;
+  }
+  .mini-node.gateway{ color:var(--type-gateway); border-color:var(--type-gateway); background:var(--type-gateway-dim); }
+  .mini-node.stage{ color:var(--type-stage); border-color:var(--type-stage); background:var(--type-stage-dim); }
+  .mini-node.store{ color:var(--type-store); border-color:var(--type-store); background:var(--type-store-dim); }
+  .mini-node.brick{ color:var(--type-brick); border-color:var(--type-brick); background:var(--type-brick-dim); }
+  .mini-link{ color:var(--foreground-dim); font-size:12px; }
+  .tpl-desc{ font-size:12px; color:var(--foreground-muted); line-height:1.4; }
+
+  /* ghost of the dragged card over the canvas (drag representation only) */
+  .ghost{
+    position:absolute; z-index:7; width:228px;
+    background:var(--surface-raised); border:1.5px dashed var(--foreground-dim);
+    border-radius:var(--r-md); padding:11px 12px 12px;
+    display:flex; flex-direction:column; gap:9px;
+    opacity:0.7; box-shadow:0 20px 44px rgba(0,0,0,0.45); pointer-events:none;
+  }
+  .drag-cursor{ position:absolute; z-index:8; pointer-events:none; }
+  .drag-cursor svg{ display:block; }
+
+  /* ============================================================
+     EDITOR-ENTRY PICKER — "the picker IS the palette", floating
+     ============================================================ */
+  .picker{
+    position:absolute; z-index:9; top:132px; right:38px; width:302px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
+    box-shadow:0 30px 74px rgba(0,0,0,0.52);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .picker-head{ padding:13px 15px 11px; border-bottom:1px solid var(--border); }
+  .picker-title-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .picker-title{ font-size:13px; font-weight:600; color:var(--foreground); }
+  .picker-origin{ font-family:var(--font-mono); font-size:11px; color:var(--foreground-dim); }
+  .picker-sub{ font-size:12px; color:var(--foreground-muted); margin-top:4px; line-height:1.4; }
+  .picker-list{ padding:8px; display:flex; flex-direction:column; gap:8px; }
+  .picker-list .tpl-card.sel{ background:var(--accent-dim); border-color:var(--accent); }
+  .picker-list .tpl-card.sel .tpl-name{ color:var(--foreground); }
+  .picker-foot{
+    display:flex; align-items:center; gap:16px;
+    padding:9px 15px; border-top:1px solid var(--border);
+    font-size:12px; color:var(--foreground-dim);
+  }
+  .picker-foot span{ display:flex; align-items:center; gap:6px; }
+  .kbd{
+    font-family:var(--font-mono); font-size:12px; font-weight:500; color:var(--foreground-muted);
+    background:var(--surface-strong); border-radius:var(--r-sm); padding:2px 7px; line-height:1;
+  }
+</style>
+
+<div class="page">
+
+  <!-- ============================================================
+       SECTION 1 — CANVAS ENTRY: drag in progress
+       ============================================================ -->
+  <section class="block">
+    <div class="eyebrow">Spec-Yard · key screen · library palette</div>
+    <h1 class="sec-title">Canvas entry — dragging a template onto the diagram</h1>
+    <p class="sec-note">The library palette flyout is open on the canvas edge, its labeled handle showing what opened it. The four registry templates each carry a name, a miniature type composition, and a plain one-line description. "Queue worker" is mid-drag — its source card lifts in the flyout and a ghost of the card follows the cursor over the canvas. The spine commits no drop preview, so no snap line or insertion marker is drawn; the existing modules and components stay in view so the drop has real context. Scope: System.</p>
+
+    <div class="scrollwrap">
+      <div class="browser">
+        <div class="chrome">
+          <div class="lights"><span class="l-r"></span><span class="l-y"></span><span class="l-g"></span></div>
+          <div class="urlbar">spec-yard · acme-checkout</div>
+          <div class="chrome-spacer"></div>
+        </div>
+
+        <div class="app">
+          <div class="body">
+
+            <!-- collapsed file rail -->
+            <div class="rail">
+              <span class="rail-btn active" title="Files">
+                <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6z"/><path d="M10 2.5V6h3.5"/></svg>
+              </span>
+            </div>
+
+            <!-- editor pane (context) -->
+            <div class="editor-pane">
+              <div class="editor">
+                <div class="cl cur"><span class="ln">1</span><span class="code"><span class="k">system</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">2</span><span class="code">  <span class="k">name</span><span class="p">:</span> <span class="v">acme-checkout</span></span></div>
+                <div class="cl"><span class="ln">3</span><span class="code">  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+                <div class="cl"><span class="ln">4</span><span class="code"> </span></div>
+                <div class="cl"><span class="ln">5</span><span class="code"><span class="k">modules</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">6</span><span class="code">  <span class="k">payments</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">7</span><span class="code">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="v">payment-api</span><span class="p">]</span></span></div>
+                <div class="cl"><span class="ln">8</span><span class="code">    <span class="k">components</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">9</span><span class="code">      <span class="k">payment-api</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">10</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="v">Gateway</span></span></div>
+                <div class="cl"><span class="ln">11</span><span class="code">      <span class="k">ledger</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">12</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="v">Store</span></span></div>
+                <div class="cl"><span class="ln">13</span><span class="code">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">14</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="v">Stage</span></span></div>
+                <div class="cl"><span class="ln">15</span><span class="code">        <span class="k">connections</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">16</span><span class="code">          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">ledger</span></span></div>
+                <div class="cl"><span class="ln">17</span><span class="code">            <span class="k">label</span><span class="p">:</span> <span class="v">writes entries</span></span></div>
+                <div class="cl"><span class="ln">18</span><span class="code"> </span></div>
+                <div class="cl"><span class="ln">19</span><span class="code"><span class="c"># top-level services</span></span></div>
+                <div class="cl"><span class="ln">20</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">21</span><span class="code">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">22</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Gateway</span></span></div>
+                <div class="cl"><span class="ln">23</span><span class="code">    <span class="k">connections</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">24</span><span class="code">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">payments.payment-api</span></span></div>
+                <div class="cl"><span class="ln">25</span><span class="code">        <span class="k">label</span><span class="p">:</span> <span class="v">charge requests</span></span></div>
+                <div class="cl"><span class="ln">26</span><span class="code">  <span class="k">audit-log</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">27</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Brick</span></span></div>
+              </div>
+
+              <div class="diagstrip">
+                <span class="diag-dot"></span>
+                <span>1 warning · quick-fix available</span>
+                <span class="chev"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg></span>
+              </div>
+            </div>
+
+            <!-- canvas -->
+            <div class="canvas">
+              <svg class="edges" width="856" height="720" viewBox="0 0 856 720" fill="none">
+                <defs>
+                  <marker id="arr1" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M1 1.5 L8.4 5 L1 8.5" fill="none" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </marker>
+                </defs>
+                <!-- web-gateway → payments.payment-api -->
+                <path d="M236 152 C 262 146, 278 140, 294 134" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr1)"/>
+                <!-- payments → identity -->
+                <path d="M410 222 C 411 245, 410 270, 410 294" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr1)"/>
+                <!-- web-gateway → audit-log -->
+                <path d="M144 204 C 140 300, 150 390, 148 464" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr1)"/>
+              </svg>
+
+              <div class="breadcrumb">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="1.5" width="4" height="4" rx="1"/><rect x="7.5" y="1.5" width="4" height="4" rx="1"/><rect x="1.5" y="7.5" width="4" height="4" rx="1"/><rect x="7.5" y="7.5" width="4" height="4" rx="1"/></svg>
+                System
+              </div>
+
+              <div class="canvas-toolbar">
+                <span class="view-switch"><span class="mark"></span>Static <span class="car">▾</span></span>
+                <span class="tool-ic" title="Fit diagram to screen"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3"/><path d="M10 2h3v3"/><path d="M13 10v3h-3"/><path d="M5 13H2v-3"/></svg></span>
+              </div>
+
+              <!-- edge labels -->
+              <span class="edge-label" style="left:246px; top:118px;">charge requests</span>
+              <span class="edge-label" style="left:420px; top:250px;">verifies account</span>
+              <span class="edge-label" style="left:156px; top:322px;">audit events</span>
+
+              <!-- module symbol: payments -->
+              <div class="node module" style="left:300px; top:70px; width:238px; height:146px; transform:rotate(-0.4deg);">
+                <div class="diag-badge"><span class="g">▲</span>1</div>
+                <div class="mod-head"><span class="mod-name">payments</span><span class="member-chip">6 members</span></div>
+                <div class="mod-sub">sealed module</div>
+                <span class="pin exposed" style="left:-6px; top:64px;" title="payment-api (exposed)"></span>
+                <span class="pin-label" style="left:12px; top:57px;">payment-api</span>
+                <span class="pin" style="right:-6px; top:70px;"></span>
+                <span class="pin" style="left:110px; bottom:-6px;"></span>
+                <span class="enter-aff" title="Descend into payments"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H9.5"/><path d="M2.5 8h7"/><path d="M6.5 5 9.5 8 6.5 11"/></svg></span>
+              </div>
+
+              <!-- module symbol: identity -->
+              <div class="node module" style="left:300px; top:300px; width:224px; height:140px; transform:rotate(0.35deg);">
+                <div class="mod-head"><span class="mod-name">identity</span><span class="member-chip">4 members</span></div>
+                <div class="mod-sub">sealed module</div>
+                <span class="pin exposed" style="left:-6px; top:64px;" title="session-api (exposed)"></span>
+                <span class="pin-label" style="left:12px; top:57px;">session-api</span>
+                <span class="pin" style="top:-6px; left:110px;"></span>
+                <span class="enter-aff" title="Descend into identity"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H9.5"/><path d="M2.5 8h7"/><path d="M6.5 5 9.5 8 6.5 11"/></svg></span>
+              </div>
+
+              <!-- component node: web-gateway (Gateway) -->
+              <div class="node compo gateway" style="left:56px; top:120px; width:180px; height:78px; transform:rotate(0.4deg);">
+                <span class="compo-name">web-gateway</span>
+                <span class="type-chip gateway">Gateway</span>
+                <span class="pin" style="right:-6px; top:32px;"></span>
+                <span class="pin" style="left:88px; bottom:-6px;"></span>
+              </div>
+
+              <!-- component node: audit-log (Brick) -->
+              <div class="node compo brick" style="left:60px; top:470px; width:170px; height:76px; transform:rotate(-0.35deg);">
+                <span class="compo-name">audit-log</span>
+                <span class="type-chip brick">Brick</span>
+                <span class="pin" style="top:-6px; left:88px;"></span>
+              </div>
+
+              <!-- GHOST of the dragged "Queue worker" card (drag representation only — no drop affordance) -->
+              <div class="ghost" style="left:66px; top:278px;">
+                <div class="tpl-top">
+                  <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                  <span class="tpl-name">Queue worker</span>
+                </div>
+                <div class="tpl-mini">
+                  <span class="mini-node stage">Stage</span>
+                  <span class="mini-link">→</span>
+                  <span class="mini-node brick">Brick</span>
+                </div>
+                <div class="tpl-desc">Processing stage that drains a queue.</div>
+              </div>
+
+              <!-- drag cursor -->
+              <div class="drag-cursor" style="left:176px; top:300px;">
+                <svg width="20" height="22" viewBox="0 0 20 22" fill="none"><path d="M2 1.5 L2 16 L6 12.4 L9 19 L11.6 18 L8.7 11.4 L14 11 Z" fill="#e6e4e0" stroke="#141312" stroke-width="1.2" stroke-linejoin="round"/></svg>
+              </div>
+
+              <!-- sync-health chip (silent when honest) -->
+              <div class="sync-chip">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 5 9.5l5.5-6"/></svg>
+                In sync
+              </div>
+
+              <!-- LIBRARY PALETTE — edge flyout, open, with its labeled handle -->
+              <div class="flyout">
+                <div class="flyout-handle" title="Templates — click to open/close">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg>
+                  <span class="htxt">Templates</span>
+                </div>
+
+                <div class="flyout-head">
+                  <div class="flyout-title">Templates</div>
+                  <div class="flyout-sub">Drag onto the canvas to add. Lands at System level, wired through pins.</div>
+                </div>
+
+                <div class="flyout-list">
+                  <!-- API front -->
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">API front</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node gateway">Gateway</span><span class="mini-link">→</span><span class="mini-node stage">Stage</span></div>
+                    <div class="tpl-desc">Public gateway wired to a request handler.</div>
+                  </div>
+
+                  <!-- Queue worker — the card being dragged (lifted source) -->
+                  <div class="tpl-card dragging">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Queue worker</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node stage">Stage</span><span class="mini-link">→</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">Processing stage that drains a queue.</div>
+                  </div>
+
+                  <!-- Storage set -->
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Storage set</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node store">Store</span><span class="mini-link">·</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">A store with a cache in front.</div>
+                  </div>
+
+                  <!-- Observability -->
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Observability</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node brick">Brick</span><span class="mini-link">·</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">Metrics and log sidecars.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- status bar -->
+          <div class="statusbar">
+            <span class="sb-accent"></span>
+            <span class="sb-path">~/projects/acme-checkout/main.spec.yaml</span>
+            <span class="sb-right"><span class="dirty-dot" title="Buffer is ahead of disk"></span><span class="sb-unsaved">Unsaved</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SECTION 2 — EDITOR ENTRY: same template, text side
+       ============================================================ -->
+  <section class="block">
+    <div class="eyebrow">Alternate state · same registry, second entry point</div>
+    <h1 class="sec-title">Editor entry — "Insert template" writes the same boilerplate at the cursor</h1>
+    <p class="sec-note">The same registry, reached from the text side. The "Insert template…" command opens the palette as a picker with "Queue worker" highlighted; choosing it writes the boilerplate YAML block at the cursor — comments preserved (the pre-existing "top-level services" comment and the template's own comment both survive). One registry, two entry points: the canvas drag and this write land the same spec. Scope: System.</p>
+
+    <div class="scrollwrap">
+      <div class="browser">
+        <div class="chrome">
+          <div class="lights"><span class="l-r"></span><span class="l-y"></span><span class="l-g"></span></div>
+          <div class="urlbar">spec-yard · acme-checkout</div>
+          <div class="chrome-spacer"></div>
+        </div>
+
+        <div class="app">
+          <div class="body">
+
+            <div class="rail">
+              <span class="rail-btn active" title="Files"><svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V6z"/><path d="M10 2.5V6h3.5"/></svg></span>
+            </div>
+
+            <!-- editor pane — the inserted block, highlighted at the cursor -->
+            <div class="editor-pane">
+              <div class="editor">
+                <div class="cl"><span class="ln">17</span><span class="code">            <span class="k">label</span><span class="p">:</span> <span class="v">writes entries</span></span></div>
+                <div class="cl"><span class="ln">18</span><span class="code"> </span></div>
+                <div class="cl"><span class="ln">19</span><span class="code"><span class="c"># top-level services</span></span></div>
+                <div class="cl"><span class="ln">20</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">21</span><span class="code">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">22</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Gateway</span></span></div>
+                <div class="cl"><span class="ln">23</span><span class="code">    <span class="k">connections</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">24</span><span class="code">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">payments.payment-api</span></span></div>
+                <div class="cl"><span class="ln">25</span><span class="code">        <span class="k">label</span><span class="p">:</span> <span class="v">charge requests</span></span></div>
+                <div class="cl"><span class="ln">26</span><span class="code">  <span class="k">audit-log</span><span class="p">:</span></span></div>
+                <div class="cl"><span class="ln">27</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Brick</span></span></div>
+                <div class="cl"><span class="ln">28</span><span class="code"> </span></div>
+                <div class="cl ins"><span class="ln">29</span><span class="code">  <span class="c"># Queue worker — drains a job queue</span></span></div>
+                <div class="cl ins"><span class="ln">30</span><span class="code">  <span class="k">queue-worker</span><span class="p">:</span></span></div>
+                <div class="cl ins"><span class="ln">31</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Stage</span></span></div>
+                <div class="cl ins"><span class="ln">32</span><span class="code">    <span class="k">connections</span><span class="p">:</span></span></div>
+                <div class="cl ins"><span class="ln">33</span><span class="code">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">job-queue</span></span></div>
+                <div class="cl ins"><span class="ln">34</span><span class="code">        <span class="k">label</span><span class="p">:</span> <span class="v">consumes jobs</span></span></div>
+                <div class="cl ins"><span class="ln">35</span><span class="code">  <span class="k">job-queue</span><span class="p">:</span></span></div>
+                <div class="cl ins"><span class="ln">36</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="v">Brick</span><span class="caret"></span></span></div>
+              </div>
+
+              <div class="diagstrip">
+                <span class="diag-dot"></span>
+                <span>1 warning · quick-fix available</span>
+                <span class="chev"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg></span>
+              </div>
+            </div>
+
+            <!-- canvas (context) + editor-entry picker floating over it -->
+            <div class="canvas">
+              <svg class="edges" width="856" height="720" viewBox="0 0 856 720" fill="none">
+                <defs>
+                  <marker id="arr2" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M1 1.5 L8.4 5 L1 8.5" fill="none" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </marker>
+                </defs>
+                <path d="M236 152 C 262 146, 278 140, 294 134" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr2)"/>
+                <path d="M410 222 C 411 245, 410 270, 410 294" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr2)"/>
+                <path d="M144 204 C 140 300, 150 390, 148 464" stroke="#6e6c67" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arr2)"/>
+              </svg>
+
+              <div class="breadcrumb">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="1.5" width="4" height="4" rx="1"/><rect x="7.5" y="1.5" width="4" height="4" rx="1"/><rect x="1.5" y="7.5" width="4" height="4" rx="1"/><rect x="7.5" y="7.5" width="4" height="4" rx="1"/></svg>
+                System
+              </div>
+
+              <div class="canvas-toolbar">
+                <span class="view-switch"><span class="mark"></span>Static <span class="car">▾</span></span>
+                <span class="tool-ic" title="Fit diagram to screen"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3"/><path d="M10 2h3v3"/><path d="M13 10v3h-3"/><path d="M5 13H2v-3"/></svg></span>
+              </div>
+
+              <span class="edge-label" style="left:246px; top:118px;">charge requests</span>
+              <span class="edge-label" style="left:420px; top:250px;">verifies account</span>
+              <span class="edge-label" style="left:156px; top:322px;">audit events</span>
+
+              <div class="node module" style="left:300px; top:70px; width:238px; height:146px; transform:rotate(-0.4deg);">
+                <div class="diag-badge"><span class="g">▲</span>1</div>
+                <div class="mod-head"><span class="mod-name">payments</span><span class="member-chip">6 members</span></div>
+                <div class="mod-sub">sealed module</div>
+                <span class="pin exposed" style="left:-6px; top:64px;"></span>
+                <span class="pin-label" style="left:12px; top:57px;">payment-api</span>
+                <span class="pin" style="right:-6px; top:70px;"></span>
+                <span class="pin" style="left:110px; bottom:-6px;"></span>
+                <span class="enter-aff"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H9.5"/><path d="M2.5 8h7"/><path d="M6.5 5 9.5 8 6.5 11"/></svg></span>
+              </div>
+
+              <div class="node module" style="left:300px; top:300px; width:224px; height:140px; transform:rotate(0.35deg);">
+                <div class="mod-head"><span class="mod-name">identity</span><span class="member-chip">4 members</span></div>
+                <div class="mod-sub">sealed module</div>
+                <span class="pin exposed" style="left:-6px; top:64px;"></span>
+                <span class="pin-label" style="left:12px; top:57px;">session-api</span>
+                <span class="pin" style="top:-6px; left:110px;"></span>
+                <span class="enter-aff"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5H12A1.5 1.5 0 0 1 13.5 4v8A1.5 1.5 0 0 1 12 13.5H9.5"/><path d="M2.5 8h7"/><path d="M6.5 5 9.5 8 6.5 11"/></svg></span>
+              </div>
+
+              <div class="node compo gateway" style="left:56px; top:120px; width:180px; height:78px; transform:rotate(0.4deg);">
+                <span class="compo-name">web-gateway</span>
+                <span class="type-chip gateway">Gateway</span>
+                <span class="pin" style="right:-6px; top:32px;"></span>
+                <span class="pin" style="left:88px; bottom:-6px;"></span>
+              </div>
+
+              <div class="node compo brick" style="left:60px; top:470px; width:170px; height:76px; transform:rotate(-0.35deg);">
+                <span class="compo-name">audit-log</span>
+                <span class="type-chip brick">Brick</span>
+                <span class="pin" style="top:-6px; left:88px;"></span>
+              </div>
+
+              <div class="sync-chip free">
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 5 9.5l5.5-6"/></svg>
+                In sync
+              </div>
+
+              <!-- EDITOR-ENTRY PICKER — the palette, reached from "Insert template…" -->
+              <div class="picker">
+                <div class="picker-head">
+                  <div class="picker-title-row">
+                    <span class="picker-title">Insert template</span>
+                    <span class="picker-origin">⌘P › Insert template</span>
+                  </div>
+                  <div class="picker-sub">Writes boilerplate at the cursor.</div>
+                </div>
+                <div class="picker-list">
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">API front</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node gateway">Gateway</span><span class="mini-link">→</span><span class="mini-node stage">Stage</span></div>
+                    <div class="tpl-desc">Public gateway wired to a request handler.</div>
+                  </div>
+
+                  <div class="tpl-card sel">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Queue worker</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node stage">Stage</span><span class="mini-link">→</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">Processing stage that drains a queue.</div>
+                  </div>
+
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Storage set</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node store">Store</span><span class="mini-link">·</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">A store with a cache in front.</div>
+                  </div>
+
+                  <div class="tpl-card">
+                    <div class="tpl-top">
+                      <span class="tpl-grip"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>
+                      <span class="tpl-name">Observability</span>
+                    </div>
+                    <div class="tpl-mini"><span class="mini-node brick">Brick</span><span class="mini-link">·</span><span class="mini-node brick">Brick</span></div>
+                    <div class="tpl-desc">Metrics and log sidecars.</div>
+                  </div>
+                </div>
+                <div class="picker-foot">
+                  <span><span class="kbd">↑↓</span> navigate</span>
+                  <span><span class="kbd">⏎</span> insert</span>
+                  <span><span class="kbd">esc</span> dismiss</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="statusbar">
+            <span class="sb-accent"></span>
+            <span class="sb-path">~/projects/acme-checkout/main.spec.yaml</span>
+            <span class="sb-right"><span class="dirty-dot" title="Buffer is ahead of disk"></span><span class="sb-unsaved">Unsaved</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
