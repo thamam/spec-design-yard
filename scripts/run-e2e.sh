@@ -83,6 +83,12 @@ run_scenario() {
   fi
   echo
   echo "==> $name (port $port)"
+  # Never adopt (and never later kill) a server this script did not start.
+  if lsof -ti:"$port" >/dev/null 2>&1; then
+    echo "    port $port is already in use — skipping rather than taking it over" >&2
+    FAILED+=("$name (port $port busy)")
+    return 0
+  fi
   if ! start_server "$port" "SPEC_YARD_CONFIG_DIR=$TMP/config-$name" "$@"; then
     FAILED+=("$name (server failed to start)")
     stop_server "$port"

@@ -102,11 +102,7 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument {
     const doc = this.local.saveSpec(id, title, yamlContent)
-    // Tag the cache with where this content belongs: the active project's
-    // epoch, or "standalone" for browser-only work. loadFromServer uses the
-    // tag to migrate a standalone sketch into a newly chosen project while
-    // still dropping another project's cache (bleed guard).
-    this.setCacheOrigin(id, this.serverEpoch ?? "standalone")
+    this.setCacheOrigin(id, this.originForWrites())
     if (!this.canMirror()) return doc
     this.specPutChain = this.specPutChain.then(() =>
       this.putSpec(`/api/store/spec/${encodeURIComponent(id)}`, { title, yamlContent })
@@ -254,10 +250,21 @@ export class RemoteSyncSpecStore implements SpecStore {
         return
       }
       if (!res.ok) {
+        // Not a conflict — a broken store (project dir deleted mid-session,
+        // disk full, permissions). Say so instead of leaving the status bar
+        // claiming "synced", but do NOT latch file mode off: the next
+        // autosave may well land, and a success below clears this.
         console.error(`[spec-yard] Spec save failed (${res.status}) — latest edits are only in browser storage`)
+        this.setSyncState({
+          status: "halted",
+          reason: `Last save failed (${res.status}) — edits are in browser storage; still retrying.`,
+        })
         return
       }
       await this.adoptAckRev(res)
+      // A save landed: clear a transient-failure alarm. A latched conflict
+      // never reaches here (fileModeDisabled stops the PUT).
+      if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
     } catch (e) {
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
     }
@@ -324,6 +331,24 @@ export class RemoteSyncSpecStore implements SpecStore {
     } catch (e) {
       console.error(`Failed to mirror ${url} to server`, e)
     }
+  }
+
+  /**
+   * Where the content being cached belongs. loadFromServer uses this tag to
+   * migrate a browser-only sketch into the first project the user picks,
+   * while dropping any cache that belongs to a different project.
+   *
+   * Only genuinely project-less work is portable. Anything written while a
+   * project is (or was) active is tagged with that project's epoch — or
+   * "unknown-project" when the server never volunteered one, which the
+   * migration check never adopts. Failing closed matters here: "standalone"
+   * is the one tag that gets adopted, so guessing it wrong bleeds one
+   * project's spec into another.
+   */
+  private originForWrites(): string {
+    const status = this.syncState.status
+    if (status === "unconfigured" || status === "local-only") return "standalone"
+    return this.serverEpoch ?? "unknown-project"
   }
 
   // Provenance tag for the cached spec (sits beside spec_<id> in

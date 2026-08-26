@@ -438,6 +438,44 @@ describe('RemoteSyncSpecStore project-epoch guard', () => {
   })
 })
 
+describe('RemoteSyncSpecStore cache provenance', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('a save made under a project is never tagged as a portable sketch', async () => {
+    // Review finding: saveSpec fell back to "standalone" whenever the server
+    // sent no epoch, even with a project active — and "standalone" is the one
+    // tag the migration path adopts, so that fallback failed OPEN into a
+    // cross-project bleed. Its sibling in loadFromServer fails closed.
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: true, status: 200, json: async () => ({ ok: true }) } as any
+      // File mode on, but the server volunteers no epoch.
+      return { ok: true, status: 200, json: async () => ({ found: false }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).not.toBe('standalone')
+  })
+
+  test('a save made with no project is tagged as a portable sketch', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ enabled: false, mode: 'unconfigured' }) }) as any))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+  })
+})
+
 describe('RemoteSyncSpecStore sync-state visibility', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -489,6 +527,53 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     expect(store.getSyncState().reason).toMatch(/reload/i)
     expect(seen.some((s) => s.status === 'halted')).toBe(true)
     unsubscribe()
+  })
+
+  test('a failed save is visible, not console-only', async () => {
+    // Review finding: a non-409 failure (project dir deleted mid-session,
+    // disk full, permissions) logged and returned, leaving the status bar
+    // still claiming "Synced to project" while nothing reached the file.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 500, json: async () => ({}) } as any
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    expect(store.getSyncState().status).toBe('synced')
+
+    store.saveSpec('main', 'T', 'yaml')
+    await vi.waitFor(() => {
+      expect(store.getSyncState().status).toBe('halted')
+    })
+    expect(store.getSyncState().reason).toMatch(/browser storage/i)
+  })
+
+  test('a transient save failure clears once a save lands again', async () => {
+    // Unlike a conflict, a transient failure does not latch file mode off —
+    // the next autosave still tries, and success must un-alarm the UI.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let failNext = true
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        if (failNext) {
+          failNext = false
+          return { ok: false, status: 500, json: async () => ({}) } as any
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true, rev: 'r2' }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    store.saveSpec('main', 'T', 'one')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+
+    store.saveSpec('main', 'T', 'two')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('synced'))
   })
 
   test('a genuine external-edit conflict halts with a reload instruction', async () => {
