@@ -85,7 +85,7 @@ describe('project API route', () => {
 
     const storeRes = mockRes()
     storeHandler(storeReq('GET', ['spec', 'main']), storeRes)
-    expect(storeRes.body).toEqual({ enabled: false })
+    expect(storeRes.body).toEqual({ enabled: false, mode: 'standalone' })
 
     // And back into a project.
     projectHandler(projectReq('PUT', { body: { dir: otherDir } }), mockRes())

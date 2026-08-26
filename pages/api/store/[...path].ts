@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import fs from "fs"
 import path from "path"
 import { writeFileAtomic } from "../../../lib/server-atomic-write"
-import { getActiveProjectDir, getProjectEpoch } from "../../../lib/server-project-config"
+import { getProjectEpoch, getProjectStatus } from "../../../lib/server-project-config"
 import { isLoopbackHost } from "../../../lib/server-request-guards"
 
 // File-backed persistence for the workspace store, active only when the app is
@@ -132,12 +132,17 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
   // Project-first resolution: session switch > SPEC_YARD_PROJECT_DIR >
   // persisted config (see lib/server-project-config.ts). Null means
   // standalone opt-out or a first run with no project chosen yet.
-  const projectDir = getActiveProjectDir()
-  if (!projectDir) {
-    // 200-with-flag rather than 501: standalone/first-run is a normal state,
-    // and an error status would surface in the browser console on every load.
-    return res.status(200).json({ enabled: false })
+  const status = getProjectStatus()
+  if (status.mode !== "project" || !status.dir) {
+    // 200-with-flag rather than 501: having no project is a normal state, and
+    // an error status would surface in the browser console on every load.
+    // The mode rides along because the two no-project states are different
+    // stories: "unconfigured" has chosen nothing yet and must open a calm
+    // blank slate behind the picker, while "standalone" is a deliberate
+    // browser-only opt-out that keeps the demo spec to play with.
+    return res.status(200).json({ enabled: false, mode: status.mode })
   }
+  const projectDir = status.dir
   let realRoot: string
   try {
     realRoot = fs.realpathSync(projectDir)

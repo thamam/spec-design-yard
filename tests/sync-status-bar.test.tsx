@@ -12,7 +12,7 @@ import { installWorkspaceFetch, projectReply } from './workspace-fetch-double'
 
 function installFetch(opts: { fileMode: boolean; putStatus?: number; putBody?: any }) {
   installWorkspaceFetch({
-    spec: { body: opts.fileMode ? { found: false, epoch: 'e1' } : { enabled: false } },
+    spec: { body: opts.fileMode ? { found: false, epoch: 'e1' } : { enabled: false, mode: 'standalone' } },
     project: opts.fileMode ? projectReply('/tmp/proj') : undefined,
     put: opts.putStatus === undefined ? undefined : { status: opts.putStatus, body: opts.putBody },
   })
@@ -68,6 +68,32 @@ describe('status bar sync visibility', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('sync-status').textContent).toMatch(/reload/i)
+    })
+  })
+})
+
+describe('status bar on a first run', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    db.removeSpec('main')
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    db.removeSpec('main')
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('says no project is chosen rather than claiming browser storage', async () => {
+    installWorkspaceFetch({
+      spec: { body: { enabled: false, mode: 'unconfigured' } },
+      project: { body: { mode: 'unconfigured', suggestedDir: '/home/u/p', recents: [] } },
+    })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-status').textContent).toMatch(/no project/i)
     })
   })
 })

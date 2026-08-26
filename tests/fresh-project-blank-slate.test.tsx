@@ -16,7 +16,7 @@ function installFetchMock(opts: { fileMode: boolean }) {
         spec: { body: { found: false, epoch: 'epoch-1' } },
         project: projectReply('/tmp/fresh-project'),
       })
-    : installWorkspaceFetch({ spec: { body: { enabled: false } } })
+    : installWorkspaceFetch({ spec: { body: { enabled: false, mode: 'standalone' } } })
 }
 
 describe('fresh project blank slate (file mode, no spec file)', () => {
@@ -98,6 +98,48 @@ describe('fresh project blank slate (file mode, no spec file)', () => {
 
   test('standalone mode keeps the built-in demo spec', async () => {
     installFetchMock({ fileMode: false })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('External Brain')
+  })
+})
+
+describe('first run (no project chosen yet)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    db.removeSpec('main')
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    db.removeSpec('main')
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('opens the blank slate, not the demo, while the picker asks for a folder', async () => {
+    // An untouched install has not opted into browser storage — it has not
+    // chosen anything. Opening the 59-diagnostic demo behind a "choose your
+    // project" prompt contradicts the project-first story.
+    installWorkspaceFetch({
+      spec: { body: { enabled: false, mode: 'unconfigured' } },
+      project: { body: { mode: 'unconfigured', suggestedDir: '/home/u/spec-yard-projects/my-system', recents: [] } },
+    })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).not.toContain('External Brain')
+    expect(textarea.value).toContain('New System')
+  })
+
+  test('an explicit browser-storage opt-out still gets the demo to play with', async () => {
+    installWorkspaceFetch({
+      spec: { body: { enabled: false, mode: 'standalone' } },
+      project: { body: { mode: 'standalone', recents: [] } },
+    })
     render(<Workspace />)
     await waitForWorkspaceHydration()
 

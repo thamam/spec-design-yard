@@ -25,13 +25,18 @@ import {
 
 /**
  * Where saves are going, for the UI to display.
- * - "local-only": browser storage by design (standalone/unconfigured) — calm.
+ * - "unconfigured": nothing chosen yet (first run) — the picker is asking.
+ * - "local-only": browser storage by deliberate opt-out — calm.
  * - "synced": a project is active and mirroring is healthy.
  * - "halted": mirroring latched off mid-session (conflict, project switched
  *   elsewhere, broken store) — edits stay in the browser; reload to resync.
+ *
+ * "unconfigured" and "local-only" both mean "not writing files", but they are
+ * different stories to the user, and the workspace opens a different starting
+ * spec for each — so they stay distinct rather than collapsing into one.
  */
 export interface SyncState {
-  status: "local-only" | "synced" | "halted"
+  status: "unconfigured" | "local-only" | "synced" | "halted"
   reason?: string
 }
 
@@ -168,7 +173,7 @@ export class RemoteSyncSpecStore implements SpecStore {
       const body = await specRes.json()
       if (body && body.enabled === false) {
         this.fileModeDisabled = true
-        this.setSyncState({ status: "local-only" })
+        this.setSyncState({ status: body.mode === "unconfigured" ? "unconfigured" : "local-only" })
         return false
       }
       // File mode confirmed on — clear any latch from a previous failed

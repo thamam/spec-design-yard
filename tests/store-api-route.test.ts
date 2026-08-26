@@ -3,6 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import handler from '../pages/api/store/[...path]'
+import { resetProjectStateForTests, setStandaloneMode } from '../lib/server-project-config'
 import { mockRes, storeReq } from './api-test-doubles'
 
 describe('store API route', () => {
@@ -16,10 +17,14 @@ describe('store API route', () => {
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-test-cfg-'))
     process.env.SPEC_YARD_CONFIG_DIR = configDir
     process.env.SPEC_YARD_PROJECT_DIR = projectDir
+    // Session selections live on globalThis; a leftover one would decide the
+    // mode for the next test.
+    resetProjectStateForTests()
   })
 
   afterEach(() => {
     delete process.env.SPEC_YARD_PROJECT_DIR
+    resetProjectStateForTests()
     fs.rmSync(projectDir, { recursive: true, force: true })
     fs.rmSync(configDir, { recursive: true, force: true })
   })
@@ -35,14 +40,33 @@ describe('store API route', () => {
     expect(fs.readdirSync(projectDir)).toEqual([])
   })
 
-  test('responds 200 with enabled:false when SPEC_YARD_PROJECT_DIR is unset', () => {
-    // 200 rather than 501: standalone mode is normal, and an error status
-    // would surface in the browser console on every load.
+  test('responds 200 with enabled:false when no project is active', () => {
+    // 200 rather than 501: having no project is a normal state, and an error
+    // status would surface in the browser console on every load.
     delete process.env.SPEC_YARD_PROJECT_DIR
     const res = mockRes()
     handler(storeReq('GET', ['spec', 'main']), res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ enabled: false })
+    expect(res.body.enabled).toBe(false)
+  })
+
+  test('a first run is reported as unconfigured, not as browser storage', () => {
+    // The two look identical to the store (no project dir either way), but
+    // they are different stories to the user: an untouched install has not
+    // chosen anything yet, so the workspace must not open the demo spec as
+    // though browser-only were a deliberate choice.
+    delete process.env.SPEC_YARD_PROJECT_DIR
+    const res = mockRes()
+    handler(storeReq('GET', ['spec', 'main']), res)
+    expect(res.body).toEqual({ enabled: false, mode: 'unconfigured' })
+  })
+
+  test('an explicit browser-storage opt-out is reported as standalone', () => {
+    delete process.env.SPEC_YARD_PROJECT_DIR
+    setStandaloneMode()
+    const res = mockRes()
+    handler(storeReq('GET', ['spec', 'main']), res)
+    expect(res.body).toEqual({ enabled: false, mode: 'standalone' })
   })
 
   test('spec round-trip: PUT writes main.spec.yaml + spec-index.json, GET reads back', () => {

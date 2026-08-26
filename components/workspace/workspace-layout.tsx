@@ -96,6 +96,14 @@ system:
   components: []
 `
 
+// First run, before any folder is picked: same calm slate, but it must not
+// promise a file it has no folder to write to yet.
+const UNCONFIGURED_SPEC = `# Pick a project folder above to start saving this spec to a file.
+system:
+  name: New System
+  components: []
+`
+
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [splitPercent, setSplitPercent] = useState(DEFAULT_SPLIT)
@@ -171,13 +179,19 @@ export function WorkspaceLayout() {
       const fileMode = await db.loadFromServer()
       if (cancelled) return
       const savedDoc = db.getSpec("main")
-      // No spec anywhere: a file-backed project opens blank (the demo must
-      // never leak into a client repo); standalone keeps the demo.
+      // No spec anywhere. A file-backed project opens blank (the demo must
+      // never leak into a client repo), and so does a first run — opening a
+      // 59-diagnostic demo behind the "choose your project" prompt reads as
+      // noise, not as a welcome. Only a deliberate browser-storage opt-out
+      // keeps the demo, as something to play with.
+      const unconfigured = db.getSyncState().status === "unconfigured"
       const loaded =
         savedDoc && savedDoc.yamlContent
           ? savedDoc.yamlContent
           : fileMode
           ? FRESH_PROJECT_SPEC
+          : unconfigured
+          ? UNCONFIGURED_SPEC
           : INITIAL_SPEC
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
@@ -393,6 +407,8 @@ function StatusBar({ syncState }: { syncState: SyncState }) {
       ? "Synced to project"
       : halted
       ? syncState.reason || "Saving halted — reload the workspace"
+      : syncState.status === "unconfigured"
+      ? "No project chosen — pick a folder to save to files"
       : "Browser storage only"
   return (
     <footer

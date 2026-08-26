@@ -181,8 +181,19 @@ opted out of projects (standalone mode) or no project has been configured yet
 (keys `spec_main`, `simulation_history`, `custom_simulation_presets`), with
 an in-memory fallback when localStorage is unavailable; in these states it
 SHALL NOT write to the filesystem and SHALL NOT surface file-mode errors to
-the user. The built-in demo spec SHALL appear only in these no-project
-states.
+the user. The built-in demo spec SHALL appear only after an explicit
+browser-storage opt-out — never on a first run, where the workspace SHALL
+open the same blank slate a fresh project gets, and the store API SHALL
+report which of the two no-project states applies (`{enabled:false, mode}`)
+so the workspace can tell them apart.
+
+#### Scenario: First run shows no demo
+
+- GIVEN an install with no project configured and no opt-out recorded
+- WHEN the workspace loads and the picker asks for a project folder
+- THEN the editor opens a blank slate, not the built-in demo
+- AND the status bar says no project has been chosen rather than claiming
+  browser storage
 
 #### Scenario: Standalone opt-out
 
