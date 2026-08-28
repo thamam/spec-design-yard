@@ -33,6 +33,10 @@ jobs:
         run: npm run build
 
       - name: Start Next.js App
+        # Keep the mode choice this job makes inside a throwaway registry —
+        # the default is ~/.specyard.
+        env:
+          SPEC_YARD_CONFIG_DIR: ${{ runner.temp }}/specyard-config
         run: npx next start -p 3001 &
 
       - name: Install Playwright browsers and dependencies
