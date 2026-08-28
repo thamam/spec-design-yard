@@ -41,8 +41,16 @@ async def main():
         except Exception as e:
             print(f"Warning during goto: {e}")
             
+        # The component tree lives in the Tree tab, and the workspace opens on
+        # Code — so these nodes are in the DOM at zero size. "attached" is the
+        # honest gate: it proves the spec parsed into components.
         print("Waiting for spec hydration ([data-component-id])...")
-        await page.wait_for_selector("[data-component-id]", timeout=20000)
+        await page.wait_for_selector("[data-component-id]", state="attached", timeout=20000)
+
+        # The canvas is what analyze_pixels.py actually grades.
+        print("Waiting for the Excalidraw canvas to render...")
+        await page.wait_for_selector("canvas.excalidraw__canvas", timeout=20000)
+        await page.wait_for_timeout(3000)
         
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         output_path = os.path.join(base_dir, "v0-workspace-screenshot.png")
