@@ -1,8 +1,14 @@
-"""E2E user-chair test for spec-yard standalone mode (no SPEC_YARD_PROJECT_DIR).
+"""E2E user-chair test for spec-yard standalone mode (the browser-storage opt-out).
 
-Expectations: localStorage persistence across reload, API answers 501,
-no filesystem writes possible, no console errors, no UI error surfaced.
+Standalone is a deliberate choice, not a default: the run starts by opting out
+through the project API exactly as the picker does, then checks localStorage
+persistence across reload, that the store API stays quiet, that the demo spec
+is available to play with, and that nothing errors.
+
+Run it via `npm run test:e2e` (which supplies an isolated server), or point
+SPEC_YARD_URL at a dev server started with a throwaway SPEC_YARD_CONFIG_DIR.
 """
+import json
 import os
 import sys
 import time
@@ -20,11 +26,24 @@ def check(name, cond, detail=""):
     if not cond:
         failures.append(name)
 
-# API contract: file mode off answers 200 {enabled:false} (quiet by design —
-# an error status would log to the browser console on every standalone load)
+# Opt out the way the picker does — standalone is a choice the user makes.
+opt_out = urllib.request.Request(
+    BASE + "/api/project",
+    data=json.dumps({"mode": "standalone"}).encode(),
+    headers={"Content-Type": "application/json"},
+    method="PUT",
+)
+with urllib.request.urlopen(opt_out) as resp:
+    check("project API accepts the browser-storage opt-out", resp.status == 200)
+
+# API contract: with no project the store answers 200 {enabled:false} (quiet by
+# design — an error status would log to the browser console on every load), and
+# says which no-project state it is so the workspace can pick a starting spec.
 with urllib.request.urlopen(BASE + "/api/store/spec/main") as resp:
     body = resp.read().decode()
-check("API answers enabled:false when SPEC_YARD_PROJECT_DIR unset", '"enabled":false' in body.replace(" ", ""), body)
+compact = body.replace(" ", "")
+check("store API answers enabled:false with no project", '"enabled":false' in compact, body)
+check("store API reports the opt-out as standalone", '"mode":"standalone"' in compact, body)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -39,7 +58,8 @@ with sync_playwright() as p:
     time.sleep(2)
 
     ta = page.locator('[data-testid="spec-textarea"]')
-    check("standalone mount loads built-in initial spec", "External Brain" in ta.input_value())
+    check("the opt-out keeps the built-in demo to play with", "External Brain" in ta.input_value(),
+          ta.input_value()[:120])
 
     edited = ta.input_value().replace("External Brain v0.2", "Standalone Local System")
     ta.fill(edited)

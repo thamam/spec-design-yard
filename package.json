@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "install-cli": "bash scripts/install-cli.sh"
+    "install-cli": "bash scripts/install-cli.sh",
+    "test:e2e": "bash scripts/run-e2e.sh"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorPanel } from "./editor-panel"
 import { CanvasPanel } from "./canvas-panel"
 import { WorkspaceHeader } from "./workspace-header"
-import { db } from "../../lib/db"
+import { db, type SyncState } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
@@ -86,6 +86,24 @@ const INITIAL_SPEC = `system:
         - target: commit_stage
         - target: inbox`
 
+// What a file-backed project opens with when its repo has no spec yet. The
+// demo above is standalone-only: it must never be written into a client repo
+// uninvited, so fresh projects get this labeled skeleton instead — and it is
+// not autosaved until the user actually edits it.
+const FRESH_PROJECT_SPEC = `# New project — this spec is saved to main.spec.yaml on your first edit.
+system:
+  name: New System
+  components: []
+`
+
+// First run, before any folder is picked: same calm slate, but it must not
+// promise a file it has no folder to write to yet.
+const UNCONFIGURED_SPEC = `# Pick a project folder above to start saving this spec to a file.
+system:
+  name: New System
+  components: []
+`
+
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [splitPercent, setSplitPercent] = useState(DEFAULT_SPLIT)
@@ -143,6 +161,11 @@ export function WorkspaceLayout() {
 
   const [isHydrated, setIsHydrated] = useState(false)
 
+  // Where saves are going (browser vs project file vs halted) — surfaced in
+  // the status bar so a mirroring latch-off is never console-only.
+  const [syncState, setSyncState] = useState<SyncState>(() => db.getSyncState())
+  useEffect(() => db.subscribeSyncState(setSyncState), [])
+
   const lastLoadedSpecRef = useRef<string | null>(null)
 
   // Hydrate the saved spec on mount. When the app runs against a project dir
@@ -152,10 +175,24 @@ export function WorkspaceLayout() {
   useEffect(() => {
     let cancelled = false
     const hydrate = async () => {
-      await db.loadFromServer()
+      // true = file mode is on (a project dir is being mirrored to).
+      const fileMode = await db.loadFromServer()
       if (cancelled) return
       const savedDoc = db.getSpec("main")
-      const loaded = savedDoc && savedDoc.yamlContent ? savedDoc.yamlContent : INITIAL_SPEC
+      // No spec anywhere. A file-backed project opens blank (the demo must
+      // never leak into a client repo), and so does a first run — opening a
+      // 59-diagnostic demo behind the "choose your project" prompt reads as
+      // noise, not as a welcome. Only a deliberate browser-storage opt-out
+      // keeps the demo, as something to play with.
+      const unconfigured = db.getSyncState().status === "unconfigured"
+      const loaded =
+        savedDoc && savedDoc.yamlContent
+          ? savedDoc.yamlContent
+          : fileMode
+          ? FRESH_PROJECT_SPEC
+          : unconfigured
+          ? UNCONFIGURED_SPEC
+          : INITIAL_SPEC
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
       setIsHydrated(true)
@@ -358,12 +395,21 @@ export function WorkspaceLayout() {
       </div>
 
       {/* Status bar */}
-      <StatusBar />
+      <StatusBar syncState={syncState} />
     </div>
   )
 }
 
-function StatusBar() {
+function StatusBar({ syncState }: { syncState: SyncState }) {
+  const halted = syncState.status === "halted"
+  const label =
+    syncState.status === "synced"
+      ? "Synced to project"
+      : halted
+      ? syncState.reason || "Saving halted — reload the workspace"
+      : syncState.status === "unconfigured"
+      ? "No project chosen — pick a folder to save to files"
+      : "Browser storage only"
   return (
     <footer
       className="flex items-center justify-between px-4 h-6 shrink-0 text-[11px] select-none"
@@ -373,13 +419,24 @@ function StatusBar() {
         color: "var(--foreground-muted)",
       }}
     >
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5">
+      <div className="flex items-center gap-4 min-w-0">
+        <span className="flex items-center gap-1.5 min-w-0" data-testid="sync-status">
           <span
-            className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ background: "var(--success)" }}
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+            style={{
+              background: halted
+                ? "var(--warning, #eab308)"
+                : syncState.status === "synced"
+                ? "var(--success)"
+                : "var(--foreground-muted)",
+            }}
           />
-          Ready
+          <span
+            className="truncate"
+            style={halted ? { color: "var(--warning, #eab308)", fontWeight: 600 } : undefined}
+          >
+            {label}
+          </span>
         </span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>main.spec.yaml</span>

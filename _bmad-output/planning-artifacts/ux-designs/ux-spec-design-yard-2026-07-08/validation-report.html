@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<!--
+  UX Design Validation Report — spec-design-yard.
+  Synthesis of three reviewers: rubric walker, cynical adversarial, accessibility auditor.
+  No overall grade by design — per-category verdicts and severity counts carry the picture.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: spec-design-yard spines (DESIGN.md + EXPERIENCE.md)</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .sev-tally { text-align: right; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .sev-tally .n-critical { color: var(--sev-critical); font-weight: 700; }
+  .sev-tally .n-high { color: var(--sev-high); font-weight: 700; }
+  .sev-tally .n-medium { color: var(--sev-medium); font-weight: 700; }
+  .sev-tally .n-low { color: var(--sev-low); font-weight: 700; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .sev-count {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    white-space: nowrap;
+  }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .badge-dedup { background: rgba(120, 113, 108, 0.14); color: var(--muted); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+  .finding-xlink { margin-top: 6px; font-size: 13px; color: var(--muted); font-style: italic; }
+  .finding-xlink strong { font-style: normal; color: var(--muted); font-weight: 600; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 6px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <header class="report-header">
+      <div class="title">
+        <h1>spec-design-yard spines — UX Design Validation Report</h1>
+        <div class="subtitle">DESIGN.md + EXPERIENCE.md · _bmad-output/planning-artifacts/ux-designs/ux-spec-design-yard-2026-07-08/</div>
+      </div>
+      <div class="sev-tally">
+        Deduped panel tally<br>
+        <span class="n-critical">4 critical</span> ·
+        <span class="n-high">13 high</span> ·
+        <span class="n-medium">22 medium</span> ·
+        <span class="n-low">16 low</span>
+      </div>
+    </header>
+
+    <div class="synthesis">
+      <p>A strong, source-extractable contract. Token discipline is near-flawless — all 39 color tokens carry 6-digit hex, every one of the 108 <code>{path.to.token}</code> references across both files resolves, all 21 components are both defined and referenced with zero orphans, and DESIGN.md holds canonical section order. A downstream consumer can extract cleanly. The gaps the rubric found are edge/requirement-level, not structural: FR5 (localStorage→file migration) has no home anywhere, two components (<code>button-primary</code>, <code>quick-fix-button</code>) carry frontmatter tokens but lack a DESIGN.md visual-anatomy row, and Flow 2's CI-lint-gate <em>failure</em> branch — the gate's whole reason to exist — is unspecified. None are blocking.</p>
+      <p>The two independent reviewers shift that picture materially, and they converge on the same surface. The adversarial reviewer found the behavior spine writing physics the Excalidraw 0.18 engine cannot honor: the headline "work" gesture (double-click to descend) collides head-on with Excalidraw's native double-click-to-edit, descend-as-scene-swap has no coordinate/data model, boundary pins fight the infinite canvas, and the entire line-jump/syntax-highlight editor story silently depends on ripping out and replacing a bare <code>&lt;textarea&gt;</code> — two implementability criticals plus seven highs the rubric's structural pass could not see. The accessibility auditor, from the opposite side, found that same canvas has no committed keyboard navigation and no screen-reader / accessible-equivalent position, so the core tiered-navigation loop (peek / descend / expand) is unreachable without a mouse. Both critical pairs land on one object: the canvas descend model is unbuildable as written — engine-infeasible by mouse <em>and</em> unreachable by keyboard at once. Contrast is clean on every declared-floor pair, but three unfenced load-bearing pairs (<code>danger</code>/<code>danger-dim</code> 4.23, <code>accent</code>/<code>accent-dim</code> 4.18, <code>syntax-punctuation</code>/<code>background</code> 3.01) miss WCAG AA by a hair.</p>
+    </div>
+
+    <div class="dimension-summary">
+      <div class="dim-card">
+        <div class="dim-name">1. Flow coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">2. Token completeness</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">3. Component coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-adequate)">Adequate</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">4. State coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">5. Visual reference coverage</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">6. Bloat &amp; overspecification</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">7. Inheritance discipline</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+      <div class="dim-card">
+        <div class="dim-name">8. Shape fit</div>
+        <div class="dim-verdict" style="color: var(--verdict-strong)">Strong</div>
+      </div>
+    </div>
+
+    <!-- ============ RUBRIC CATEGORIES (all strong/adequate → collapsed) ============ -->
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>1. Flow coverage</h2>
+          <span class="verdict-pill verdict-adequate">Adequate</span>
+          <span class="sev-count">2 medium · 2 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>All three PRD journeys (UJ1 Design a system, UJ2 Hand off to an agent, UJ3 Learn a system) have a named-protagonist Key Flow with numbered steps and a bold <strong>Climax</strong> beat (Priya / Priya+agent / Sam). Walking FR1–FR17 for a home surfaced requirement-level gaps, not structural ones.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">FR5 localStorage→project-file migration appears nowhere</h3>
+              <span class="finding-location">EXPERIENCE — Foundation / State Patterns / flows</span>
+            </header>
+            <div class="finding-note">The one-time first-run migration (and localStorage-only fallback when no folder is configured) is a UI surface a first-run consumer must build from nothing — absent from Foundation, State Patterns, and every flow.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a "Migration (first run from localStorage)" row to State Patterns, or a Foundation sentence.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Flow 2's CI-lint-gate failure branch is unspecified</h3>
+              <span class="finding-location">EXPERIENCE — Key Flows (line 353)</span>
+            </header>
+            <div class="finding-note">Flow 2 climaxes on "the lint gate passes green in CI" but specifies no failure path for the gate failing red — the exact condition the CI surface exists to catch. The example spines carry a Failure line even on the async-handoff flow.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a <code>Failure:</code> line — non-zero exit, machine-readable errors surfaced, PR blocked; Priya sees the diagnostics.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">FR11 Focus view never named in the summoned-surface mapping</h3>
+              <span class="finding-location">EXPERIENCE — IA (lines 63–66)</span>
+            </header>
+            <div class="finding-note">The mapping folds Tree→breadcrumb, Grid→canvas view, Layers→control, Metrics→analysis view, but never names where <strong>Focus</strong> (membership/exposure editing) went — absorbed into the detail-drawer module editor but left implicit.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add "Focus = the detail drawer's module interface/members editor" to the mapping.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <span class="badge badge-dedup">deduped</span>
+              <h3 class="finding-title">FR7 simulation-report / history export has no stated save home</h3>
+              <span class="finding-location">EXPERIENCE — Export / Foundation; PRD FR7</span>
+            </header>
+            <div class="finding-note">FR7 routes simulation reports and history exports into the project folder; only diagram export (<code>&lt;project&gt;/exports/</code>) is surfaced. Sim-run report file-save is never mentioned.</div>
+            <div class="finding-fix"><strong>Fix:</strong> one line homing sim reports (e.g. <code>&lt;project&gt;/reports/</code>), or fold them into the Export section.</div>
+            <div class="finding-xlink"><strong>Dedup:</strong> Adversarial raised the identical issue independently (§3 "FR7 non-image artifact export not re-homed," low). Merged here; both sources — rubric Flow coverage + adversarial. Kept at low.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>2. Token completeness</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">1 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>39 colors all carry hex; all 108 <code>{...}</code> references resolve; the contrast floor is stated for the load-bearing combinations. The apparent <code>{spacing.1}</code>–<code>{spacing.8}</code> misses are a false positive — YAML string-forced keys (<code>'1'</code>) that flatten correctly at consumption. No missing hex, no unresolved paths, no dangling components.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title"><code>button-primary.foreground</code> is a raw hex outside the fenced contrast floor</h3>
+              <span class="finding-location">DESIGN — Colors / Components</span>
+            </header>
+            <div class="finding-note">A dark-navy label <code>#0b1a2e</code> on <code>{colors.accent}</code> <code>#3794ff</code> — the only non-tokenized, non-neutral color value, and this accent/label pair is load-bearing yet absent from the stated contrast floor.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add the primary-button label pair to the contrast-floor list, or promote the value to a named <code>on-accent</code> token.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> the accessibility auditor computed this exact pair at <code>btn-primary-fg</code>/<code>accent</code> = 5.70:1 (PASS) — the AA worry is resolved; the fencing gap stands. See Accessibility §High "load-bearing pairs the floor never fenced" (AX-H6) for three <em>other</em> unfenced pairs that actually fail.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>3. Component coverage</h2>
+          <span class="verdict-pill verdict-adequate">Adequate</span>
+          <span class="sev-count">2 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>19 of 21 frontmatter components have a real visual-anatomy row plus a specific behavioral rule; behavioral coverage is complete and not one-word.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title"><code>button-primary</code> and <code>quick-fix-button</code> lack a DESIGN.md visual-anatomy row</h3>
+              <span class="finding-location">DESIGN — Components</span>
+            </header>
+            <div class="finding-note">Both carry frontmatter tokens and EXPERIENCE behavioral rules but no visual-anatomy row (the other 19 have one). Impact is contained — frontmatter tokens carry bg/fg/radius/height, so the visual spec is still source-extractable — but the prose spec is absent.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add two short anatomy rows, or accept frontmatter-only and note it.</div>
+          </article>
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Metrics, Aspects, and Layers have no spec beyond their IA one-liner</h3>
+              <span class="finding-location">DESIGN / EXPERIENCE — IA table</span>
+            </header>
+            <div class="finding-note">Metrics (SPOFs, hotspots, path comparison, STRIDE), the Aspects prose view, and Layers (visibility control) are named in the IA table and flows but have no visual or behavioral component spec. Lean-by-design is defensible, but a consumer building the Metrics view gets nothing.</div>
+            <div class="finding-fix"><strong>Fix:</strong> a minimal visual/behavioral note each, or an explicit "spec deferred" marker.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Adversarial escalates the <em>Aspects</em> portion to <span style="color:var(--sev-medium);font-weight:600">medium</span> (§7, "no defined content or layout"). This low stands for the Metrics/Layers residual; the Aspects sub-issue is counted once under adversarial.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>4. State coverage</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">1 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>State Patterns covers empty-project, missing <code>main.spec.yaml</code>, read-only folder, invalid mid-keystroke YAML, external-edit conflict, cold-load shimmer, simulation-running, all-checks-passing, and onboarding; focus states live in the Accessibility Floor. A comprehensive spread — empty, cold-load, error, conflict, and read-only are all explicitly present.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">No command-palette "no matches" state and no library-palette empty state</h3>
+              <span class="finding-location">EXPERIENCE — State Patterns</span>
+            </header>
+            <div class="finding-note">The paired example spine specs a command-palette no-match row. A consumer will otherwise improvise the highest-traffic keyboard surface's empty view.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add the two rows.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>5. Visual reference coverage</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">no findings</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><code>.working/</code> holds three direction boards, three flow-variant wireframes, and two working extracts; <code>imports/</code> is empty. DESIGN.md links all three retained direction boards inline (notion-calm→surfaces/shapes, vscode-kin→accent, discord-warm→density/grouping) and the three wireframes in Components; EXPERIENCE.md links the three wireframes in IA. Each link names what it illustrates. "Spines win on conflict" is stated twice per file. The intentional reject (<code>direction-drafting-instrument.html</code>) and the working extracts are correctly unlinked. No orphans, no unspecific references.</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>6. Bloat &amp; overspecification</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">1 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>DESIGN.md carries editorial voice ("a quiet desk at night, not an IDE cockpit") appropriately; EXPERIENCE.md prose stays plain and behavioral. Inline hex restatement in the Colors section is spec-appropriate (per-color story), matching the example convention.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">"Four undefined tokens now defined" motif repeats ~4× in DESIGN.md</h3>
+              <span class="finding-location">DESIGN — blockquote / Colors / Do &amp; Don't</span>
+            </header>
+            <div class="finding-note">Load-bearing history, but it could compress to one or two mentions. EXPERIENCE.md Open Questions largely restates PRD OQs/assumptions — justified as downstream flags, but skimmable rather than load-bearing.</div>
+            <div class="finding-fix"><strong>Fix:</strong> compress the repeated motif to one or two mentions.</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>7. Inheritance discipline</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">1 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p><code>sources:</code> resolves (the PRD folder exists on disk); <code>design_ref: ./DESIGN.md</code> resolves. UJ names are verbatim from the PRD extract; the EXPERIENCE.md glossary mirrors the canonical PRD glossary term-for-term; component names are identical across frontmatter, DESIGN prose, and EXPERIENCE prose; all EXPERIENCE token references resolve to DESIGN tokens by name.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title"><code>sources</code> points at the PRD folder rather than a specific <code>prd.md</code></h3>
+              <span class="finding-location">DESIGN / EXPERIENCE — frontmatter</span>
+            </header>
+            <div class="finding-note">The example spines point at <code>.../prd.md</code>. Resolves fine and the folder is the correct home, but it is marginally less precise about which file wins.</div>
+            <div class="finding-fix"><strong>Fix:</strong> point <code>sources</code> at the specific file.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> the rubric rates this dimension strong partly on the "glossary mirrored verbatim" claim that Adversarial disputes — see Adversarial §3 "glossary drops the encapsulation clarifier" (A-M6, medium).</div>
+          </article>
+        </div>
+      </details>
+    </section>
+
+    <section class="dimension">
+      <details>
+        <summary>
+          <h2>8. Shape fit</h2>
+          <span class="verdict-pill verdict-strong">Strong</span>
+          <span class="sev-count">no findings</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>DESIGN.md sections run in exact canonical order (Brand &amp; Style → Colors → Typography → Layout &amp; Spacing → Elevation &amp; Depth → Shapes → Components → Do's and Don'ts). EXPERIENCE.md carries all eight required defaults plus both required-when-applicable sections (Inspiration &amp; Anti-patterns; Responsive &amp; Platform). Invented sections earn their place — Scope &amp; Trajectory manages the select-everything-vs-LEAN-DESIGN tension (load-bearing); Open Questions is a useful unresolved-for-downstream ledger.</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ EXTRA REVIEWER: ADVERSARIAL ============ -->
+
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>Adversarial review — cynical reviewer</h2>
+          <span class="reviewer-source">review-adversarial.md</span>
+          <span class="sev-count">2 critical · 7 high · 12 medium · 3 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>These spines are well-written prose sitting on top of an engine that cannot do several of the things they promise. The two headline gestures — <strong>double-click to descend</strong> and <strong>boundary pins at the canvas edge</strong> — fight Excalidraw's own double-click-to-edit and its infinite-canvas coordinate model, and the whole line-jump/syntax-highlight editor story assumes a code editor the app does not have (a bare <code>&lt;textarea&gt;</code>). The "lean default = exactly three things" banner is contradicted three lines later by the doc's own always-present furniture and by <strong>four differently-meaning dot/badge status indicators</strong> shipping at rest — the exact chrome accretion this product exists to kill. Most of the visual/token discipline is genuinely strong; the danger is concentrated in the behavior spine writing physics the canvas engine can't honor, which is itself a "lying UI" the PRD forbids.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Double-click descend collides head-on with Excalidraw's native double-click</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns "Work = descend"; §Interaction Primitives</span>
+            </header>
+            <div class="finding-note">In Excalidraw 0.18, double-clicking a shape enters bound-text editing. The canvas passes only <code>onChange</code> (line 709) and <code>theme="dark"</code> (line 691) — there is <strong>no double-click interception</strong>, so the default is fully in force. Binding double-click to descend means descending a module also tries to edit its label, and double-click now means "rename" on components but "descend" on modules — two conflicting meanings for one gesture, both fighting the engine. The primary "work" gesture is unimplementable without hacking Excalidraw's pointer pipeline.</div>
+            <div class="finding-fix"><strong>Fix:</strong> pick a descend trigger the engine leaves alone (a corner "enter" control, or <code>⌘·</code>/<code>Enter</code>-on-selected-module), state explicitly that double-click text-edit is suppressed on module symbols, and define the module-rename gesture separately.</div>
+            <div class="finding-xlink"><strong>Cross-link (converging criticals):</strong> Accessibility flags the same descend gesture has <em>no keyboard binding at all and no screen-reader path</em> (AX-C1 / AX-C2 / AX-H1). Engine-infeasible by mouse and unreachable by keyboard — the two criticals land on one object.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Descend-as-scene-swap has no coordinate / data model</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns; §Foundation; DESIGN §Components "Boundary pin"</span>
+            </header>
+            <div class="finding-note">Descend is specified as a scene-swap — "the canvas <strong>becomes</strong> the module's internals" — distinct from FR10 expand-in-place. But the compiler does a single flat compile of the whole spec into one scene, and the spine insists "structural data <strong>and coordinates</strong> live in the spec." A component has <strong>one</strong> coordinate in the spec, yet it must appear at one position in the full-system view and a different position in the descended module-internal view. Nowhere is it said where the module-internal-view positions live. A builder cannot compile the subscene deterministically (NFR2) without inventing a second coordinate space; putting it in the spec reintroduces exactly the PR-diff pollution OQ4 was resolved to avoid.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state that descended-view layout is derived/auto-laid-out (not stored), or that per-scope positions live in the project-folder config; specify subscene extraction + synthetic boundary-pin generation as an explicit build dependency.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Boundary pins "docked to the canvas edge" fight the infinite canvas</h3>
+              <span class="finding-location">DESIGN §Components "Boundary pin"; EXPERIENCE §Component Patterns / §View switcher</span>
+            </header>
+            <div class="finding-note">Excalidraw is an infinite pan/zoom surface — there is <strong>no fixed "canvas edge" in scene space</strong>. An element pinned "at the edge" as a real Excalidraw element scrolls away when you pan; as a screen-fixed DOM overlay it <strong>cannot be the endpoint of a native Excalidraw arrow</strong>. So "connections from outside enter via boundary pins at the edge" is physics the engine does not offer.</div>
+            <div class="finding-fix"><strong>Fix:</strong> decide the pin model explicitly — scene-space pins placed at the subscene's computed bounding box (they pan with content) vs. an overlay "gutter" with non-Excalidraw connector rendering — and write it into the spine.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Line-jump, line-highlight, syntax coloring, and line numbers require replacing the textarea — an unflagged major dependency</h3>
+              <span class="finding-location">DESIGN §Components "Editor"; EXPERIENCE §Editor / §Interaction Primitives</span>
+            </header>
+            <div class="finding-note">The editor is a plain <code>&lt;textarea id="spec-textarea"&gt;</code> (<code>editor-panel.tsx:136</code>) with no line numbers and no per-line styling. The DESIGN editor token promises line numbers, <code>syntax-*</code> YAML coloring, and an <code>accent-dim</code> line-highlight; EXPERIENCE makes bidirectional line-jump an MVP, "named critical." A <code>&lt;textarea&gt;</code> <strong>cannot</strong> render line-highlight backgrounds, syntax colors, or a gutter — every one needs CodeMirror/Monaco. The single most-promised interaction silently depends on ripping out and replacing the editor, which no artifact flags as scope.</div>
+            <div class="finding-fix"><strong>Fix:</strong> name the code-editor swap as an explicit MVP dependency (or descope syntax/line-highlight to what a textarea overlay can fake), so the estimate isn't a surprise.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">"Lean default = exactly three things" is false by the doc's own inventory, and four status indicators ship at rest</h3>
+              <span class="finding-location">EXPERIENCE §Information Architecture (line 45 + table); DESIGN §Components</span>
+            </header>
+            <div class="finding-note">The banner says the lean default is "exactly three things: editor, canvas, collapsed diagnostics strip." The same IA table then marks <strong>Status bar</strong> = Visible and <strong>Breadcrumb</strong> = "always present in canvas"; DESIGN adds an always-rendered <strong>sync-health chip</strong> and a <strong>canvas toolbar</strong>. Worse, the rest state carries <strong>four differently-meaning dot/badge signifiers</strong> — status-bar dirty dot, corner sync-health chip, diagnostics-strip dot, and per-module diagnostic badge. A first-timer sees four small colored blobs meaning four unrelated things; the product reaccretes the very orientation-less chrome it was chartered to remove.</div>
+            <div class="finding-fix"><strong>Fix:</strong> replace "exactly three things" with an honest tally ("two primary panes + a diagnostics strip + persistent status/nav furniture"), and consolidate/differentiate the four look-alike status signifiers.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Accessibility hits the same color-as-sole-carrier problem for node state — selection ring, error border, and sim glow stack distinguished by color/glow alone (AX-H5).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Grid is simultaneously "a canvas view," a quick-fix host, and absent from the view-switcher enumeration</h3>
+              <span class="finding-location">EXPERIENCE §IA table "Canvas"; §Quick-fix; §View switcher; PRD FR9/FR11</span>
+            </header>
+            <div class="finding-note">The IA says "the 'Grid' alt is a canvas view in the switcher," and §Quick-fix routes fixes to "the diagnostics strip, the detail drawer, and the Grid view." But the switcher is enumerated everywhere as <strong>Static / Simulation / Aspects</strong> (+ grayed Sequence/Pipeline/State) — Grid is not in the list. A builder cannot place the Grid, nor the FR9 quick-fix button that's supposed to live in it.</div>
+            <div class="finding-fix"><strong>Fix:</strong> either add Grid to the enumerated switcher entries, or delete the stale "Grid view" quick-fix reference and re-home that quick-fix surface.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">FR11 Tree view is folded into the breadcrumb, losing the whole-hierarchy view with no replacement</h3>
+              <span class="finding-location">EXPERIENCE §IA "Summoned-surface mapping"; PRD FR11; UJ3</span>
+            </header>
+            <div class="finding-note">FR11 requires Tree/Grid/Focus to reflect module membership. The spine maps <strong>Tree → breadcrumb</strong>, but a breadcrumb shows only the current path (system → module → submodule), not the full tree of modules and members. No surface lists the whole hierarchy. UJ3's newcomer, whose whole job is "start at the collapsed top level and dive progressively," loses the at-a-glance structural map FR11 guaranteed — presented as a lossless "fold" but a capability cut.</div>
+            <div class="finding-fix"><strong>Fix:</strong> acknowledge the regression and either restore a hierarchy affordance (a tree in the file rail / command-palette navigator), or justify that canvas navigation replaces it.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <span class="badge badge-dedup">deduped</span>
+              <h3 class="finding-title"><code>Space</code> (peek) and <code>⇧1</code> (fit) collide with text entry in the editor; no suppression rule</h3>
+              <span class="finding-location">EXPERIENCE §Interaction Primitives keyboard map + "Undo/redo semantics"</span>
+            </header>
+            <div class="finding-note"><code>selectedUnit</code> is shared across both panes, so a module can be "selected" while the cursor is in the YAML <code>&lt;textarea&gt;</code>. <code>Space</code> = peek and <code>⇧1</code> = fit-to-screen are bare/shift keys that are literal characters in text. The spine only suppresses undo/redo inside inputs — it never says what happens to <code>Space</code>/<code>⇧1</code> while typing. Taken literally, pressing space peeks (or typing <code>!</code> fits the diagram).</div>
+            <div class="finding-fix"><strong>Fix:</strong> state the rule — global bare/shift shortcuts are inert while focus is in the editor; <code>Space</code>-peek/<code>⇧1</code>-fit require canvas focus.</div>
+            <div class="finding-xlink"><strong>Dedup:</strong> Accessibility raised the same <code>Space</code> overload from the canvas-pan / focused-button side (AX §Medium "Space-to-peek may collide with canvas pan and focused-button activation," medium). Same root cause — no stated focus-arbitration rule for <code>Space</code>. Merged here; both sources. Kept at <strong>high</strong>.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Line-jump into a collapsed/undescended module has no defined behavior, yet "works across scopes" is promised</h3>
+              <span class="finding-location">EXPERIENCE §Editor leash-follow + line-jump; §Key Flows</span>
+            </header>
+            <div class="finding-note">"Place the cursor on a YAML line → the canvas highlights and centers the corresponding element… works across scopes (descended or not)." But a component inside a <strong>collapsed module symbol</strong> (or inside a different module than the one you're descended in) is <strong>not rendered</strong> — there is no element to center. Does the canvas auto-expand/descend, ascend, or highlight the sealed symbol as a proxy? Undefined. The "named critical," MVP line-jump breaks precisely where the hierarchy it's supposed to traverse gets in the way.</div>
+            <div class="finding-fix"><strong>Fix:</strong> specify the cross-scope target rule — auto-navigate to the scope containing the line and center there, or highlight the enclosing symbol when the target is sealed.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title"><code>theme="dark"</code> color-inversion shifts the literal type-hue hexes</h3>
+              <span class="finding-location">DESIGN §Colors "Type hues"; memlog 2026-07-09</span>
+            </header>
+            <div class="finding-note">The canvas is hard-pinned <code>theme="dark"</code> and the memlog keeps "the existing Excalidraw dark-inversion approach." DESIGN specifies exact final hexes for the type hues (Gateway <code>#2dd4bf</code>, etc.). If Excalidraw's dark theme inverts node strokes, authoring those hexes produces different on-screen colors than the DESIGN swatches, and the fences (Store-off-selection-blue, Gateway-off-warning-amber) silently break.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state whether the DESIGN hues are pre- or post-inversion values; if the inversion is kept, provide the authored (pre-inversion) source hexes for canvas elements.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Peek trigger needs manual hit-testing Excalidraw doesn't expose</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns "Glance = peek"</span>
+            </header>
+            <div class="finding-note">"Hover-pause opens a peek card" and "Space (with a module selected)" both require knowing the pointer is over a specific module. Excalidraw exposes no per-element hover API; you must hit-test the pointer against scene elements yourself on every mousemove and convert scene→screen coords to place the card. Feasible but non-trivial, and the pause duration is unspecified.</div>
+            <div class="finding-fix"><strong>Fix:</strong> note the manual hit-test + coord-conversion as a build task and give the hover-pause a concrete threshold (e.g. 500 ms).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Four overlapping affordances to inspect one module symbol</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns; §Detail drawer; keyboard map</span>
+            </header>
+            <div class="finding-note">One module symbol answers to: single-click → select + open detail drawer, <code>Space</code> → peek card, double-click → descend, and a corner control → expand-in-place. Three of these reveal overlapping "module internals/interface" views — a lot of doors on one box for a lean product, and undiscoverable.</div>
+            <div class="finding-fix"><strong>Fix:</strong> justify or thin the set — e.g. drawer = interface editing only, peek = internals glance, descend = work — so the three don't read as redundant.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">First-timer discovery gap: every capability is summoned, nothing teaches the summons</h3>
+              <span class="finding-location">EXPERIENCE §IA; §State Patterns "Onboarding"; §Command palette</span>
+            </header>
+            <div class="finding-note">"Everything else is summoned" via <code>⌘P</code>, <code>Space</code>, double-click, an edge flyout, <code>⌘J</code>, a rail toggle — none visible at rest. The onboarding tour teaches "the core loop," not the gesture vocabulary or how to summon surfaces. A novice who dismisses the tour is stranded with editor + canvas + dots.</div>
+            <div class="finding-fix"><strong>Fix:</strong> make onboarding explicitly teach the gesture/summon vocabulary, or add resting affordance hints; reconcile the library-palette flyout open trigger ("prominent" empty state vs "closed edge flyout" IA).</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Accessibility's "keyboard entry to everything" claim (AX-H2) is the same summon vocabulary with no committed command inventory to back it.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Detail-drawer field list drops sim-critical component metadata</h3>
+              <span class="finding-location">EXPERIENCE §Detail drawer; PRD §6 / extract §3</span>
+            </header>
+            <div class="finding-note">The drawer's component form is enumerated as id, name, type, owner, status, description, latency, throughput, connections. The PRD's canonical metadata also includes <code>rate_limit</code>, <code>buffer</code>, <code>throttled</code> (and <code>color</code>) — the fields the <strong>simulator</strong> consumes, editable today in the Focus tab. If the drawer replaces Focus with only the listed fields, there is no editor for simulation parameters.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add the sim params to the drawer's component form, or state explicitly where they're edited.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Glossary "mirrored verbatim" drops the load-bearing encapsulation clarifier; descend depth limit never stated</h3>
+              <span class="finding-location">EXPERIENCE §header glossary (lines 16–18); PRD §6 / FR8</span>
+            </header>
+            <div class="finding-note">The spine lists "Module / submodule" as a bare term and claims the glossary is "mirrored verbatim," but omits the PRD's pinned reading: "the two encapsulation boundaries… the system root and leaf components are <strong>not</strong> encapsulation boundaries" — a flagged terminology-drift risk. Relatedly, no rule states that descend bottoms out at submodule; a builder could allow arbitrary nesting.</div>
+            <div class="finding-fix"><strong>Fix:</strong> carry the clarifier verbatim and state the descend/nesting depth cap (system → module → submodule; components are not descendable).</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> directly contests the rubric's Inheritance-discipline "strong" verdict, which credited the verbatim-glossary claim.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title"><code>⌘,</code> "opens settings" but no settings surface exists in the IA</h3>
+              <span class="finding-location">EXPERIENCE §Command palette; §Interaction Primitives; PRD FR12</span>
+            </header>
+            <div class="finding-note">The keyboard map binds <code>⌘,</code> to "settings," yet the IA table has no Settings surface, and FR12 removed the dead Settings button as lying UI. A shortcut that opens a panel that isn't designed is itself a lying affordance.</div>
+            <div class="finding-fix"><strong>Fix:</strong> define the settings surface (view-state lives in config, so what's left?), or drop the <code>⌘,</code> binding.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">No precedence when conflict prompt + data-loss toast + drift chip fire together — and this is the common case</h3>
+              <span class="finding-location">EXPERIENCE §Sync-health chip; §Conflict prompt; §State Patterns</span>
+            </header>
+            <div class="finding-note">The spine itself says agent-edits-while-open is "the common case." That single event plausibly triggers, at once: the modal <strong>conflict prompt</strong>, a <strong>data-loss toast</strong>, and a stateful <strong>sync-health chip</strong>. Three attention-grabbers, no stacking or precedence rule, on the product's most frequent event.</div>
+            <div class="finding-fix"><strong>Fix:</strong> define precedence — the conflict prompt is modal and wins; drift/loss surfaces suppress or queue behind it and re-evaluate after the user's reload/keep choice.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Accessibility hits the same common-case event from the a11y side — conflict-modal focus management (AX-H3) and toast live-region/keyboard-reach (AX-H4).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Peek open (or descended) when the file changes on disk, or a quick-fix deletes the scope you stand in</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns; §Quick-fix; §State Patterns</span>
+            </header>
+            <div class="finding-note">Undefined: (a) peek card open when a reload replaces the buffer and the peeked module no longer exists; (b) you're descended into module A and a fix-all/reload deletes/renames A — the canvas is "standing in" a scope that doesn't exist. The reconciler has <code>rename-id</code>, orphaning the per-module view-state keys stored in config.</div>
+            <div class="finding-fix"><strong>Fix:</strong> specify "if the current scope is deleted or its id changes, auto-ascend to the nearest surviving ancestor and re-key or drop its view state"; dismiss/refresh the peek card on reload.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Drawer docked-right at 1024px with the file rail open exceeds the minimums; "graceful degradation" names no hide-order</h3>
+              <span class="finding-location">DESIGN §Layout; EXPERIENCE §Detail drawer; §Responsive</span>
+            </header>
+            <div class="finding-note">Editor (≥280) + canvas (≥280) + docked-right inspector (~280) + file rail — plus split handles — cannot coexist at 1024px. The spine's only answer is "narrow windows degrade gracefully; chrome may hide," with no hide-order. A builder guesses which of four regions collapses first.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state the degradation order (e.g. file rail auto-collapses first, then the docked drawer reverts to under-editor) and the width thresholds.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Accessibility's 200%-zoom reflow gap (AX-M7) is the same responsive stance underspecified from the WCAG angle.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Undo across a descend boundary operates on invisible context</h3>
+              <span class="finding-location">EXPERIENCE §Interaction Primitives "Undo/redo"; §Component Patterns</span>
+            </header>
+            <div class="finding-note">Descend/ascend is view state (config), so undo (which acts on the spec/buffer) won't restore scope. Edit inside module A, ascend, then undo → you reverse an edit to an element you can no longer see, at the top level, with no visual feedback.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state that undo does not restore scope but auto-navigates to the scope of the reverted change (or explicitly accept the blind-undo and say so).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">The "Aspects" view is MVP-designed but has no defined content or layout</h3>
+              <span class="finding-location">EXPERIENCE §View switcher; §Scope &amp; Trajectory "MVP-designed"</span>
+            </header>
+            <div class="finding-note">"Aspects (free-text prose as a legitimate representation)" is listed as a live MVP view alongside Static/Simulation, but nothing says what it renders — prose from which field? The per-component <code>description</code>? A system-level narrative? What's the layout when "the diagram" is text? A builder cannot build a view from "prose as a legitimate representation."</div>
+            <div class="finding-fix"><strong>Fix:</strong> define the Aspects content source and layout, or move it to DIRECTIONAL with the other future renderers.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> escalates the rubric's Component-coverage low (Metrics/Aspects/Layers spec gap); the Aspects sub-issue is counted here at medium.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title"><code>Esc</code> precedence is an ambiguous list, not an order</h3>
+              <span class="finding-location">EXPERIENCE §Interaction Primitives "Esc"; §Component Patterns</span>
+            </header>
+            <div class="finding-note"><code>Esc</code> = "Dismiss peek · ascend one level · close palette/popover." With a popover open <em>and</em> a peek open <em>and</em> descended, one <code>Esc</code> must do one thing; the list order (ascend in the middle) doesn't encode topmost-first.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state "Esc closes the topmost transient overlay first (popover → palette → peek), and only ascends when no overlay is open."</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Simulation running + external reload leaves a stale sim graph mid-run</h3>
+              <span class="finding-location">EXPERIENCE §State Patterns "Simulation running"; §Conflict prompt</span>
+            </header>
+            <div class="finding-note">Sim runs on the buffer; a reload swaps the buffer under a live playback. No rule says whether the sim stops, restarts, or continues on the old graph.</div>
+            <div class="finding-fix"><strong>Fix:</strong> one line — reload halts any running simulation and requires re-run.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Unquantified rules: hover-pause duration, sync-health cadence, edge-flyout trigger, <code>[DELEGATED]</code> on decided items</h3>
+              <span class="finding-location">EXPERIENCE — multiple</span>
+            </header>
+            <div class="finding-note">Hover-pause peek has no threshold; "silent check when honest" sync-health has no cadence; the library-palette edge flyout's open trigger is vague; and several load-bearing <em>resolved</em> decisions are tagged <code>[DELEGATED]</code>, which reads like "still open" on a contract doc.</div>
+            <div class="finding-fix"><strong>Fix:</strong> give numbers where behavior needs them, and relabel resolved <code>[DELEGATED]</code> items as decided-by-facilitator so a builder treats them as binding.</div>
+          </article>
+
+          <p style="font-size:13px;color:var(--muted);margin:14px 20px 4px;padding-top:12px;border-top:1px solid var(--border);"><em>Preserved correctly (reviewer's note for the record):</em> FR9 retarget-default + index-safe fix-all is exact; the four component types and their hue fences are clean; FR10-override → OQ4 config is properly disclosed; FR3 save semantics, FR15 empty state, FR13 onboarding location, and FR16 and/or are all coherently resolved. <em>(§3 "FR7 non-image artifact export not re-homed," low, is merged into rubric Flow coverage above — see the deduped finding there.)</em></p>
+
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ EXTRA REVIEWER: ACCESSIBILITY ============ -->
+
+    <section class="reviewer-section">
+      <details>
+        <summary>
+          <h2>Accessibility review — accessibility auditor</h2>
+          <span class="reviewer-source">review-accessibility.md</span>
+          <span class="sev-count">2 critical · 6 high · 8 medium · 5 low</span>
+        </summary>
+        <div class="dim-body">
+          <div class="dim-judgment">
+            <p>The spines are genuinely strong where they legislate: the color-never-sole-carrier contract for type and severity holds, the 13px density correction is real, <code>prefers-reduced-motion</code> is named, and every declared WCAG-AA floor combination computes clean. But the <strong>canvas — the product's right half — has no stated keyboard navigation and no stated screen-reader position</strong>, so a keyboard-only or blind architect has no committed path to select, peek, descend, or perceive a single node; the editor is a perfect accessible equivalent yet the spine never says so. Secondary but real: the command palette is claimed as "keyboard entry to everything" with no command inventory, several interactive states have no stated focus or non-color differentiation, and a handful of load-bearing token pairs the floor never fenced miss AA by a hair.</p>
+          </div>
+        </div>
+        <div class="findings-list">
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">Canvas has no committed keyboard navigation</h3>
+              <span class="finding-location">EXPERIENCE §Component Patterns / Interaction Primitives</span>
+            </header>
+            <div class="finding-note">Every canvas gesture is mouse-defined. The keyboard map binds only <code>Esc</code> (ascend/dismiss) and <code>Space</code> (peek an <em>already-selected</em> module) — <strong>nothing selects or moves between nodes, and nothing descends</strong>. The entire tiered-navigation model (peek / descend / expand-in-place), the core of the product, is unreachable without a mouse. The Accessibility Floor promises reachability for summoned surfaces but conspicuously omits the canvas itself. Excalidraw's own keyboard support for traversing scene objects is limited, so this cannot be assumed — it must be designed or honestly punted.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a canvas keyboard model — <code>Tab</code>/arrows move a focus ring between nodes/pins in reading order; <code>Enter</code> descends, <code>Space</code> peeks, <code>Esc</code> ascends; a "Go to node…" palette command jumps focus by name. If a full spatial model is out of MVP scope, state that explicitly and route keyboard users to the editor + "Go to node."</div>
+            <div class="finding-xlink"><strong>Cross-link (converging criticals):</strong> Adversarial shows the mouse descend gesture is itself engine-infeasible (double-click collides with Excalidraw's native double-click). Engine-broken by mouse and unreachable by keyboard — one object, two criticals.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-critical">critical</span>
+              <h3 class="finding-title">No screen-reader / accessible-equivalent position for the canvas</h3>
+              <span class="finding-location">DESIGN §Components; EXPERIENCE §Foundation, Accessibility Floor</span>
+            </header>
+            <div class="finding-note">The canvas is an inherently visual Excalidraw surface, and the spines say nothing about how a screen-reader user perceives it: no <code>aria-label</code> on the canvas region, no roles/labels for nodes, chips, badges, or pins, and no stated position that <strong>the YAML editor is the accessible textual equivalent</strong> of the diagram. This is the one place the product is unusually well-positioned — the editor <em>is</em> the honest contract — yet the commitment is absent, so it will not be built or QA'd. Silence here = a blind user gets an unlabeled canvas and nothing else.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state in the Accessibility Floor that "the canvas is a supplementary visual view; the editor is the screen-reader-accessible equivalent and carries the full contract," <code>aria-label</code> the canvas region, and expose node names/roles where Excalidraw permits. Add live-region announcements for diagnostics count, sync-health state, save/dirty state, and simulation start/stop.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Descend has no keyboard binding — hierarchy navigation is one-way</h3>
+              <span class="finding-location">EXPERIENCE §Interaction Primitives</span>
+            </header>
+            <div class="finding-note"><code>Esc</code> ascends one level (stated), but the only descend gesture is <code>double-click</code>. A keyboard user who somehow reaches a module can climb <em>out</em> of the hierarchy but never <em>in</em> — the VHDL descend/ascend pillar, the admired anchor, is half-reachable.</div>
+            <div class="finding-fix"><strong>Fix:</strong> bind descend to <code>Enter</code> (or double-<code>Enter</code>) on a focused/selected module, add a "Descend into module" palette command, and mirror <code>Esc</code>↔descend in the keyboard map so the pair is symmetric.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> subset of AX-C1 (canvas keyboard nav); and Adversarial shows the <code>double-click</code> descend is engine-broken even for mouse.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">"Keyboard entry to everything" is claimed but not backed by a command inventory</h3>
+              <span class="finding-location">EXPERIENCE §IA table, Command palette</span>
+            </header>
+            <div class="finding-note">The IA calls the command palette "keyboard entry to everything," but no command inventory is committed, and the spatial/canvas operations a mouse user performs — select node X, descend into Y, expand-in-place, toggle a type's visibility, switch view, resolve a specific drift, run a quick-fix, insert a template, run/pause/step the sim, dock the drawer, export — are nowhere enumerated as commands. An "everything" claim with no backing list is a lying-UI risk against the spine's own "zero lying UI" rule.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add a Command Inventory listing (or ruling in-scope) every mouse-reachable action as a palette command, especially the canvas-spatial ones; commit that the palette is exhaustive, or narrow the claim.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Adversarial's first-timer discovery gap (A §2) is the same summon vocabulary with nothing to teach it.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Conflict prompt (data-loss modal) has no stated focus management</h3>
+              <span class="finding-location">EXPERIENCE §Conflict prompt, State Patterns</span>
+            </header>
+            <div class="finding-note">The conflict prompt — "Changed on disk. Reload or keep your edits?" — is the <strong>common case</strong>, and one choice overwrites disk while the other discards the buffer: irreversible either way. Yet nothing is stated about focus trap, initial focus, default/destructive-button distinction, or <code>Esc</code> behavior (and here <code>Esc</code> is dangerous — it must not silently pick a data-losing default). A keyboard user could destroy work by hitting the wrong key.</div>
+            <div class="finding-fix"><strong>Fix:</strong> modal traps focus, initial focus lands on the <strong>non-destructive</strong> choice, both buttons are keyboard-operable and labeled distinctly (not color-only), <code>Esc</code> cancels to the safe state (keep-editing, no write), and focus restores to the editor on close.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Adversarial flags the same common-case event has no precedence when the modal + data-loss toast + drift chip fire together (A §5).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Toasts — including the data-loss warning — not committed to a live region or keyboard-reachable action</h3>
+              <span class="finding-location">DESIGN §Toast; EXPERIENCE §Sync-health chip + data-loss toast</span>
+            </header>
+            <div class="finding-note">The data-loss toast fires when canvas content would vanish on reload — a genuine loss warning — and export toasts carry an open/download action. Nothing states the toast is announced via <code>aria-live</code>, whether it steals focus, or that its action link is keyboard-focusable and <code>Esc</code>-dismissible. A screen-reader or keyboard user silently misses the loss warning and cannot reach "Undo/open."</div>
+            <div class="finding-fix"><strong>Fix:</strong> render loss warnings in an <code>aria-live="assertive"</code> region (<code>polite</code> for completions), do not steal focus, keep action + dismiss keyboard-reachable while visible, and mirror the loss warning as a diagnostics/sync entry so it survives toast timeout.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> pairs with AX-H3 and Adversarial A §5 on the same conflict/data-loss common-case event.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Selection ring, error border, and simulation glow stack on one node, distinguished by color/glow alone</h3>
+              <span class="finding-location">DESIGN §Component node; EXPERIENCE §Canvas display elements</span>
+            </header>
+            <div class="finding-note">A node can be simultaneously <strong>selected</strong> (<code>accent</code> ring), <strong>erroring</strong> (<code>danger</code> border), and <strong>on an active sim path</strong> (<code>accent</code> glow). Selection ring and simulation glow are the same hue, so a selected node on a sim path is ambiguous; error vs the others is a pure color swap. No shape/icon/stroke-style differentiation is stated — this reintroduces color-as-sole-carrier for node <em>state</em> (solved only for type and severity).</div>
+            <div class="finding-fix"><strong>Fix:</strong> differentiate by more than color — selection = solid ring + handles, error = dashed <code>danger</code> border + an error glyph, simulation = animated/pulsing glow + a "live" readout — and define the stacking order for co-occurrence in DESIGN §Component node.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Adversarial's "four look-alike status dots at rest" (A §2) is the same color-as-sole-carrier problem for chrome-level signifiers.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-high">high</span>
+              <h3 class="finding-title">Load-bearing token pairs the contrast floor never fenced miss WCAG AA</h3>
+              <span class="finding-location">DESIGN §Colors "Contrast floor", Components</span>
+            </header>
+            <div class="finding-note">The declared floor combinations all pass, but three <em>undeclared</em> load-bearing pairs fail: <strong><code>danger</code> on <code>danger-dim</code> = 4.23:1</strong> (error diagnostic-badge glyph+count — the single most important severity has the only failing badge); <strong><code>accent</code> on <code>accent-dim</code> = 4.18:1</strong> (the open file's name in the file rail — the indicator of <em>which file you are editing</em>); <strong><code>syntax-punctuation</code> on <code>background</code> = 3.01:1</strong> (YAML structural punctuation a low-vision author must read to parse structure).</div>
+            <div class="finding-fix"><strong>Fix:</strong> brighten <code>danger</code> toward ~<code>#ef6d70</code> (or darken <code>danger-dim</code>) to ≥4.5 on the fill; use <code>foreground</code> not <code>accent</code> for the active filename + an accent marker; raise <code>syntax-punctuation</code> (e.g. <code>#7a7972</code>+) or declare it decorative; add all three to the DESIGN contrast-floor list.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> the rubric flagged <code>button-primary</code> as similarly unfenced (Token completeness, low) — but the auditor computed <code>btn-primary-fg</code>/<code>accent</code> = 5.70:1 (PASS), so that one clears AA; these three do not.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">13px floor contradicts the spine's own typography tokens</h3>
+              <span class="finding-location">DESIGN §Typography; EXPERIENCE §Accessibility Floor</span>
+            </header>
+            <div class="finding-note">The floor says interactive/content text is ≥13px (only <code>eyebrow</code> at 11px), but <code>caption</code> (12px), <code>readout</code> (12px — "ids and <strong>metrics</strong> — latency, throughput, packet counts"), and <code>kbd</code> (11px) all carry content, re-importing the 9–11px squint problem §7 called out.</div>
+            <div class="finding-fix"><strong>Fix:</strong> raise <code>readout</code>/<code>caption</code> to 13px and <code>kbd</code> to ≥12px, or amend the floor to carve them out and justify each — but <code>readout</code> carrying metrics is hard to justify as non-content. Recommend raising <code>readout</code>.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Focus is not stated to move on selection (drawer) or after descend</h3>
+              <span class="finding-location">EXPERIENCE §Detail drawer, Module symbol</span>
+            </header>
+            <div class="finding-note">"Selecting any unit opens the detail drawer," but nothing says focus moves into the drawer's first field — so a keyboard user opens a form they must then hunt for. Likewise, after descend the canvas focus target inside the module is unstated.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state that selection moves focus to the drawer's first field (or a documented <code>⌘J</code>/<code>Tab</code> path into it), and that descend places focus on the first boundary pin or node of the entered module.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Expand-in-place has no stated keyboard path</h3>
+              <span class="finding-location">EXPERIENCE §Module symbol</span>
+            </header>
+            <div class="finding-note">Expand-in-place is triggered by "an explicit corner control or context-menu action." Corner controls need focus (unstated) and context menus need a keyboard opener (<code>Menu</code>/<code>Shift+F10</code>, unstated).</div>
+            <div class="finding-fix"><strong>Fix:</strong> bind expand-in-place to a key on a focused module and/or a palette command; ensure the context menu opens from the keyboard.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Sync-health chip resolution has no stated keyboard operation</h3>
+              <span class="finding-location">EXPERIENCE §Sync-health chip</span>
+            </header>
+            <div class="finding-note">The chip "click expands a popover of per-drift resolve actions," and drifts can risk data loss. The chip isn't in the Accessibility Floor reachability list, and popover keyboard operation (focus, arrow, <code>Esc</code>) is unstated.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add the sync-health chip to the reachable set; specify focus into the popover, arrow-through per-drift actions, and <code>Esc</code> to close.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Playback bar / simulation transport not committed to keyboard; reduced-motion coupling is vague</h3>
+              <span class="finding-location">EXPERIENCE §State Patterns "Simulation running", Interaction Primitives</span>
+            </header>
+            <div class="finding-note">The playback bar (speed, pause, step) is absent from the reachability commitment, so a keyboard user may be unable to pause or step a running simulation — the app's largest continuous motion. <code>prefers-reduced-motion</code> is named generally but not explicitly tied to the moving packet-dot animation.</div>
+            <div class="finding-fix"><strong>Fix:</strong> add playback controls to the reachable set with keys (e.g. <code>K</code> pause/play, <code>,</code>/<code>.</code> step); state that <code>prefers-reduced-motion</code> suppresses the simulation packet motion and that simulation is pausable (WCAG 2.2.2).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Browser zoom / text-resize (WCAG 1.4.4 / 1.4.10 reflow) not addressed</h3>
+              <span class="finding-location">DESIGN §Layout &amp; Spacing; EXPERIENCE §Responsive &amp; Platform</span>
+            </header>
+            <div class="finding-note">"Desktop-only," fixed two-pane, "narrow windows degrade gracefully — not designed." Reflow at 200% zoom and text resize to 200% are AA requirements even for desktop web; the non-responsive stance may break layout at zoom with no committed behavior. (Canvas <code>⇧1</code> fit is diagram zoom, not UI text zoom.)</div>
+            <div class="finding-fix"><strong>Fix:</strong> commit a minimum — UI text scales/reflows to 200% without loss of content or function within the desktop frame (panes may narrow to minimums, chrome may collapse), even without a full responsive layout.</div>
+            <div class="finding-xlink"><strong>Cross-link:</strong> Adversarial's 1024px pane-arithmetic + no-hide-order gap (A §5) is the same responsive stance underspecified.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Roving/arrow-key navigation committed only for tabs + view switcher, not the palette or diagnostics lists</h3>
+              <span class="finding-location">EXPERIENCE §Accessibility Floor</span>
+            </header>
+            <div class="finding-note">Roving tab focus is promised for tab bars and the view switcher, but the command-palette result list and the expanded diagnostics list are vertical option lists that equally need arrow-key nav with a single tab stop — unstated. Also: the view switcher is a "dropdown" in DESIGN/Component Patterns but a roving "tab bar" in the Floor — different ARIA patterns (combobox/listbox vs tablist).</div>
+            <div class="finding-fix"><strong>Fix:</strong> extend the arrow-key/single-tab-stop commitment to the palette list and diagnostics list; reconcile the view-switcher description (dropdown <em>or</em> tablist) so the keyboard pattern is unambiguous.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-medium">medium</span>
+              <h3 class="finding-title">Dirty-dot and low-value contrast edges</h3>
+              <span class="finding-location">DESIGN §Status bar, Colors</span>
+            </header>
+            <div class="finding-note">The dirty state is an <code>accent</code> dot only, with no text affordance — small and color/presence-only; a low-vision user may miss "unsaved." Separately, <code>accent-strong</code> on <code>surface</code> = 3.61:1 (status-bar accent): fine as a graphical accent (≥3:1) but fails 4.5:1 if it ever carries text.</div>
+            <div class="finding-fix"><strong>Fix:</strong> pair the dirty dot with a text/tooltip affordance ("Unsaved") or a filename style change; fence <code>accent-strong</code> to non-text use, or don't use it for status-bar labels.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title"><code>foreground-dim</code> fails 4.5:1 on every surface — protected by declaration, but two edge cases lean load-bearing</h3>
+              <span class="finding-location">DESIGN §Colors</span>
+            </header>
+            <div class="finding-note">Scoped as "decorative/supplementary only… never sole carrier of essential meaning," so its 2.99–3.66:1 ratios are compliant by contract. Two uses press that boundary: editor line numbers (the line-jump feature navigates <em>by</em> line) and the disabled future view-switcher entries (2.99:1 on <code>surface-elevated</code>).</div>
+            <div class="finding-fix"><strong>Fix:</strong> keep them supplementary; ensure line-jump never <em>requires</em> reading a dim number.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Peek dismissal focus-return not stated</h3>
+              <span class="finding-location">EXPERIENCE §Module symbol</span>
+            </header>
+            <div class="finding-note"><code>Esc</code> dismisses the peek card, but where focus returns (should be the peeked module) is unstated.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state focus returns to the module that was peeked.</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">High-speed simulation (up to 5×) vs. flash thresholds not addressed</h3>
+              <span class="finding-location">EXPERIENCE §State Patterns; extract §3</span>
+            </header>
+            <div class="finding-note">The build offers 0.5×–5× playback with moving packet dots; at high speed, rapidly appearing dots could approach WCAG 2.3.1's three-flashes-per-second limit. The spines don't address it.</div>
+            <div class="finding-fix"><strong>Fix:</strong> state that packet animation never exceeds the flash threshold at any speed (cap effective flash rate or use motion, not blink).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Border hairlines sit far below 3:1 — by design, worth an explicit note</h3>
+              <span class="finding-location">DESIGN §Elevation &amp; Depth, Colors</span>
+            </header>
+            <div class="finding-note"><code>border</code> on <code>surface</code>/<code>background</code> = 1.18–1.28:1 and <code>border-node</code>/<code>border-pin</code> = 1.36–1.61:1 — intended to "nearly vanish," so not text/essential graphics. But <strong>module symbols</strong> (no type tint) rely on <code>border-node</code> = 1.49:1 against the canvas plus a ~1.1:1 fill delta — their boundary is nearly imperceptible for low-vision users, and the object-boundary <em>is</em> essential for an untyped module box.</div>
+            <div class="finding-fix"><strong>Fix:</strong> ensure module symbols carry a perceivable boundary (raise <code>border-node</code> toward 3:1 against <code>surface-canvas</code>, or add a shade/tint).</div>
+          </article>
+
+          <article class="finding">
+            <header>
+              <span class="badge badge-sev-low">low</span>
+              <h3 class="finding-title">Layers visibility control and "operable" claims are asserted, not specified</h3>
+              <span class="finding-location">EXPERIENCE §IA, Accessibility Floor</span>
+            </header>
+            <div class="finding-note">"View switcher, layers control, library palette, and diagnostics are all reachable and operable without a mouse" is a blanket assertion with no per-control keyboard spec (how a toggle flips, how a library item is inserted — though the editor "Insert template" path covers library insertion honestly).</div>
+            <div class="finding-fix"><strong>Fix:</strong> note the concrete key/mechanism for each (Layers toggle = <code>Space</code>/<code>Enter</code> on a focused row; library = editor "Insert template" as the committed keyboard equivalent).</div>
+          </article>
+
+          <p style="font-size:13px;color:var(--muted);margin:14px 20px 4px;padding-top:12px;border-top:1px solid var(--border);"><em>Deduped:</em> the auditor's medium "<code>Space</code>-to-peek may collide with canvas pan and focused-button activation" is folded into Adversarial's <code>Space</code>/<code>⇧1</code> overload finding (kept at high) — same root cause, no stated focus-arbitration rule for <code>Space</code>. Full computed contrast table (all load-bearing pairs, WCAG 2.x) is in <code>review-accessibility.md</code>.</p>
+
+        </div>
+      </details>
+    </section>
+
+    <div class="mechanical">
+      <h3>Mechanical notes</h3>
+      <ul>
+        <li><strong>Deduped panel tally:</strong> 4 critical · 13 high · 22 medium · 16 low, from a raw 4 / 13 / 23 / 17 across the three reviewers (rubric 0/0/2/8 · adversarial 2/7/12/4 · accessibility 2/6/9/5). Two findings collapsed; see below.</li>
+        <li><strong>Dedup 1 — <code>Space</code> overload (kept high):</strong> Adversarial "<code>Space</code> (peek) and <code>⇧1</code> (fit) collide with text entry" + Accessibility "<code>Space</code>-to-peek collides with canvas pan / focused-button activation" are one underlying issue — no focus-arbitration rule for <code>Space</code>. Merged into the adversarial high; both sources retained. Removes 1 medium.</li>
+        <li><strong>Dedup 2 — FR7 export home (kept low):</strong> Rubric Flow-coverage "FR7 sim-report file-save not surfaced" + Adversarial "FR7 non-image artifact export not re-homed" are the same gap. Merged into rubric Flow coverage; both sources retained. Removes 1 low.</li>
+        <li><strong>Converging criticals (cross-linked, not merged):</strong> Adversarial's "double-click descend collides with Excalidraw's native double-click" and Accessibility's "canvas has no keyboard nav / no screen-reader position" are two faces of one object — the canvas descend model is engine-infeasible by mouse <em>and</em> unreachable by keyboard. Kept as distinct findings (different fixes); relationship noted on all four.</li>
+        <li><strong>Other cross-links (noted, not collapsed):</strong> contrast-floor fencing (rubric <code>button-primary</code> ↔ accessibility AX-H6 — the auditor computed <code>button-primary</code> at 5.70:1 PASS, so it clears; three other pairs fail); Aspects view (rubric Component-coverage low ↔ adversarial medium, escalated); conflict-prompt / data-loss common case (adversarial precedence ↔ accessibility modal-focus + toast-live-region); responsive degradation (adversarial 1024px hide-order ↔ accessibility 200% reflow); node/status signifiers by color (adversarial four dots ↔ accessibility node-state stack); the "glossary mirrored verbatim" claim (rubric Inheritance-discipline strong ↔ adversarial disputes it).</li>
+        <li><strong>Every declared contrast-floor pair passes.</strong> The load-bearing AA misses are the three the floor never fenced — <code>danger</code>/<code>danger-dim</code> 4.23, <code>accent</code>/<code>accent-dim</code> 4.18, <code>syntax-punctuation</code>/<code>background</code> 3.01. The <code>foreground-dim</code> and <code>border*</code> failures are declared decorative/tonal and compliant by that contract (module-symbol boundary is the one caveat).</li>
+        <li><strong>Count note:</strong> the adversarial file carries 2C / 7H / 12M / 4L at the heading level; the pipeline's "8 high" summary counted the legend line. This report uses the document's actual heading count.</li>
+      </ul>
+    </div>
+
+    <footer class="report-footer">
+      <div class="meta">
+        <span>DESIGN.md: _bmad-output/planning-artifacts/ux-designs/ux-spec-design-yard-2026-07-08/DESIGN.md</span>
+        <span>EXPERIENCE.md: _bmad-output/planning-artifacts/ux-designs/ux-spec-design-yard-2026-07-08/EXPERIENCE.md</span>
+      </div>
+      <div class="meta" style="margin-top:6px;">
+        <span>Reviewers: review-rubric.md · review-adversarial.md · review-accessibility.md</span>
+        <span>Project: spec-design-yard</span>
+        <span>Generated: 2026-07-09</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

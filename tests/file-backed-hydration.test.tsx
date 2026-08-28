@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { installWorkspaceFetch } from './workspace-fetch-double'
 
 // File-backed mode (SPEC_YARD_PROJECT_DIR set server-side): the repo file is
 // canonical. These tests mock the /api/store endpoints the RemoteSyncSpecStore
@@ -15,25 +16,14 @@ const SERVER_SPEC = `system:
 `
 
 function installFetchMock() {
-  const puts: { url: string; body: any }[] = []
-  const fetchMock = vi.fn(async (input: any, init?: any) => {
-    const url = String(input)
-    if (init?.method === 'PUT') {
-      puts.push({ url, body: JSON.parse(init.body) })
-      return { ok: true, status: 200, json: async () => ({ ok: true }) } as any
-    }
-    if (url === '/api/store/spec/main') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ id: 'main', title: 'Server Canonical System', yamlContent: SERVER_SPEC, updatedAt: '2026-08-18T00:00:00.000Z' }),
-      } as any
-    }
+  return installWorkspaceFetch({
+    spec: {
+      body: { id: 'main', title: 'Server Canonical System', yamlContent: SERVER_SPEC, updatedAt: '2026-08-18T00:00:00.000Z' },
+    },
     // meta endpoints: nothing stored yet
-    return { ok: false, status: 404, json: async () => ({ found: false }) } as any
+    meta: { status: 404, body: { found: false } },
+    put: { body: { ok: true } },
   })
-  vi.stubGlobal('fetch', fetchMock)
-  return { puts, fetchMock }
 }
 
 describe('File-backed hydration (server canonical)', () => {

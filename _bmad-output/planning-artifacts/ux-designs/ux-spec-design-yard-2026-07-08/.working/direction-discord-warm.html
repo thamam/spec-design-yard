@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec-Yard — Direction: Discord warm</title>
+<style>
+/* ============================================================
+   SPEC-YARD DIRECTION BOARD — "DISCORD WARM"
+   Palette (all hex values used in this document):
+
+   Neutrals (Discord-family warm dark grays)
+   #101114  page background outside the mockup frames
+   #1e1f22  deepest surface — app header, file rail, strips
+   #232428  recessed panels — diagnostics strip, drawer base
+   #26272b  browser chrome bar
+   #2b2d31  panel surface — editor, cards, toolbars, modules
+   #313338  canvas / app body background
+   #383a40  raised controls, chips, hover shade
+   #4e5058  sketch borders, hairlines, grab handle
+   #3f4147  canvas dot-grid dots
+   #5d6067  editor line numbers
+   #6d7178  punctuation, faintest text
+   #80848e  arrows, secondary icons
+   #949ba4  muted text
+   #b5bac1  secondary text
+   #dbdee1  primary text
+   #f2f3f5  headings / wordmark
+
+   Accent + semantic
+   #5865f2  blurple accent — primary actions, selection, Gateway type
+   #4752c4  blurple pressed / deep
+   #949cf7  blurple-light — YAML keys, Gateway chip text
+   #23a55a  green — Stage type, sync-ok
+   #4ade80  green-light — status chip text
+   #00a8fc  cyan — Store type
+   #6bcbff  cyan-light — Store chip text
+   #eb459e  fuchsia — Brick type
+   #f286c4  fuchsia-light — Brick chip text
+   #f0b232  amber — warnings, diagnostics
+   #1e1f22  text on amber badges (reused deep neutral)
+
+   Browser-frame traffic lights
+   #ff5f57  red   #febc2e  yellow   #28c840  green
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #101114;
+  color: #dbdee1;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  padding: 48px 32px 80px;
+}
+.mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+
+.board { max-width: 1340px; margin: 0 auto; }
+
+/* ---------- board intro ---------- */
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: #949cf7; margin-bottom: 10px;
+}
+h1 { font-size: 26px; font-weight: 700; color: #f2f3f5; letter-spacing: -0.01em; margin-bottom: 12px; }
+.rationale { max-width: 860px; color: #b5bac1; line-height: 1.65; font-size: 14.5px; margin-bottom: 40px; }
+.rationale strong { color: #dbdee1; font-weight: 600; }
+
+.section-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #949ba4; margin: 0 0 14px 2px;
+}
+.section-label .dot8 { width: 8px; height: 8px; border-radius: 3px; background: #5865f2; }
+.caption { font-size: 12.5px; color: #6d7178; margin: 12px 2px 48px; }
+
+.scrollwrap { overflow-x: auto; padding-bottom: 6px; }
+
+/* ---------- browser frame ---------- */
+.browser {
+  width: 1280px; border-radius: 12px; overflow: hidden;
+  background: #26272b;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px #383a40;
+}
+.browser.small { width: 900px; }
+.chrome {
+  height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  background: #26272b;
+}
+.lights { display: flex; gap: 7px; margin-right: 8px; }
+.light { width: 11px; height: 11px; border-radius: 50%; }
+.light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
+.urlbar {
+  flex: 0 0 auto; margin: 0 auto;
+  background: #1e1f22; color: #949ba4; font-size: 12px;
+  padding: 5px 44px; border-radius: 99px; /* pill */
+}
+
+/* ---------- app header ---------- */
+.app { display: flex; flex-direction: column; background: #313338; }
+.hdr {
+  height: 46px; flex: 0 0 46px; background: #1e1f22;
+  display: flex; align-items: center; padding: 0 12px; position: relative;
+}
+.wordmark { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; color: #f2f3f5; }
+.logo {
+  width: 22px; height: 22px; border-radius: 7px; background: #5865f2;
+  display: flex; align-items: center; justify-content: center;
+}
+.hdr-center {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 7px;
+  background: #2b2d31; border-radius: 99px; padding: 5px 14px; /* pill grouping */
+  font-size: 12.5px;
+}
+.hdr-center .proj { color: #949ba4; }
+.hdr-center .sep { color: #6d7178; }
+.hdr-center .file { color: #dbdee1; font-weight: 500; }
+.dirty { width: 7px; height: 7px; border-radius: 50%; background: #5865f2; margin-left: 2px; }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.icon-btn {
+  width: 30px; height: 30px; border-radius: 8px; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-btn.shaded { background: #2b2d31; }
+.hdr-divider { width: 1px; height: 18px; background: #383a40; margin: 0 6px; }
+.help-pill {
+  background: #2b2d31; color: #b5bac1; font-size: 12px; font-weight: 600;
+  padding: 6px 14px; border-radius: 99px;
+}
+
+/* ---------- body split ---------- */
+.split { display: flex; height: 714px; }
+.split.short { height: 594px; }
+
+/* file rail */
+.rail {
+  width: 44px; flex: 0 0 44px; background: #1e1f22;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 12px;
+}
+.rail-btn {
+  width: 32px; height: 32px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.rail-btn.active { background: #5865f2; }
+.rail-btn.active svg { stroke: #f2f3f5; }
+
+/* left pane */
+.pane-left { display: flex; flex-direction: column; background: #2b2d31; }
+.pane-left.hero-w { width: 468px; flex: 0 0 468px; }
+.pane-left.variant-w { width: 480px; flex: 0 0 480px; }
+
+.tabrow {
+  height: 36px; flex: 0 0 36px; display: flex; align-items: center;
+  padding: 0 10px; background: #232428;
+}
+.tab {
+  display: flex; align-items: center; gap: 7px;
+  background: #2b2d31; color: #dbdee1;
+  font-size: 12px; font-weight: 500;
+  padding: 6px 14px; border-radius: 99px; /* pill tab */
+}
+.tab .tabdot { width: 6px; height: 6px; border-radius: 50%; background: #5865f2; }
+
+/* editor */
+.editor { flex: 1; overflow: hidden; padding: 10px 0; }
+.editor.fixed-variant { flex: 0 0 300px; }
+.cl { display: flex; height: 19px; line-height: 19px; font-size: 12px; }
+.cl.sel { background: rgba(88,101,242,0.10); box-shadow: inset 2px 0 0 #5865f2; }
+.ln {
+  width: 40px; flex: 0 0 40px; text-align: right; padding-right: 14px;
+  color: #5d6067; font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  user-select: none;
+}
+.code {
+  white-space: pre; color: #dbdee1;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+.k { color: #949cf7; }          /* keys — blurple-light */
+.p { color: #6d7178; }          /* punctuation */
+.v { color: #dbdee1; }          /* plain values */
+.s { color: #b5bac1; }          /* free-text strings */
+.n { color: #f0b232; }          /* version number — amber */
+.tG { color: #949cf7; font-weight: 600; }  /* Gateway */
+.tS { color: #4ade80; font-weight: 600; }  /* Stage */
+.tSt { color: #6bcbff; font-weight: 600; } /* Store */
+.tB { color: #f286c4; font-weight: 600; }  /* Brick */
+.warnline { text-decoration: underline wavy #f0b232 1px; text-underline-offset: 3px; }
+
+/* diagnostics strip (collapsed) */
+.diagstrip {
+  height: 34px; flex: 0 0 34px; background: #232428;
+  display: flex; align-items: center; gap: 9px; padding: 0 14px;
+  font-size: 12px; color: #b5bac1;
+}
+.amberdot { width: 8px; height: 8px; border-radius: 50%; background: #f0b232; }
+.diagstrip .count strong { color: #dbdee1; font-weight: 600; }
+.diagstrip .chev { margin-left: auto; }
+
+/* ---------- canvas ---------- */
+.canvas {
+  flex: 1; position: relative; overflow: hidden;
+  background-color: #313338;
+  background-image: radial-gradient(circle, #3f4147 1px, transparent 1.1px);
+  background-size: 22px 22px;
+}
+.breadcrumb {
+  position: absolute; top: 12px; left: 14px; z-index: 3;
+  display: flex; align-items: center; gap: 7px;
+  background: #2b2d31; border-radius: 99px; padding: 6px 14px;
+  font-size: 12px; font-weight: 600; color: #dbdee1;
+}
+.canvas-toolbar {
+  position: absolute; top: 12px; right: 14px; z-index: 3;
+  display: flex; align-items: center; gap: 4px;
+  background: #2b2d31; border-radius: 10px; padding: 4px;
+}
+.view-switch {
+  display: flex; align-items: center; gap: 8px;
+  background: #383a40; border-radius: 8px;  /* chunkier control */
+  padding: 6px 12px; font-size: 12px; font-weight: 600; color: #dbdee1;
+}
+.view-switch .car { color: #949ba4; font-size: 10px; }
+.tool-ic {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.sync-chip {
+  position: absolute; bottom: 14px; right: 14px; z-index: 3;
+  display: flex; align-items: center; gap: 7px;
+  background: #2b2d31; border-radius: 99px; padding: 6px 13px;
+  font-size: 12px; font-weight: 600; color: #23a55a;
+}
+
+/* nodes — sketchy Excalidraw-ish restraint */
+.module {
+  position: absolute; z-index: 2;
+  background: #2b2d31;
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 6px, transparent 6px 13px); /* sealed hatch */
+  border: 1.5px solid #4e5058;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+}
+.module.payments {
+  left: 380px; top: 120px; width: 240px; height: 150px;
+  border-radius: 15px 10px 14px 11px / 11px 15px 10px 14px;  /* hand-drawn asymmetry */
+  transform: rotate(-0.5deg);
+}
+.module.identity {
+  left: 420px; top: 430px; width: 220px; height: 140px;
+  border-radius: 11px 15px 10px 14px / 14px 10px 15px 11px;
+  transform: rotate(0.4deg);
+}
+.mod-head {
+  display: flex; align-items: center; gap: 8px; padding: 12px 12px 0;
+}
+.mod-name {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; font-weight: 700; color: #f2f3f5;
+}
+.member-chip {
+  margin-left: auto;
+  background: #383a40; color: #b5bac1;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 9px; border-radius: 99px;
+}
+.mod-sub {
+  padding: 6px 12px 0; font-size: 11px; color: #6d7178;
+}
+.diag-badge {
+  position: absolute; top: -9px; right: -9px;
+  background: #f0b232; color: #1e1f22;
+  font-size: 11px; font-weight: 800;
+  min-width: 19px; height: 19px; border-radius: 99px;
+  display: flex; align-items: center; justify-content: center; padding: 0 5px;
+  box-shadow: 0 0 0 3px #313338;
+}
+.pin {
+  position: absolute; width: 9px; height: 9px; border-radius: 2px;
+  border: 2px solid #1e1f22;
+}
+.pin.gw { background: #5865f2; }   /* Gateway pin */
+.pin.st { background: #23a55a; }   /* Stage pin */
+.pin.sto { background: #00a8fc; }  /* Store pin */
+.pin.br { background: #eb459e; }   /* Brick pin */
+.pin-label {
+  position: absolute; font-size: 10px; color: #949ba4;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.compo {
+  position: absolute; z-index: 2;
+  background: #2b2d31; border: 1.5px solid #4e5058;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  padding: 11px 13px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.compo.webgw {
+  left: 60px; top: 300px; width: 160px; height: 70px;
+  border-radius: 12px 9px 13px 10px / 10px 13px 9px 12px;
+  transform: rotate(0.5deg);
+  border-left: 3px solid #5865f2;
+}
+.compo.auditlog {
+  left: 130px; top: 560px; width: 150px; height: 64px;
+  border-radius: 10px 13px 9px 12px / 12px 9px 13px 10px;
+  transform: rotate(-0.4deg);
+  border-left: 3px solid #eb459e;
+}
+.compo-name {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px; font-weight: 700; color: #f2f3f5;
+}
+.type-chip {
+  align-self: flex-start;
+  font-size: 10.5px; font-weight: 700;
+  padding: 2px 9px; border-radius: 99px;
+}
+.type-chip.gw { background: rgba(88,101,242,0.18); color: #949cf7; }
+.type-chip.st { background: rgba(35,165,90,0.16); color: #4ade80; }
+.type-chip.sto { background: rgba(0,168,252,0.14); color: #6bcbff; }
+.type-chip.br { background: rgba(235,69,158,0.14); color: #f286c4; }
+
+.edge-svg { position: absolute; inset: 0; z-index: 1; }
+.edge-label {
+  position: absolute; z-index: 2;
+  background: #232428; color: #b5bac1;
+  font-size: 11px; font-weight: 500;
+  padding: 3px 11px; border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* ---------- details drawer (variant) ---------- */
+.drawer {
+  flex: 1; background: #232428; display: flex; flex-direction: column;
+  padding: 0 12px 10px; overflow: hidden;
+}
+.grab { display: flex; justify-content: center; padding: 5px 0 3px; }
+.grab span { width: 36px; height: 4px; border-radius: 99px; background: #4e5058; }
+.drawer-head { display: flex; align-items: center; gap: 10px; padding: 4px 4px 10px; }
+.drawer-name {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px; font-weight: 700; color: #f2f3f5;
+}
+.drawer-head .close { margin-left: auto; }
+
+.d-section {
+  background: #2b2d31; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+}
+.d-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #6d7178; margin-bottom: 8px;
+}
+.meta-row { display: flex; align-items: center; gap: 22px; }
+.meta-field { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.meta-field .fk { color: #6d7178; }
+.meta-field .fv {
+  color: #dbdee1;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+.status-chip {
+  font-size: 10.5px; font-weight: 700; padding: 2px 10px; border-radius: 99px;
+}
+.status-chip.ok { background: rgba(35,165,90,0.16); color: #4ade80; }
+.status-chip.neutral { background: #383a40; color: #b5bac1; }
+
+.conn-cols { display: flex; gap: 8px; }
+.conn-col { flex: 1; background: #313338; border-radius: 8px; padding: 8px 10px; }
+.conn-col .col-h { font-size: 10.5px; font-weight: 700; color: #949ba4; margin-bottom: 6px; }
+.conn-row { display: flex; align-items: center; gap: 8px; font-size: 12px; height: 22px; }
+.conn-pin { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 8px; }
+.conn-pin.gw { background: #5865f2; } .conn-pin.sto { background: #00a8fc; }
+.conn-row .cn {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px; color: #dbdee1;
+}
+.conn-row .clab { color: #6d7178; font-size: 11.5px; }
+
+.diag-row { display: flex; align-items: center; gap: 10px; }
+.diag-row .msg { flex: 1; font-size: 12px; color: #dbdee1; line-height: 1.45; }
+.diag-row .msg .ident {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px; color: #f0b232;
+}
+.quickfix {
+  flex: 0 0 auto;
+  background: #5865f2; color: #f2f3f5;
+  font-size: 12px; font-weight: 600;
+  padding: 7px 14px; border-radius: 8px;  /* chunky primary action */
+  white-space: nowrap;
+}
+
+/* variant canvas sliver */
+.canvas.sliver .module.payments { left: 96px; top: 150px; }
+.sel-ring {
+  box-shadow: 0 0 0 2px #5865f2, 0 0 0 6px rgba(88,101,242,0.18), 0 3px 10px rgba(0,0,0,0.35) !important;
+}
+
+svg.ic { display: block; }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="eyebrow">Spec-Yard · Direction board</div>
+  <h1>Discord warm — the organized clubhouse</h1>
+  <p class="rationale">
+    This direction treats the workspace as an <strong>organized clubhouse</strong>: warm dark grays separate
+    regions by background shade rather than border lines, so every tool reads as having a home. Blurple is
+    used confidently — the dirty dot, selection, quick-fix actions — while component-type hues stay in the
+    same saturated Discord family so the canvas feels cohesive rather than color-coded-clinical. Chunky 8px
+    controls, pill tabs, and pill chips keep density friendly without giving up the precision of an IDE.
+  </p>
+
+  <!-- ================= HERO ================= -->
+  <div class="section-label"><span class="dot8"></span> Hero — main workspace</div>
+  <div class="scrollwrap">
+  <div class="browser">
+    <div class="chrome">
+      <div class="lights"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
+      <div class="urlbar">specyard.app/acme-checkout</div>
+      <div style="width:60px"></div>
+    </div>
+    <div class="app">
+      <!-- app header -->
+      <div class="hdr">
+        <div class="wordmark">
+          <span class="logo">
+            <svg class="ic" width="12" height="12" viewBox="0 0 12 12"><path d="M6 1l4.5 2.6v4.8L6 11 1.5 8.4V3.6z" fill="none" stroke="#f2f3f5" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </span>
+          Spec-Yard
+        </div>
+        <div class="hdr-center">
+          <span class="proj">acme-checkout</span><span class="sep">/</span>
+          <span class="file">main.spec.yaml</span><span class="dirty"></span>
+        </div>
+        <div class="hdr-right">
+          <span class="icon-btn shaded">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#b5bac1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5H11a3 3 0 0 1 0 6H8"/><path d="M7 3.5 4 6.5l3 3"/></svg>
+          </span>
+          <span class="icon-btn shaded">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#b5bac1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 6.5H5a3 3 0 0 0 0 6h3"/><path d="M9 3.5l3 3-3 3"/></svg>
+          </span>
+          <span class="hdr-divider"></span>
+          <span class="help-pill">Help</span>
+        </div>
+      </div>
+
+      <div class="split">
+        <!-- file rail -->
+        <div class="rail">
+          <span class="rail-btn active">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#b5bac1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.8H4a1 1 0 0 0-1 1v10.4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.8z"/><path d="M9 1.8v4h4"/></svg>
+          </span>
+          <span class="rail-btn">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#80848e" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/></svg>
+          </span>
+        </div>
+
+        <!-- left pane: editor -->
+        <div class="pane-left hero-w">
+          <div class="tabrow">
+            <span class="tab"><span class="tabdot"></span>main.spec.yaml</span>
+          </div>
+          <div class="editor">
+            <div class="cl"><span class="ln">1</span><span class="code"><span class="k">system</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">2</span><span class="code">  <span class="k">name</span><span class="p">:</span> <span class="v">acme-checkout</span></span></div>
+            <div class="cl"><span class="ln">3</span><span class="code">  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></span></div>
+            <div class="cl"><span class="ln">4</span><span class="code"></span></div>
+            <div class="cl"><span class="ln">5</span><span class="code"><span class="k">modules</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">6</span><span class="code">  <span class="k">payments</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">7</span><span class="code">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="v">payment-api</span><span class="p">]</span></span></div>
+            <div class="cl"><span class="ln">8</span><span class="code">    <span class="k">components</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">9</span><span class="code">      <span class="k">payment-api</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">10</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tG">Gateway</span></span></div>
+            <div class="cl"><span class="ln">11</span><span class="code">      <span class="k">ledger</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">12</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tSt">Store</span></span></div>
+            <div class="cl"><span class="ln">13</span><span class="code">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">14</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tS">Stage</span></span></div>
+            <div class="cl"><span class="ln">15</span><span class="code">        <span class="k">connections</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">16</span><span class="code">          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v warnline">ledger</span></span></div>
+            <div class="cl"><span class="ln">17</span><span class="code">            <span class="k">label</span><span class="p">:</span> <span class="s">writes entries</span></span></div>
+            <div class="cl"><span class="ln">18</span><span class="code"></span></div>
+            <div class="cl"><span class="ln">19</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">20</span><span class="code">  <span class="k">web-gateway</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">21</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="tG">Gateway</span></span></div>
+            <div class="cl"><span class="ln">22</span><span class="code">    <span class="k">connections</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">23</span><span class="code">      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">payments.payment-api</span></span></div>
+            <div class="cl"><span class="ln">24</span><span class="code">        <span class="k">label</span><span class="p">:</span> <span class="s">charge requests</span></span></div>
+            <div class="cl"><span class="ln">25</span><span class="code">  <span class="k">audit-log</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">26</span><span class="code">    <span class="k">type</span><span class="p">:</span> <span class="tB">Brick</span></span></div>
+          </div>
+          <div class="diagstrip">
+            <span class="amberdot"></span>
+            <span class="count"><strong>3 issues</strong> · 1 quick-fixable</span>
+            <span class="chev">
+              <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6d7178" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- right: canvas -->
+        <div class="canvas">
+          <div class="breadcrumb">
+            <svg class="ic" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#949ba4" stroke-width="1.4"><rect x="1.5" y="1.5" width="4" height="4" rx="1.2"/><rect x="7.5" y="1.5" width="4" height="4" rx="1.2"/><rect x="1.5" y="7.5" width="4" height="4" rx="1.2"/><rect x="7.5" y="7.5" width="4" height="4" rx="1.2"/></svg>
+            System
+          </div>
+          <div class="canvas-toolbar">
+            <span class="view-switch">Static <span class="car">▾</span></span>
+            <span class="tool-ic">
+              <svg class="ic" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#b5bac1" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3"/><path d="M10 2h3v3"/><path d="M13 10v3h-3"/><path d="M5 13H2v-3"/><rect x="5.2" y="5.2" width="4.6" height="4.6" rx="1"/></svg>
+            </span>
+            <span class="tool-ic">
+              <svg class="ic" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#b5bac1" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h4v4"/><path d="M13 2 8.8 6.2"/><path d="M6 13H2V9"/><path d="M2 13l4.2-4.2"/></svg>
+            </span>
+          </div>
+
+          <!-- edges -->
+          <svg class="edge-svg" width="768" height="714" viewBox="0 0 768 714" fill="none">
+            <defs>
+              <marker id="arr" markerWidth="9" markerHeight="9" refX="6.5" refY="3.5" orient="auto">
+                <path d="M0.5 0.5 L6.5 3.5 L0.5 6.5" fill="none" stroke="#80848e" stroke-width="1.4" stroke-linecap="round"/>
+              </marker>
+            </defs>
+            <!-- web-gateway → payments.payment-api -->
+            <path d="M224 322 C 268 306, 308 250, 341 219 S 366 196 372 190" stroke="#80848e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#arr)"/>
+            <!-- web-gateway → identity.session-api -->
+            <path d="M224 348 C 286 371, 344 436, 412 476" stroke="#80848e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#arr)"/>
+            <!-- identity → audit-log -->
+            <path d="M506 574 C 450 612, 358 616, 290 594" stroke="#80848e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#arr)"/>
+          </svg>
+
+          <!-- edge labels -->
+          <span class="edge-label" style="left: 238px; top: 244px;">charge requests</span>
+          <span class="edge-label" style="left: 254px; top: 402px;">session checks</span>
+          <span class="edge-label" style="left: 348px; top: 596px;">audit events</span>
+
+          <!-- module: payments -->
+          <div class="module payments">
+            <div class="mod-head">
+              <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#949ba4" stroke-width="1.3" stroke-linejoin="round"><path d="M7 1.3 12.4 4.4v5.2L7 12.7 1.6 9.6V4.4z"/><path d="M1.6 4.4 7 7.5l5.4-3.1"/><path d="M7 7.5v5.2"/></svg>
+              <span class="mod-name">payments</span>
+              <span class="member-chip">6</span>
+            </div>
+            <div class="mod-sub">sealed module · 1 exposed</div>
+            <span class="diag-badge">3</span>
+            <span class="pin gw" style="left: -6px; top: 61px;"></span>
+            <span class="pin-label" style="left: 12px; top: 60px;">payment-api</span>
+          </div>
+
+          <!-- module: identity -->
+          <div class="module identity">
+            <div class="mod-head">
+              <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#949ba4" stroke-width="1.3" stroke-linejoin="round"><path d="M7 1.3 12.4 4.4v5.2L7 12.7 1.6 9.6V4.4z"/><path d="M1.6 4.4 7 7.5l5.4-3.1"/><path d="M7 7.5v5.2"/></svg>
+              <span class="mod-name">identity</span>
+              <span class="member-chip">4</span>
+            </div>
+            <div class="mod-sub">sealed module · 1 exposed</div>
+            <span class="pin gw" style="left: -6px; top: 45px;"></span>
+            <span class="pin-label" style="left: 12px; top: 44px;">session-api</span>
+            <span class="pin br" style="left: 85px; bottom: -6px;"></span>
+          </div>
+
+          <!-- loose component: web-gateway -->
+          <div class="compo webgw">
+            <span class="compo-name">web-gateway</span>
+            <span class="type-chip gw">Gateway</span>
+            <span class="pin gw" style="right: -6px; top: 16px;"></span>
+            <span class="pin gw" style="right: -6px; top: 42px;"></span>
+          </div>
+
+          <!-- loose component: audit-log -->
+          <div class="compo auditlog">
+            <span class="compo-name">audit-log</span>
+            <span class="type-chip br">Brick</span>
+            <span class="pin br" style="right: -6px; top: 26px;"></span>
+          </div>
+
+          <div class="sync-chip">✓ in sync</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <p class="caption">1280 × 800 · YAML editor with file rail and collapsed diagnostics strip (left) · dot-grid canvas with sealed modules, typed components, and pin-to-pin edges (right)</p>
+
+  <!-- ================= STATE VARIANT ================= -->
+  <div class="section-label"><span class="dot8"></span> State — details drawer open · settle-worker selected</div>
+  <div class="scrollwrap">
+  <div class="browser small">
+    <div class="chrome">
+      <div class="lights"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
+      <div class="urlbar">specyard.app/acme-checkout</div>
+      <div style="width:60px"></div>
+    </div>
+    <div class="app">
+      <div class="hdr">
+        <div class="wordmark">
+          <span class="logo">
+            <svg class="ic" width="12" height="12" viewBox="0 0 12 12"><path d="M6 1l4.5 2.6v4.8L6 11 1.5 8.4V3.6z" fill="none" stroke="#f2f3f5" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </span>
+          Spec-Yard
+        </div>
+        <div class="hdr-center">
+          <span class="proj">acme-checkout</span><span class="sep">/</span>
+          <span class="file">main.spec.yaml</span><span class="dirty"></span>
+        </div>
+        <div class="hdr-right">
+          <span class="help-pill">Help</span>
+        </div>
+      </div>
+
+      <div class="split short">
+        <div class="rail">
+          <span class="rail-btn active">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#b5bac1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.8H4a1 1 0 0 0-1 1v10.4a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.8z"/><path d="M9 1.8v4h4"/></svg>
+          </span>
+          <span class="rail-btn">
+            <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#80848e" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/></svg>
+          </span>
+        </div>
+
+        <div class="pane-left variant-w">
+          <div class="tabrow">
+            <span class="tab"><span class="tabdot"></span>main.spec.yaml</span>
+          </div>
+
+          <!-- editor, scrolled to the payments module, selection on settle-worker -->
+          <div class="editor fixed-variant">
+            <div class="cl"><span class="ln">5</span><span class="code"><span class="k">modules</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">6</span><span class="code">  <span class="k">payments</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">7</span><span class="code">    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="v">payment-api</span><span class="p">]</span></span></div>
+            <div class="cl"><span class="ln">8</span><span class="code">    <span class="k">components</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">9</span><span class="code">      <span class="k">payment-api</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">10</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tG">Gateway</span></span></div>
+            <div class="cl"><span class="ln">11</span><span class="code">      <span class="k">ledger</span><span class="p">:</span></span></div>
+            <div class="cl"><span class="ln">12</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tSt">Store</span></span></div>
+            <div class="cl sel"><span class="ln">13</span><span class="code">      <span class="k">settle-worker</span><span class="p">:</span></span></div>
+            <div class="cl sel"><span class="ln">14</span><span class="code">        <span class="k">type</span><span class="p">:</span> <span class="tS">Stage</span></span></div>
+            <div class="cl sel"><span class="ln">15</span><span class="code">        <span class="k">connections</span><span class="p">:</span></span></div>
+            <div class="cl sel"><span class="ln">16</span><span class="code">          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v warnline">ledger</span></span></div>
+            <div class="cl sel"><span class="ln">17</span><span class="code">            <span class="k">label</span><span class="p">:</span> <span class="s">writes entries</span></span></div>
+            <div class="cl"><span class="ln">18</span><span class="code"></span></div>
+            <div class="cl"><span class="ln">19</span><span class="code"><span class="k">components</span><span class="p">:</span></span></div>
+          </div>
+
+          <!-- adaptive details drawer -->
+          <div class="drawer">
+            <div class="grab"><span></span></div>
+            <div class="drawer-head">
+              <span class="drawer-name">settle-worker</span>
+              <span class="type-chip st">Stage</span>
+              <span class="close">
+                <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6d7178" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>
+              </span>
+            </div>
+
+            <div class="d-section">
+              <div class="meta-row">
+                <span class="meta-field"><span class="fk">owner</span><span class="fv">platform-payments</span></span>
+                <span class="meta-field"><span class="fk">status</span><span class="status-chip ok">active</span><span class="status-chip neutral">internal</span></span>
+              </div>
+            </div>
+
+            <div class="d-section">
+              <div class="d-label">Connections</div>
+              <div class="conn-cols">
+                <div class="conn-col">
+                  <div class="col-h">In · 1</div>
+                  <div class="conn-row"><span class="conn-pin gw"></span><span class="cn">payment-api</span><span class="clab">· settlement batches</span></div>
+                </div>
+                <div class="conn-col">
+                  <div class="col-h">Out · 1</div>
+                  <div class="conn-row"><span class="conn-pin sto"></span><span class="cn">ledger</span><span class="clab">· writes entries</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-section">
+              <div class="d-label">Diagnostics · 1</div>
+              <div class="diag-row">
+                <span class="amberdot" style="flex:0 0 8px"></span>
+                <span class="msg">connection targets unexposed member <span class="ident">'ledger'</span> — retarget to an exposed member</span>
+                <span class="quickfix">retarget to payment-api</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="diagstrip">
+            <span class="amberdot"></span>
+            <span class="count"><strong>3 issues</strong> · 1 quick-fixable</span>
+            <span class="chev">
+              <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#6d7178" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 7 5l3.5 3.5"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- canvas sliver for context -->
+        <div class="canvas sliver">
+          <div class="breadcrumb">
+            <svg class="ic" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#949ba4" stroke-width="1.4"><rect x="1.5" y="1.5" width="4" height="4" rx="1.2"/><rect x="7.5" y="1.5" width="4" height="4" rx="1.2"/><rect x="1.5" y="7.5" width="4" height="4" rx="1.2"/><rect x="7.5" y="7.5" width="4" height="4" rx="1.2"/></svg>
+            System
+          </div>
+          <div class="module payments sel-ring">
+            <div class="mod-head">
+              <svg class="ic" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#949ba4" stroke-width="1.3" stroke-linejoin="round"><path d="M7 1.3 12.4 4.4v5.2L7 12.7 1.6 9.6V4.4z"/><path d="M1.6 4.4 7 7.5l5.4-3.1"/><path d="M7 7.5v5.2"/></svg>
+              <span class="mod-name">payments</span>
+              <span class="member-chip">6</span>
+            </div>
+            <div class="mod-sub">sealed module · 1 exposed</div>
+            <span class="diag-badge">3</span>
+            <span class="pin gw" style="left: -6px; top: 61px;"></span>
+            <span class="pin-label" style="left: 12px; top: 60px;">payment-api</span>
+          </div>
+          <div class="sync-chip">✓ in sync</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <p class="caption">Left pane splits: editor keeps ~55%, the adaptive drawer takes the rest. Sections group by background shade — meta, connections in/out, diagnostics with a one-tap quick fix. Selecting a member highlights its YAML block and rings its module on the canvas.</p>
+
+</div>
+</body>
+</html>

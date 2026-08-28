@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec-Yard — Direction 03: Drafting Instrument</title>
+<style>
+/* ============================================================
+   DIRECTION 03 — "DRAFTING INSTRUMENT"
+   The engineer's light table. Blueprint blue-black, hairline
+   rules, monospace-forward, amber/cyan indicator lights.
+
+   PALETTE
+   ------------------------------------------------------------
+   #070b16  board backdrop (page behind the mockups)
+   #0b1020  app deepest surface / canvas base
+   #0d1322  browser chrome bar, file rail
+   #0f1526  editor panel
+   #141b30  raised chrome (app header, toolbars, playback bar)
+   #121a33  module housing fill (sealed box)
+   #101832  loose component fill
+   #1c2747  hairline rule (all chrome borders)
+   #223055  frame border / stronger hairline
+   #2a3763  inner drafted line on modules
+   #22305a  dot-grid dots & major rules on canvas
+   #3c4c80  chip borders on nodes
+   #4a5b93  module housing border
+   ------------------------------------------------------------
+   TEXT
+   #e6edfc  brightest (node names)
+   #d7e0f4  primary text
+   #aab8dd  soft secondary
+   #8fa1cf  secondary / wires / icons
+   #5a6a95  dim text, punctuation
+   #3b4a75  faintest (line numbers)
+   ------------------------------------------------------------
+   YAML SYNTAX
+   #7aa5e0  keys (periwinkle blue)
+   #d7e0f4  scalar values
+   #e8b04f  numbers / versions
+   #5a6a95  punctuation, dashes, brackets
+   ------------------------------------------------------------
+   INDICATOR LIGHTS (used sparingly, like panel LEDs)
+   amber:  #f5a623 core · #ffd27a bright · #221503 dark ground
+   cyan:   #39c5cf core · #8ff0f6 bright · #0e2f33 dark ground
+   ------------------------------------------------------------
+   COMPONENT TYPE HUES (distinct, night-instrument register)
+   Gateway #39c5cf (cyan)    — border dim #2fa7b1, yaml tint #6fd3da
+   Stage   #f5a623 (amber)   — yaml tint #f0bc5e
+   Store   #8f7bff (violet)  — yaml tint #a99bff
+   Brick   #5ad98c (phosphor green) — border dim #3fa06b, yaml tint #7fe0a4
+   ============================================================ */
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html { background:#070b16; }
+body {
+  background:#070b16;
+  color:#d7e0f4;
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.mono { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+.board { width:1460px; margin:0 auto; padding:44px 48px 72px; }
+
+/* ---------- board header / rationale ---------- */
+.kicker {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:10px; letter-spacing:.24em; text-transform:uppercase;
+  color:#39c5cf; margin-bottom:10px;
+}
+.kicker .amber { color:#f5a623; }
+h1.title {
+  font-size:30px; font-weight:650; letter-spacing:-.01em; color:#e6edfc;
+  margin-bottom:12px;
+}
+.rationale {
+  max-width:860px; font-size:13.5px; line-height:1.65; color:#aab8dd;
+  margin-bottom:40px;
+}
+.rationale strong { color:#d7e0f4; font-weight:600; }
+
+.sechead {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:#5a6a95; margin:0 0 12px 2px;
+  display:flex; align-items:center; gap:10px;
+}
+.sechead::after { content:""; flex:1; height:1px; background:#1c2747; }
+.sechead b { color:#8fa1cf; font-weight:400; }
+
+/* ---------- browser frame ---------- */
+.frame {
+  width:1362px; border:1px solid #223055; border-radius:2px;
+  background:#0b1020; box-shadow:0 24px 70px rgba(0,0,0,.55);
+  overflow:hidden; margin-bottom:56px;
+}
+.chrome {
+  height:34px; background:#0d1322; border-bottom:1px solid #1c2747;
+  display:flex; align-items:center; gap:14px; padding:0 14px;
+}
+.tl { display:flex; gap:7px; }
+.tl i { width:9px; height:9px; border-radius:50%; border:1px solid #2a3763; background:#121a33; }
+.addr {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:10.5px; color:#5a6a95; background:#0b1020;
+  border:1px solid #1c2747; border-radius:2px; padding:3px 12px;
+}
+
+/* ---------- app header ---------- */
+.apphead {
+  height:42px; background:#141b30; border-bottom:1px solid #1c2747;
+  display:flex; align-items:center; padding:0 16px; position:relative;
+}
+.brand {
+  display:flex; align-items:center; gap:9px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#d7e0f4;
+}
+.brand i { width:7px; height:7px; background:#39c5cf; box-shadow:0 0 7px rgba(57,197,207,.55); }
+.fileline {
+  position:absolute; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:8px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:11.5px;
+}
+.fileline .proj { color:#5a6a95; }
+.fileline .sep { color:#3b4a75; }
+.fileline .file { color:#d7e0f4; }
+.dirty { width:6px; height:6px; border-radius:50%; background:#f5a623; box-shadow:0 0 6px rgba(245,166,35,.55); }
+.headicons { margin-left:auto; display:flex; align-items:center; gap:6px; }
+.hbtn {
+  width:26px; height:24px; display:flex; align-items:center; justify-content:center;
+  border:1px solid transparent; border-radius:2px; color:#8fa1cf;
+}
+.hbtn svg { display:block; }
+.help {
+  font-size:11px; color:#8fa1cf; padding:3px 10px; margin-left:6px;
+  border:1px solid #1c2747; border-radius:2px;
+}
+
+/* ---------- body split ---------- */
+.appbody { display:flex; height:758px; }
+
+/* file rail */
+.rail {
+  width:38px; background:#0d1322; border-right:1px solid #1c2747;
+  display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:6px;
+}
+.railbtn {
+  width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+  color:#5a6a95; border-radius:2px; position:relative;
+}
+.railbtn.active { color:#39c5cf; background:#101a35; }
+.railbtn.active::before {
+  content:""; position:absolute; left:-5px; top:6px; bottom:6px; width:2px; background:#39c5cf;
+}
+
+/* editor */
+.leftpane { width:506px; display:flex; flex-direction:column; background:#0f1526; border-right:1px solid #1c2747; }
+.edhead {
+  height:26px; display:flex; align-items:center; padding:0 12px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:8.5px; letter-spacing:.18em; text-transform:uppercase; color:#5a6a95;
+  border-bottom:1px solid #1c2747;
+}
+.edhead .r { margin-left:auto; color:#3b4a75; }
+.editor { flex:1; padding:10px 0; overflow:hidden; }
+.row { display:flex; height:19px; align-items:center; }
+.ln {
+  width:38px; flex:none; text-align:right; padding-right:12px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10.5px; color:#3b4a75;
+}
+.row code {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:11.5px;
+  white-space:pre; color:#d7e0f4;
+}
+.row.warn .ln { color:#f5a623; box-shadow:inset 2px 0 0 #f5a623; }
+.k  { color:#7aa5e0; }         /* keys */
+.p  { color:#5a6a95; }         /* punctuation, dashes, brackets */
+.n  { color:#e8b04f; }         /* numbers */
+.v  { color:#d7e0f4; }         /* plain values */
+.t-gw { color:#6fd3da; }       /* Gateway */
+.t-sr { color:#a99bff; }       /* Store */
+.t-sg { color:#f0bc5e; }       /* Stage */
+.t-br { color:#7fe0a4; }       /* Brick */
+
+/* collapsed diagnostics strip */
+.diag {
+  height:26px; border-top:1px solid #1c2747; background:#0d1322;
+  display:flex; align-items:center; gap:9px; padding:0 12px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10px; color:#aab8dd;
+}
+.diag i {
+  width:7px; height:7px; border-radius:50%; background:#f5a623;
+  box-shadow:0 0 7px rgba(245,166,35,.55);
+}
+.diag .fx { color:#5a6a95; }
+.diag .caret { margin-left:auto; color:#3b4a75; font-size:9px; }
+
+/* ---------- canvas ---------- */
+.canvas {
+  position:relative; width:816px; height:758px; overflow:hidden;
+  background-color:#0b1020;
+  background-image:
+    radial-gradient(circle, #22305a 1px, transparent 1.3px),
+    linear-gradient(rgba(34,48,90,.38) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,48,90,.38) 1px, transparent 1px);
+  background-size:22px 22px, 110px 110px, 110px 110px;
+}
+.crumb {
+  position:absolute; top:13px; left:16px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#8fa1cf;
+}
+.cbar {
+  position:absolute; top:10px; right:12px; display:flex; align-items:stretch;
+  background:#141b30; border:1px solid #1c2747; border-radius:2px;
+}
+.viewsel {
+  display:flex; align-items:center; gap:7px; padding:5px 11px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:11px; color:#d7e0f4;
+  border-right:1px solid #1c2747;
+}
+.viewsel .car { color:#5a6a95; font-size:9px; }
+.viewsel .live { width:6px; height:6px; border-radius:50%; background:#f5a623; box-shadow:0 0 6px rgba(245,166,35,.6); }
+.tbtn {
+  width:30px; display:flex; align-items:center; justify-content:center; color:#8fa1cf;
+}
+.tbtn + .tbtn { border-left:1px solid #1c2747; }
+.sync {
+  position:absolute; bottom:12px; right:12px;
+  display:flex; align-items:center; gap:7px; padding:3px 10px;
+  background:rgba(12,18,36,.85); border:1px solid #1c2747; border-radius:2px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10px; color:#aab8dd;
+}
+.sync b { color:#39c5cf; font-weight:400; }
+.legend {
+  position:absolute; bottom:12px; left:14px;
+  display:flex; align-items:center; gap:12px; padding:5px 10px;
+  background:rgba(12,18,36,.85); border:1px solid #1c2747; border-radius:2px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:#8fa1cf;
+}
+.legend span { display:flex; align-items:center; gap:5px; }
+.legend i { width:7px; height:7px; display:inline-block; }
+.sw-gw { background:#39c5cf; } .sw-sg { background:#f5a623; }
+.sw-sr { background:#8f7bff; } .sw-br { background:#5ad98c; }
+
+/* edges */
+.edges { position:absolute; inset:0; pointer-events:none; }
+.edge-label {
+  position:absolute; padding:2px 7px;
+  background:rgba(11,16,32,.88); border:1px solid #1c2747; border-radius:2px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:9.5px; color:#aab8dd;
+  white-space:nowrap;
+}
+.tchip {
+  position:absolute; padding:1px 6px;
+  background:rgba(10,22,28,.88); border:1px solid rgba(57,197,207,.42); border-radius:2px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:9px; color:#8ff0f6;
+  white-space:nowrap;
+}
+
+/* module symbols — sealed boxes, hand-drawn */
+.module {
+  position:absolute;
+  background:
+    repeating-linear-gradient(135deg, rgba(63,82,140,.10) 0 1px, transparent 1px 9px),
+    #121a33;
+  border:1.4px solid #4a5b93;
+}
+.module::before {
+  content:""; position:absolute; inset:4px; border:1px solid #2a3763;
+  border-radius:inherit; pointer-events:none;
+}
+.mtag {
+  position:absolute; top:10px; left:15px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:8px; letter-spacing:.22em; text-transform:uppercase; color:#5a6a95;
+}
+.mname {
+  position:absolute; top:23px; left:15px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:14px; color:#e6edfc;
+}
+.mchips { position:absolute; top:13px; right:13px; display:flex; gap:6px; }
+.chip {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10px; color:#aab8dd;
+  background:#0b1020; border:1px solid #3c4c80; border-radius:3px 5px 4px 6px;
+  padding:1px 7px;
+}
+.badge {
+  position:absolute; top:-9px; right:-9px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10px; font-weight:700;
+  color:#221503; background:#f5a623; border-radius:3px 5px 3px 5px;
+  padding:1px 6px; transform:rotate(2deg);
+  box-shadow:0 0 10px rgba(245,166,35,.35);
+}
+.pin {
+  position:absolute; width:9px; height:9px;
+  background:#0b1020; border:1.5px solid #8fa1cf;
+}
+.pin.exposed { border-color:#39c5cf; box-shadow:0 0 6px rgba(57,197,207,.45); }
+.pinlabel {
+  position:absolute;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:9px; color:#6fd3da;
+}
+.msub {
+  position:absolute; bottom:11px; left:15px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:9px; color:#5a6a95;
+}
+
+/* loose components — hand-drawn */
+.node { position:absolute; background:#101832; }
+.node .ntag {
+  position:absolute; top:9px; left:13px; display:flex; align-items:center; gap:5px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:8px; letter-spacing:.2em; text-transform:uppercase;
+}
+.node .ntag i { width:6px; height:6px; display:inline-block; }
+.node .nname {
+  position:absolute; top:24px; left:13px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12.5px; color:#e6edfc;
+}
+
+/* node geometry — asymmetric radii + micro-rotations = the hand */
+.m-payments {
+  left:400px; top:110px; width:300px; height:180px;
+  border-radius:10px 6px 12px 7px / 7px 11px 6px 12px;
+  transform:rotate(-.3deg);
+}
+.m-identity {
+  left:450px; top:450px; width:250px; height:140px;
+  border-radius:7px 11px 6px 12px / 12px 7px 11px 6px;
+  transform:rotate(.35deg);
+}
+.n-webgw {
+  left:70px; top:150px; width:190px; height:78px;
+  border:1.4px solid #2fa7b1;
+  border-radius:9px 5px 11px 6px / 6px 10px 5px 11px;
+  transform:rotate(-.5deg);
+}
+.n-webgw .ntag { color:#39c5cf; } .n-webgw .ntag i { background:#39c5cf; }
+.n-audit {
+  left:90px; top:490px; width:180px; height:76px;
+  border:1.4px solid #3fa06b;
+  border-radius:6px 10px 5px 9px / 10px 6px 9px 5px;
+  transform:rotate(.4deg);
+}
+.n-audit .ntag { color:#5ad98c; } .n-audit .ntag i { background:#5ad98c; }
+
+/* ---------- simulation variant ---------- */
+.variant { display:flex; gap:32px; align-items:flex-start; }
+.simframe {
+  width:614px; height:571px; border:1px solid #223055; border-radius:2px;
+  overflow:hidden; background:#0b1020; flex:none;
+  box-shadow:0 18px 50px rgba(0,0,0,.5);
+}
+.simscale { width:816px; height:758px; transform:scale(.75); transform-origin:0 0; }
+.playbar {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:11px; padding:6px 13px;
+  background:#141b30; border:1px solid #1c2747; border-radius:2px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:10.5px; color:#8fa1cf;
+}
+.pbtn { display:flex; align-items:center; justify-content:center; width:16px; height:14px; color:#8fa1cf; }
+.pbtn.on { color:#8ff0f6; }
+.pdiv { width:1px; height:14px; background:#1c2747; }
+.playbar .speed { color:#d7e0f4; }
+.playbar .clock { color:#f5a623; }
+
+.simnotes { max-width:360px; padding-top:6px; }
+.simnotes h3 {
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#8fa1cf;
+  font-weight:400; margin-bottom:16px;
+}
+.simnotes ul { list-style:none; }
+.simnotes li {
+  position:relative; padding-left:20px; margin-bottom:14px;
+  font-size:12.5px; line-height:1.6; color:#aab8dd;
+}
+.simnotes li::before {
+  content:""; position:absolute; left:2px; top:7px; width:7px; height:7px;
+  background:#0b1020; border:1.5px solid #39c5cf;
+}
+.simnotes li b { color:#d7e0f4; font-weight:600; }
+.simnotes .mono { color:#8ff0f6; font-size:11px; }
+
+.foot {
+  margin-top:56px;
+  font-family:ui-monospace, "SF Mono", Menlo, monospace;
+  font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#3b4a75;
+}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ================= board header ================= -->
+  <div class="kicker">Spec-Yard · Design direction 03 · <span class="amber">the wildcard</span></div>
+  <h1 class="title">Drafting instrument</h1>
+  <p class="rationale">
+    The engineer's light table: deep blueprint surfaces, hairline rules, and monospace-forward labels
+    treat the architecture like a precision drawing under instrument light. <strong>Amber and cyan act
+    strictly as indicator lights</strong> — amber for attention, cyan for signal — so state reads at a
+    glance without decoration. Chrome is squared and exact; the canvas keeps Excalidraw's hand, so the
+    drawing itself still feels authored rather than generated.
+  </p>
+
+  <!-- ================= HERO ================= -->
+  <div class="sechead">Hero — <b>static view · 1362 × 800</b></div>
+  <div class="frame">
+    <div class="chrome">
+      <div class="tl"><i></i><i></i><i></i></div>
+      <div class="addr">spec-yard.local/acme-checkout</div>
+    </div>
+
+    <div class="apphead">
+      <div class="brand"><i></i>Spec-Yard</div>
+      <div class="fileline">
+        <span class="proj">acme-checkout</span><span class="sep">/</span><span class="file">main.spec.yaml</span><span class="dirty"></span>
+      </div>
+      <div class="headicons">
+        <span class="hbtn" aria-label="undo">
+          <svg width="15" height="13" viewBox="0 0 15 13" fill="none" stroke="currentColor" stroke-width="1.4">
+            <path d="M4.5 1.5 L1.5 4.5 L4.5 7.5"/><path d="M1.8 4.5 H9.5 a3.5 3.5 0 0 1 0 7 H6"/>
+          </svg>
+        </span>
+        <span class="hbtn" aria-label="redo">
+          <svg width="15" height="13" viewBox="0 0 15 13" fill="none" stroke="currentColor" stroke-width="1.4">
+            <path d="M10.5 1.5 L13.5 4.5 L10.5 7.5"/><path d="M13.2 4.5 H5.5 a3.5 3.5 0 0 0 0 7 H9"/>
+          </svg>
+        </span>
+        <span class="help">Help</span>
+      </div>
+    </div>
+
+    <div class="appbody">
+      <!-- file rail -->
+      <div class="rail">
+        <span class="railbtn active" aria-label="files">
+          <svg width="15" height="16" viewBox="0 0 15 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M2.5 1.5 h7 l3 3 v10 h-10 z"/><path d="M9.5 1.5 v3 h3"/>
+            <path d="M5 8 h5 M5 10.5 h5"/>
+          </svg>
+        </span>
+        <span class="railbtn" aria-label="search">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.3">
+            <circle cx="6.5" cy="6.5" r="4.2"/><path d="M9.8 9.8 L13.2 13.2"/>
+          </svg>
+        </span>
+      </div>
+
+      <!-- editor -->
+      <div class="leftpane">
+        <div class="edhead">Source · main.spec.yaml <span class="r">yaml · utf-8</span></div>
+        <div class="editor">
+          <div class="row"><span class="ln">1</span><code><span class="k">system</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">2</span><code>  <span class="k">name</span><span class="p">:</span> <span class="v">acme-checkout</span></code></div>
+          <div class="row"><span class="ln">3</span><code>  <span class="k">version</span><span class="p">:</span> <span class="n">1.4.0</span></code></div>
+          <div class="row"><span class="ln">4</span><code></code></div>
+          <div class="row"><span class="ln">5</span><code><span class="k">modules</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">6</span><code>  <span class="k">payments</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">7</span><code>    <span class="k">expose</span><span class="p">:</span> <span class="p">[</span><span class="v">payment-api</span><span class="p">]</span></code></div>
+          <div class="row"><span class="ln">8</span><code>    <span class="k">components</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">9</span><code>      <span class="k">payment-api</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">10</span><code>        <span class="k">type</span><span class="p">:</span> <span class="t-gw">Gateway</span></code></div>
+          <div class="row"><span class="ln">11</span><code>      <span class="k">ledger</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">12</span><code>        <span class="k">type</span><span class="p">:</span> <span class="t-sr">Store</span></code></div>
+          <div class="row"><span class="ln">13</span><code>      <span class="k">settle-worker</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">14</span><code>        <span class="k">type</span><span class="p">:</span> <span class="t-sg">Stage</span></code></div>
+          <div class="row"><span class="ln">15</span><code>        <span class="k">connections</span><span class="p">:</span></code></div>
+          <div class="row warn"><span class="ln">16</span><code>          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">ledger</span></code></div>
+          <div class="row"><span class="ln">17</span><code>            <span class="k">label</span><span class="p">:</span> <span class="v">writes entries</span></code></div>
+          <div class="row"><span class="ln">18</span><code></code></div>
+          <div class="row"><span class="ln">19</span><code><span class="k">components</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">20</span><code>  <span class="k">web-gateway</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">21</span><code>    <span class="k">type</span><span class="p">:</span> <span class="t-gw">Gateway</span></code></div>
+          <div class="row"><span class="ln">22</span><code>    <span class="k">connections</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">23</span><code>      <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">payments.payment-api</span></code></div>
+          <div class="row"><span class="ln">24</span><code>        <span class="k">label</span><span class="p">:</span> <span class="v">charge requests</span></code></div>
+          <div class="row"><span class="ln">25</span><code>  <span class="k">audit-log</span><span class="p">:</span></code></div>
+          <div class="row"><span class="ln">26</span><code>    <span class="k">type</span><span class="p">:</span> <span class="t-br">Brick</span></code></div>
+        </div>
+        <div class="diag">
+          <i></i>3 issues <span class="fx">· 1 quick-fixable</span>
+          <span class="caret">▴</span>
+        </div>
+      </div>
+
+      <!-- canvas -->
+      <div class="canvas">
+        <svg class="edges" width="816" height="758" viewBox="0 0 816 758" fill="none">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M1.5 1.5 L8.5 5 L1.5 8.5" fill="none" stroke="#8fa1cf" stroke-width="1.5"/>
+            </marker>
+          </defs>
+          <path d="M268 188 C300 182, 345 192, 390 185" stroke="#8fa1cf" stroke-width="1.4" marker-end="url(#arr)"/>
+          <path d="M166 234 C205 330, 320 462, 441 516" stroke="#8fa1cf" stroke-width="1.4" marker-end="url(#arr)"/>
+          <path d="M444 546 C400 558, 335 550, 282 531" stroke="#8fa1cf" stroke-width="1.4" marker-end="url(#arr)"/>
+        </svg>
+
+        <span class="edge-label" style="left:276px; top:156px;">charge requests</span>
+        <span class="edge-label" style="left:246px; top:376px;">verifies session</span>
+        <span class="edge-label" style="left:322px; top:560px;">audit events</span>
+
+        <!-- module: payments -->
+        <div class="module m-payments">
+          <span class="mtag">Module</span>
+          <span class="mname">payments</span>
+          <span class="mchips"><span class="chip">3</span></span>
+          <span class="badge">1</span>
+          <span class="pin exposed" style="left:-5px; top:70px;"></span>
+          <span class="pinlabel" style="left:11px; top:68px;">payment-api</span>
+          <span class="pin" style="left:140px; top:-5px;"></span>
+          <span class="pin" style="left:84px; bottom:-5px;"></span>
+          <span class="msub">sealed · exposes payment-api</span>
+        </div>
+
+        <!-- module: identity -->
+        <div class="module m-identity">
+          <span class="mtag">Module</span>
+          <span class="mname">identity</span>
+          <span class="mchips"><span class="chip">4</span></span>
+          <span class="pin exposed" style="left:-5px; top:65px;"></span>
+          <span class="pinlabel" style="left:11px; top:63px;">session-api</span>
+          <span class="pin" style="left:-5px; top:90px;"></span>
+          <span class="pin" style="left:118px; top:-5px;"></span>
+          <span class="msub">sealed · exposes session-api</span>
+        </div>
+
+        <!-- component: web-gateway -->
+        <div class="node n-webgw">
+          <span class="ntag"><i></i>Gateway</span>
+          <span class="nname">web-gateway</span>
+          <span class="pin" style="right:-5px; top:34px;"></span>
+          <span class="pin" style="left:91px; bottom:-5px;"></span>
+        </div>
+
+        <!-- component: audit-log -->
+        <div class="node n-audit">
+          <span class="ntag"><i></i>Brick</span>
+          <span class="nname">audit-log</span>
+          <span class="pin" style="right:-5px; top:34px;"></span>
+        </div>
+
+        <span class="crumb">System</span>
+
+        <div class="cbar">
+          <span class="viewsel">Static <span class="car">▾</span></span>
+          <span class="tbtn" aria-label="fit to screen">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M1 4.5 V1 h3.5 M8.5 1 H12 v3.5 M12 8.5 V12 H8.5 M4.5 12 H1 V8.5"/>
+              <rect x="4.5" y="4.5" width="4" height="4"/>
+            </svg>
+          </span>
+          <span class="tbtn" aria-label="fullscreen">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M8 1 h4 v4 M12 1 L8.2 4.8 M5 12 H1 V8 M1 12 L4.8 8.2"/>
+            </svg>
+          </span>
+        </div>
+
+        <div class="legend">
+          <span><i class="sw-gw"></i>Gateway</span>
+          <span><i class="sw-sg"></i>Stage</span>
+          <span><i class="sw-sr"></i>Store</span>
+          <span><i class="sw-br"></i>Brick</span>
+        </div>
+
+        <span class="sync"><b>✓</b> in sync</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STATE VARIANT ================= -->
+  <div class="sechead">State variant — <b>simulation running · same canvas, instrumented</b></div>
+  <div class="variant">
+    <div class="simframe">
+      <div class="simscale">
+        <div class="canvas" style="width:816px; height:758px;">
+          <svg class="edges" width="816" height="758" viewBox="0 0 816 758" fill="none">
+            <defs>
+              <marker id="arrsim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M1.5 1.5 L8.5 5 L1.5 8.5" fill="none" stroke="#3fb6c0" stroke-width="1.5"/>
+              </marker>
+            </defs>
+            <path d="M268 188 C300 182, 345 192, 390 185" stroke="#3fb6c0" stroke-width="1.4" marker-end="url(#arrsim)"/>
+            <path d="M166 234 C205 330, 320 462, 441 516" stroke="#3fb6c0" stroke-width="1.4" marker-end="url(#arrsim)"/>
+            <path d="M444 546 C400 558, 335 550, 282 531" stroke="#3fb6c0" stroke-width="1.4" marker-end="url(#arrsim)"/>
+            <!-- packets in flight: bright dot + soft halo -->
+            <circle cx="295" cy="186" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="295" cy="186" r="2.6" fill="#8ff0f6"/>
+            <circle cx="330" cy="188" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="330" cy="188" r="2.6" fill="#8ff0f6"/>
+            <circle cx="368" cy="186" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="368" cy="186" r="2.6" fill="#8ff0f6"/>
+            <circle cx="205" cy="302" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="205" cy="302" r="2.6" fill="#8ff0f6"/>
+            <circle cx="282" cy="410" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="282" cy="410" r="2.6" fill="#8ff0f6"/>
+            <circle cx="392" cy="490" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="392" cy="490" r="2.6" fill="#8ff0f6"/>
+            <circle cx="402" cy="552" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="402" cy="552" r="2.6" fill="#8ff0f6"/>
+            <circle cx="330" cy="549" r="6.5" fill="rgba(57,197,207,.18)"/><circle cx="330" cy="549" r="2.6" fill="#8ff0f6"/>
+          </svg>
+
+          <span class="edge-label" style="left:276px; top:156px;">charge requests</span>
+          <span class="edge-label" style="left:246px; top:376px;">verifies session</span>
+          <span class="edge-label" style="left:322px; top:560px;">audit events</span>
+
+          <span class="tchip" style="left:300px; top:198px;">142 req/s</span>
+          <span class="tchip" style="left:372px; top:436px;">61 req/s</span>
+          <span class="tchip" style="left:298px; top:572px;">9 req/s</span>
+
+          <div class="module m-payments">
+            <span class="mtag">Module</span>
+            <span class="mname">payments</span>
+            <span class="mchips"><span class="chip">3</span></span>
+            <span class="badge">1</span>
+            <span class="pin exposed" style="left:-5px; top:70px;"></span>
+            <span class="pinlabel" style="left:11px; top:68px;">payment-api</span>
+            <span class="pin" style="left:140px; top:-5px;"></span>
+            <span class="pin" style="left:84px; bottom:-5px;"></span>
+            <span class="msub">sealed · exposes payment-api</span>
+          </div>
+
+          <div class="module m-identity">
+            <span class="mtag">Module</span>
+            <span class="mname">identity</span>
+            <span class="mchips"><span class="chip">4</span></span>
+            <span class="pin exposed" style="left:-5px; top:65px;"></span>
+            <span class="pinlabel" style="left:11px; top:63px;">session-api</span>
+            <span class="pin" style="left:-5px; top:90px;"></span>
+            <span class="pin" style="left:118px; top:-5px;"></span>
+            <span class="msub">sealed · exposes session-api</span>
+          </div>
+
+          <div class="node n-webgw">
+            <span class="ntag"><i></i>Gateway</span>
+            <span class="nname">web-gateway</span>
+            <span class="pin" style="right:-5px; top:34px;"></span>
+            <span class="pin" style="left:91px; bottom:-5px;"></span>
+          </div>
+
+          <div class="node n-audit">
+            <span class="ntag"><i></i>Brick</span>
+            <span class="nname">audit-log</span>
+            <span class="pin" style="right:-5px; top:34px;"></span>
+          </div>
+
+          <span class="crumb">System</span>
+
+          <div class="cbar">
+            <span class="viewsel"><span class="live"></span>Simulation <span class="car">▾</span></span>
+            <span class="tbtn" aria-label="fit to screen">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+                <path d="M1 4.5 V1 h3.5 M8.5 1 H12 v3.5 M12 8.5 V12 H8.5 M4.5 12 H1 V8.5"/>
+                <rect x="4.5" y="4.5" width="4" height="4"/>
+              </svg>
+            </span>
+            <span class="tbtn" aria-label="fullscreen">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+                <path d="M8 1 h4 v4 M12 1 L8.2 4.8 M5 12 H1 V8 M1 12 L4.8 8.2"/>
+              </svg>
+            </span>
+          </div>
+
+          <div class="legend">
+            <span><i class="sw-gw"></i>Gateway</span>
+            <span><i class="sw-sg"></i>Stage</span>
+            <span><i class="sw-sr"></i>Store</span>
+            <span><i class="sw-br"></i>Brick</span>
+          </div>
+
+          <!-- playback transport -->
+          <div class="playbar">
+            <span class="pbtn" aria-label="play">
+              <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor"><path d="M1.5 1 L9 5.5 L1.5 10 Z"/></svg>
+            </span>
+            <span class="pbtn on" aria-label="pause">
+              <svg width="9" height="11" viewBox="0 0 9 11" fill="currentColor"><rect x="1" y="1" width="2.4" height="9"/><rect x="5.6" y="1" width="2.4" height="9"/></svg>
+            </span>
+            <span class="pbtn" aria-label="step">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor"><path d="M1 1 L7 5.5 L1 10 Z"/><rect x="8" y="1" width="2" height="9"/></svg>
+            </span>
+            <span class="pdiv"></span>
+            <span class="speed">1x</span>
+            <span class="pdiv"></span>
+            <span class="clock">00:12</span>
+          </div>
+
+          <span class="sync"><b>✓</b> in sync</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="simnotes">
+      <h3>What changes under simulation</h3>
+      <ul>
+        <li><b>Packets ride the wires</b> as points of light. The drawing itself never moves — only the signal does, the way a logic analyzer overlays a schematic.</li>
+        <li><b>Throughput readouts</b> sit beside each wire as instrument chips — <span class="mono">142 req/s</span> — measured values in monospace, not a dashboard.</li>
+        <li><b>A compact transport bar</b> — play, pause, step, <span class="mono">1x</span>, <span class="mono">00:12</span> — keeps control quiet and bottom-center, and the amber lamp in the view switcher marks the live state.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">Spec-Yard UX · direction board 03 of 03 · drafting instrument · 2026-07-08</div>
+</div>
+</body>
+</html>

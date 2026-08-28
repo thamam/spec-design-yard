@@ -358,6 +358,330 @@ describe('RemoteSyncSpecStore round-2 protocol fixes', () => {
   })
 })
 
+describe('RemoteSyncSpecStore project-epoch guard', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('loadFromServer captures the epoch and spec/meta PUTs carry it as a query param', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-A' } },
+      '/api/store/meta/simulation_history': { status: 200, body: null },
+      '/api/store/meta/custom_presets': { status: 200, body: null },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    store.saveSimulationHistory([{ id: 'r1' }])
+
+    await vi.waitFor(() => {
+      const fetchMock = globalThis.fetch as any
+      const putUrls = fetchMock.mock.calls
+        .filter(([, init]: any[]) => init?.method === 'PUT')
+        .map(([url]: any[]) => String(url))
+      expect(putUrls).toContain('/api/store/spec/main?epoch=epoch-A')
+      expect(putUrls).toContain('/api/store/meta/simulation_history?epoch=epoch-A')
+    })
+  })
+
+  test('no epoch from the server: PUT URLs stay bare', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => {
+      const fetchMock = globalThis.fetch as any
+      const putUrls = fetchMock.mock.calls
+        .filter(([, init]: any[]) => init?.method === 'PUT')
+        .map(([url]: any[]) => String(url))
+      expect(putUrls).toContain('/api/store/spec/main')
+    })
+  })
+
+  test('a project-switched 409 latches mirroring off without a reconcile retry', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let gets = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        return { ok: false, status: 409, json: async () => ({ conflict: true, reason: 'project-switched' }) } as any
+      }
+      gets++
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'other' }) } as any
+    }))
+
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => expect(errSpy).toHaveBeenCalled())
+    expect(errSpy.mock.calls.map(c => String(c[0])).join('\n')).toMatch(/project.*(switched|changed)/i)
+    // No lost-ack reconcile GET: the session must not adopt the new project.
+    expect(gets).toBe(0)
+
+    // Mirroring is latched off.
+    const fetchMock = globalThis.fetch as any
+    fetchMock.mockClear()
+    store.saveSpec('main', 'T2', 'yaml2')
+    await new Promise(r => setTimeout(r, 50))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('RemoteSyncSpecStore cache provenance', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('a save made under a project is never tagged as a portable sketch', async () => {
+    // Review finding: saveSpec fell back to "standalone" whenever the server
+    // sent no epoch, even with a project active — and "standalone" is the one
+    // tag the migration path adopts, so that fallback failed OPEN into a
+    // cross-project bleed. Its sibling in loadFromServer fails closed.
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: true, status: 200, json: async () => ({ ok: true }) } as any
+      // File mode on, but the server volunteers no epoch.
+      return { ok: true, status: 200, json: async () => ({ found: false }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).not.toBe('standalone')
+  })
+
+  test('a save made with no project is tagged as a portable sketch', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ enabled: false, mode: 'unconfigured' }) }) as any))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+  })
+})
+
+describe('RemoteSyncSpecStore sync-state visibility', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('standalone is a calm local-only state, not an alarm', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ enabled: false }) }) as any))
+    const store = new RemoteSyncSpecStore()
+    expect(store.getSyncState().status).toBe('local-only')
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('local-only')
+  })
+
+  test('a successful project load reports synced', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'e1' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('synced')
+  })
+
+  test('a project-switched 409 halts with a reload instruction and notifies subscribers', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        return { ok: false, status: 409, json: async () => ({ conflict: true, reason: 'project-switched' }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    const seen: any[] = []
+    const unsubscribe = store.subscribeSyncState((s) => seen.push(s))
+    store.saveSpec('main', 'T', 'yaml')
+
+    await vi.waitFor(() => {
+      expect(store.getSyncState().status).toBe('halted')
+    })
+    expect(store.getSyncState().reason).toMatch(/reload/i)
+    expect(seen.some((s) => s.status === 'halted')).toBe(true)
+    unsubscribe()
+  })
+
+  test('a failed save is visible, not console-only', async () => {
+    // Review finding: a non-409 failure (project dir deleted mid-session,
+    // disk full, permissions) logged and returned, leaving the status bar
+    // still claiming "Synced to project" while nothing reached the file.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 500, json: async () => ({}) } as any
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    expect(store.getSyncState().status).toBe('synced')
+
+    store.saveSpec('main', 'T', 'yaml')
+    await vi.waitFor(() => {
+      expect(store.getSyncState().status).toBe('halted')
+    })
+    expect(store.getSyncState().reason).toMatch(/browser storage/i)
+  })
+
+  test('a transient save failure clears once a save lands again', async () => {
+    // Unlike a conflict, a transient failure does not latch file mode off —
+    // the next autosave still tries, and success must un-alarm the UI.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let failNext = true
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        if (failNext) {
+          failNext = false
+          return { ok: false, status: 500, json: async () => ({}) } as any
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true, rev: 'r2' }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    store.saveSpec('main', 'T', 'one')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+
+    store.saveSpec('main', 'T', 'two')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('synced'))
+  })
+
+  test('a genuine external-edit conflict halts with a reload instruction', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      // Reconcile GET sees content that differs from our last write.
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: 'external', rev: 'rX', epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    store.saveSpec('main', 'T', 'mine')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+  })
+
+  test('a broken store (5xx on load) halts loudly rather than posing as standalone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as any))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(store.getSyncState().status).toBe('halted')
+  })
+})
+
+describe('RemoteSyncSpecStore cache provenance (standalone sketch migration)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test('a standalone sketch survives into a freshly chosen project', async () => {
+    // Sketch in standalone mode: no server, saves are cache-only and tagged
+    // as standalone work.
+    const standalone = new RemoteSyncSpecStore()
+    standalone.saveSpec('main', 'My Sketch', 'system:\n  name: My Sketch\n')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+
+    // User picks an empty project folder -> reload -> {found:false}.
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-new' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    expect(await store.loadFromServer()).toBe(true)
+
+    // The user's only copy is adopted, not deleted.
+    expect(store.getSpec('main')?.yamlContent).toContain('My Sketch')
+  })
+
+  test('another project\'s cache is still dropped on {found:false}', async () => {
+    localStorage.setItem('spec_main', JSON.stringify({
+      id: 'main', title: 'Project A', yamlContent: 'system:\n  name: Project A\n', updatedAt: '2026-01-01',
+    }))
+    localStorage.setItem('spec_main_origin', 'epoch-project-a')
+
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-project-b' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+
+    expect(store.getSpec('main')).toBeNull()
+    expect(localStorage.getItem('spec_main_origin')).toBeNull()
+  })
+
+  test('a legacy cache with no origin tag is dropped (conservative bleed guard)', async () => {
+    localStorage.setItem('spec_main', JSON.stringify({
+      id: 'main', title: 'Unknown Origin', yamlContent: 'system: {}\n', updatedAt: '2026-01-01',
+    }))
+
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'epoch-new' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+
+    expect(store.getSpec('main')).toBeNull()
+  })
+
+  test('project-mode saves and loads tag the cache with the project epoch', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: 'system: {}\n', updatedAt: 't1', rev: 'r1', epoch: 'epoch-1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    expect(localStorage.getItem('spec_main_origin')).toBe('epoch-1')
+
+    store.arm()
+    store.saveSpec('main', 'T', 'system:\n  name: Edited\n')
+    expect(localStorage.getItem('spec_main_origin')).toBe('epoch-1')
+  })
+
+  test('removeSpec clears the origin tag too', () => {
+    const store = new RemoteSyncSpecStore()
+    store.saveSpec('main', 'T', 'yaml')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+    store.removeSpec('main')
+    expect(localStorage.getItem('spec_main_origin')).toBeNull()
+  })
+})
+
 describe('RemoteSyncSpecStore round-3 fixes', () => {
   beforeEach(() => {
     localStorage.clear()

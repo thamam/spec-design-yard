@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec-Yard — key screen: descended into payments</title>
+
+<!-- ============================================================
+     SPINE SECTIONS THIS MOCK ILLUSTRATES
+     (tokens applied EXACTLY from DESIGN.md post-remediation frontmatter;
+      where the descend wireframe and the spines disagreed, the spines win)
+
+     DESIGN.md
+       · Components → boundary-pin (real scene-space element at the fitted
+         bounding-box edge nearest its external counterpart)
+       · Components → component-node + node-state stacking
+         (Selected accent ring + handles OVER Error dashed danger border + glyph)
+       · Components → type-chip + type hues fence
+         (Gateway teal #2dd4bf · Stage violet #a78bfa · Store green #4ade80 —
+          each moved clear of the accent/severity fences)
+       · Components → detail-drawer (adaptive, dock-right affordance, focus in field)
+       · Components → diagnostic-badge + diagnostics-strip (worst rolled-up severity)
+       · Components → quick-fix-button anatomy (surface-elevated fill, accent label)
+       · Components → breadcrumb (ancestor muted · current foreground · separator dim)
+       · Components → sync-health-chip (silent when honest) + status-bar (true path + Unsaved)
+       · Components → editor (accent-dim line-highlight, per-line syntax, gutter)
+       · Components → view-switcher (Static active) + file-rail (collapsed toggle)
+       · Elevation & Depth (docked surfaces flat; hierarchy by shade-step, no cast shadow)
+
+     EXPERIENCE.md
+       · Component Patterns → Descend coordinate model
+         (same spec coords, filtered to members, viewport fitted, boundary pins at edge)
+       · Component Patterns → Detail drawer — dockable, adaptive (content SWAP: component ↔ module)
+       · Editor leash-follow + line-jump (editor auto-scoped to payments, settle-worker line lit)
+       · View switcher — follows where you stand (Static, scoped to payments internals)
+       · Quick-fix (FR9 retarget-default; expose is explicit secondary, never the default)
+       · Breadcrumb / IA (descend depth, Esc ascends)
+       · Voice and Tone (calm, no jargon, no exclamation; "shows the module you are in")
+
+     Content: acme-checkout · descended into module "payments"
+       members: payment-api [Gateway, exposed] · ledger [Store] · settle-worker [Stage]
+       connection: settle-worker -> ledger "writes entries"
+       external counterpart: web-gateway entering via a boundary pin
+============================================================ -->
+
+<style>
+/* ---- board chrome (review page only — NOT the product) ---- */
+:root{
+  --sc:#1c1b1a; --scd:#262624; --bg:#191919; --surf:#202020; --raised:#232322;
+  --elev:#2a2a29; --strong:#2f2f2f;
+  --bd:#2e2d2b; --bd-node:#6e6d68; --bd-pin:#454440; --conn:#6e6c67;
+  --fg:#e6e4e0; --fg-body:#c8c6c1; --fg-muted:#9b9a97; --fg-dim:#737270;
+  --acc:#3794ff; --acc-h:#4fb3ff; --acc-dim:#122a40; --acc-strong:#007acc;
+  --ok:#8fae8b; --ok-dim:#1f2d24; --warn:#d0a04a; --warn-dim:#3a2f1b;
+  --dng:#ef6d70; --dng-dim:#3a1f21; --info:#7f9fbf; --info-dim:#1e2b38;
+  --t-gw:#2dd4bf; --t-st:#a78bfa; --t-sr:#4ade80; --t-br:#f472b6;
+  --t-gw-d:#16302c; --t-st-d:#241f38; --t-sr-d:#16301f; --t-br-d:#35202c;
+  --sy-k:#9db4cd; --sy-v:#c8c6c1; --sy-n:#c2a878; --sy-p:#83827b;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#131211;color:#cfcdc9;font-family:var(--ui);padding:34px 40px 80px;-webkit-font-smoothing:antialiased}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#7c7a76}
+h1{font-family:var(--ui);font-size:22px;font-weight:600;color:#eceae6;margin:6px 0 6px}
+.lede{font-size:13.5px;line-height:1.55;color:#a5a29d;max-width:1040px;margin:0 0 18px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:12px;color:#8f8d89;margin:0 0 26px}
+.legend b{color:#b7b4af;font-weight:600;margin-right:2px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.scrollwrap{overflow-x:auto;padding-bottom:8px}
+.seclabel{font-size:12px;font-weight:600;color:#c9c6c1;margin:30px 0 4px;letter-spacing:.01em}
+.seclabel em{color:#7c7a76;font-style:normal;font-weight:400}
+.cap{font-size:12.5px;line-height:1.6;color:#8f8d89;max-width:1440px;margin:12px 0 6px}
+.cap b{color:#b7b4af;font-weight:600}
+.spinechips{display:flex;flex-wrap:wrap;gap:6px;max-width:1440px;margin:8px 0 4px}
+.spinechips span{font-size:11px;color:#8b8984;background:#1d1c1b;border:1px solid #2a2927;border-radius:9999px;padding:3px 10px}
+
+/* ---- browser frame ---- */
+.frame{width:1440px;border:1px solid #34322f;border-radius:10px;overflow:hidden;background:var(--bg);
+  box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.chrome{height:40px;background:#161514;border-bottom:1px solid #2a2927;display:flex;align-items:center;
+  padding:0 14px;position:relative}
+.lights{display:flex;gap:8px}
+.lights i{width:11px;height:11px;border-radius:50%}
+.lights i:nth-child(1){background:#f2555a}.lights i:nth-child(2){background:#f7b62d}.lights i:nth-child(3){background:#43c05a}
+.url{position:absolute;left:50%;transform:translateX(-50%);background:#100f0e;border:1px solid #2a2927;
+  border-radius:6px;padding:4px 30px;font-size:11px;color:#7f7d79;font-family:var(--mono)}
+
+/* ---- app title bar ---- */
+.tbar{height:40px;background:var(--surf);border-bottom:1px solid var(--bd);display:flex;align-items:center;
+  padding:0 12px;gap:12px;position:relative}
+.brand{font-size:13px;font-weight:600;color:var(--fg);letter-spacing:.01em}
+.brand .dot{color:var(--fg-dim);margin:0 7px;font-weight:400}
+.brand .proj{color:var(--fg-body);font-weight:500}
+.tbar .rt{margin-left:auto;display:flex;align-items:center;gap:14px;color:var(--fg-muted);font-size:12px}
+.icobtn{color:var(--fg-muted);display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:default}
+.icobtn svg{display:block}
+
+/* ---- main split ---- */
+.main{display:flex;height:640px}
+.rail{width:36px;flex:none;background:var(--surf);border-right:1px solid var(--bd);
+  display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:12px;color:var(--fg-dim)}
+.rail .on{color:var(--fg-body)}
+.rail svg{display:block}
+
+.lpane{width:540px;flex:none;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid var(--bd)}
+
+/* ---- editor ---- */
+.editor{height:360px;overflow:hidden;background:var(--bg);position:relative}
+.code{font-family:var(--mono);font-size:13px;line-height:20px;padding:8px 0}
+.ln{display:flex;white-space:pre;padding:0 14px 0 0}
+.ln>i{width:42px;flex:none;text-align:right;padding-right:14px;color:var(--fg-dim);font-style:normal;user-select:none}
+.ln.leash{background:var(--acc-dim)}
+.ln.cur{background:#163150;box-shadow:inset 3px 0 0 var(--acc)}
+.k{color:var(--sy-k)}.v{color:var(--sy-v)}.n{color:var(--sy-n)}.p{color:var(--sy-p)}
+.tg{color:var(--t-gw)}.tt{color:var(--t-st)}.ts{color:var(--t-sr)}
+
+/* ---- detail drawer (docked under editor) ---- */
+.split{height:5px;background:var(--surf);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);
+  position:relative}
+.split::after{content:"";position:absolute;left:50%;top:1px;width:34px;height:2px;border-radius:2px;
+  background:var(--fg-dim);transform:translateX(-50%)}
+.drawer{flex:1;background:var(--surf);display:flex;flex-direction:column;min-height:0}
+.dhead{display:flex;align-items:center;gap:10px;padding:12px 14px 10px}
+.dhead .title{font-size:15px;font-weight:600;color:var(--fg);font-family:var(--mono)}
+.dhead .rt{margin-left:auto;display:flex;align-items:center;gap:8px}
+.dockbtn{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-muted);
+  background:var(--elev);border:1px solid var(--bd);border-radius:6px;padding:4px 8px;cursor:default}
+.dockbtn svg{display:block}
+.dbody{padding:0 14px 14px;overflow:auto}
+
+/* type + status chips */
+.chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:12px;
+  border-radius:9999px;padding:2px 10px;line-height:1.5}
+.chip.gw{background:var(--t-gw-d);color:var(--t-gw)}
+.chip.st{background:var(--t-st-d);color:var(--t-st)}
+.chip.sr{background:var(--t-sr-d);color:var(--t-sr)}
+.chip.count{background:var(--elev);color:var(--fg-muted)}
+.chip.mod{background:var(--elev);color:var(--fg-body)}
+.spill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);
+  background:var(--ok-dim);border-radius:9999px;padding:2px 9px}
+
+/* form fields */
+.field{margin:8px 0}
+.field .lab{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-muted);
+  margin:0 0 5px}
+.inp{background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:7px 10px;font-size:13px;
+  color:var(--fg-body);font-family:var(--mono);display:flex;align-items:center;justify-content:space-between}
+.inp.focus{border-color:var(--acc);box-shadow:0 0 0 2px rgba(55,148,255,.28)}
+.inp .caret{width:1.5px;height:15px;background:var(--acc-h);display:inline-block;margin-left:2px;vertical-align:middle}
+.inp .muted{color:var(--fg-dim);font-family:var(--ui);font-size:11px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.subhead{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-muted);
+  margin:14px 0 7px;display:flex;align-items:center;gap:8px}
+.subhead .c{color:var(--fg-dim);font-weight:400;letter-spacing:0;text-transform:none}
+.row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--fg-body);padding:6px 0;
+  border-top:1px solid var(--bd)}
+.row .dir{font-family:var(--mono);font-size:12px;color:var(--fg-dim);width:34px;flex:none}
+.row .nm{font-family:var(--mono);color:var(--fg-body)}
+.row .meta{color:var(--fg-dim);font-size:12px}
+.row .rt{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tag-ext{font-size:11px;color:var(--fg-muted);background:var(--elev);border-radius:4px;padding:1px 7px}
+.tag-exp{font-size:11px;color:var(--ok);background:var(--ok-dim);border-radius:4px;padding:1px 7px}
+
+/* diagnostics inside drawer */
+.diagcard{margin-top:8px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:11px 12px}
+.diagcard .msg{display:flex;gap:9px;font-size:13px;line-height:1.5;color:var(--fg-body)}
+.gl{flex:none;width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;margin-top:1px}
+.gl.err{background:var(--dng-dim);color:var(--dng)}
+.gl.warn{background:var(--warn-dim);color:var(--warn)}
+.fixrow{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.qfix{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--acc);
+  background:var(--elev);border:1px solid var(--bd);border-radius:6px;padding:6px 11px;cursor:default}
+.qfix svg{display:block}
+.secondary{font-size:12px;color:var(--fg-muted);cursor:default}
+.secondary u{text-decoration-color:var(--fg-dim)}
+.openref{margin-top:12px;font-size:12px;color:var(--acc);display:inline-flex;align-items:center;gap:6px}
+
+/* ---- canvas pane ---- */
+.cpane{flex:1;display:flex;flex-direction:column;min-width:0}
+.ctool{height:40px;flex:none;background:var(--surf);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;padding:0 12px;gap:10px}
+.crumb{display:flex;align-items:center;gap:9px;font-size:13px}
+.ascend{display:inline-flex;align-items:center;gap:5px;color:var(--fg-muted);background:var(--elev);
+  border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-size:11px;cursor:default}
+.ascend svg{display:block}
+.crumb .anc{color:var(--fg-muted);cursor:default}
+.crumb .sep{color:var(--fg-dim)}
+.crumb .cur{color:var(--fg)}
+.crumb .cur.sel{color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc);padding-bottom:2px}
+.ctool .rt{margin-left:auto;display:flex;align-items:center;gap:8px}
+.vsw{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-body);background:var(--elev);
+  border:1px solid var(--bd);border-radius:6px;padding:5px 10px}
+.vsw .mk{width:6px;height:6px;border-radius:50%;background:var(--acc)}
+.vsw .car{color:var(--fg-muted)}
+.fit{display:inline-flex;align-items:center;color:var(--fg-muted);background:var(--elev);border:1px solid var(--bd);
+  border-radius:6px;padding:5px 8px}
+.fit svg{display:block}
+
+.canvas{flex:1;position:relative;background:var(--sc);overflow:hidden;
+  background-image:radial-gradient(circle,var(--scd) 1.1px,transparent 1.1px);background-size:22px 22px}
+
+/* nodes */
+.node{position:absolute;background:var(--raised);border:1.5px solid var(--bd-node);border-radius:8px;
+  padding:11px 13px 12px;width:156px}
+.node .nm{font-size:13px;font-weight:600;color:var(--fg);font-family:var(--mono)}
+.node .tc{margin-top:8px}
+.n-gw{border-color:var(--t-gw);transform:rotate(-.4deg)}
+.n-st{border-color:var(--t-st);transform:rotate(.5deg)}
+.n-sr{border-color:var(--t-sr);transform:rotate(-.3deg)}
+
+/* node states (stack: selection ring OVER error dashed border) */
+.err{border-style:dashed;border-color:var(--dng)}
+.errbadge{position:absolute;top:-10px;right:-9px;font-family:var(--mono);font-size:11px;font-weight:700;
+  color:var(--dng);background:var(--dng-dim);border:1px solid #5a2b2d;border-radius:4px;padding:1px 6px}
+.sel{outline:2px solid var(--acc);outline-offset:4px}
+.handle{position:absolute;width:8px;height:8px;background:var(--acc);border:1px solid #0b1a2e;border-radius:2px;z-index:6}
+
+/* exposed interface pin on a member (the intended target) */
+.exppin{position:absolute;width:12px;height:12px;border-radius:9999px;background:var(--acc-dim);
+  border:2px solid var(--acc);z-index:6}
+.exppin-lbl{position:absolute;font-size:10px;color:var(--fg-muted);font-family:var(--mono);z-index:6}
+
+/* boundary pin at the fitted-bounds edge */
+.bpin{position:absolute;width:16px;height:16px;border-radius:9999px;background:var(--acc-dim);
+  border:2px solid var(--acc);z-index:6}
+.bpin-lbl{position:absolute;z-index:6;font-size:11px;color:var(--fg-muted);font-family:var(--mono);white-space:nowrap}
+.bpin-lbl small{display:block;font-family:var(--ui);font-size:10px;color:var(--fg-dim);letter-spacing:.03em}
+
+/* edges */
+.edges{position:absolute;inset:0;z-index:2}
+.elbl{position:absolute;z-index:5;transform:translate(-50%,-50%);font-size:11px;color:var(--fg-muted);
+  background:var(--sc);border:1px solid var(--bd);border-radius:4px;padding:1px 8px;font-family:var(--ui);white-space:nowrap}
+
+/* sync-health chip (silent when honest) */
+.sync{position:absolute;right:14px;bottom:14px;z-index:7;display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--ok);background:var(--ok-dim);border-radius:9999px;padding:4px 11px}
+
+/* ---- diagnostics strip (collapsed) + status bar ---- */
+.dstrip{height:30px;background:var(--surf);border-top:1px solid var(--bd);display:flex;align-items:center;
+  gap:10px;padding:0 14px;font-size:12px;color:var(--fg-muted)}
+.dstrip .dt{width:9px;height:9px;border-radius:50%;background:var(--dng)}
+.dstrip .lbl{color:var(--fg-body)}
+.dstrip .rt{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--fg-dim)}
+.statusbar{height:26px;background:var(--surf);border-top:1px solid var(--bd);display:flex;align-items:center;
+  padding:0 14px;gap:14px;font-size:12px;color:var(--fg-muted)}
+.statusbar .path{font-family:var(--mono);color:var(--fg-muted)}
+.unsaved{display:inline-flex;align-items:center;gap:6px;color:var(--fg-body)}
+.unsaved .d{width:7px;height:7px;border-radius:50%;background:var(--acc)}
+.statusbar .rt{margin-left:auto;display:flex;align-items:center;gap:16px;font-family:var(--mono);color:var(--fg-dim)}
+</style>
+</head>
+<body>
+
+<div class="eyebrow">spec-yard · ux key screen · descend model (flow-variant-b)</div>
+<h1>Descended into a module</h1>
+<p class="lede">The hero of the most complex flow. Descend is <b>not</b> a scene swap: the canvas renders the
+same spec coordinates, filtered to the module's members and fitted to their bounds, with outside traffic
+entering through a boundary pin at the edge. The editor leash-follows to the module's YAML, and one adaptive
+drawer under the editor swaps its whole content by what you select. Tokens are applied exactly from DESIGN.md
+(post-remediation): Gateway teal, Stage violet, Store green — each held clear of the selection blue and the
+severity reds.</p>
+<div class="legend">
+  <b>type hues</b>
+  <span><i style="background:#2dd4bf"></i>Gateway</span>
+  <span><i style="background:#a78bfa"></i>Stage</span>
+  <span><i style="background:#4ade80"></i>Store</span>
+  <span><i style="background:#f472b6"></i>Brick</span>
+  &nbsp;&nbsp;<b>node state</b>
+  <span><i style="background:#3794ff"></i>selected (ring + handles)</span>
+  <span><i style="background:#ef6d70"></i>error (dashed + glyph)</span>
+</div>
+
+<!-- ==================================================================
+     SECTION 1 — Descended into payments, component selected
+================================================================== -->
+<div class="seclabel">1 · Descended into payments — component selected <em>· settle-worker</em></div>
+<div class="scrollwrap">
+<div class="frame">
+
+  <div class="chrome">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="url">spec-yard.local/acme-checkout</div>
+  </div>
+
+  <div class="tbar">
+    <span class="brand">Spec-Yard<span class="dot">·</span><span class="proj">acme-checkout</span></span>
+    <span class="rt">
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7 4 12l5 5"/><path d="M20 6v4a4 4 0 0 1-4 4H4"/></svg></span>
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5"/><path d="M4 6v4a4 4 0 0 0 4 4h12"/></svg></span>
+      <span class="icobtn" title="Help">Help</span>
+    </span>
+  </div>
+
+  <div class="main">
+
+    <!-- collapsed file rail (toggle only, per lean default) -->
+    <div class="rail">
+      <span class="on" title="Files">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h6l2 2h8v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+      </span>
+      <span title="Command palette">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/></svg>
+      </span>
+    </div>
+
+    <!-- LEFT PANE: editor + adaptive drawer -->
+    <div class="lpane">
+
+      <!-- editor: leash-follows to the payments block; settle-worker line lit -->
+      <div class="editor">
+        <div class="code">
+          <div class="ln"><i>1</i><span class="k">system</span><span class="p">:</span> <span class="v">acme-checkout</span></div>
+          <div class="ln"><i>2</i><span class="k">version</span><span class="p">:</span> <span class="n">0.4.2</span></div>
+          <div class="ln"><i>3</i></div>
+          <div class="ln"><i>4</i><span class="k">modules</span><span class="p">:</span></div>
+          <div class="ln"><i>5</i>  <span class="k">payments</span><span class="p">:</span></div>
+          <div class="ln"><i>6</i>    <span class="k">kind</span><span class="p">:</span> <span class="v">module</span></div>
+          <div class="ln"><i>7</i>    <span class="k">exposes</span><span class="p">:</span></div>
+          <div class="ln"><i>8</i>      <span class="p">-</span> <span class="v">payment-api</span></div>
+          <div class="ln"><i>9</i>    <span class="k">members</span><span class="p">:</span></div>
+          <div class="ln"><i>10</i>      <span class="k">payment-api</span><span class="p">:</span></div>
+          <div class="ln"><i>11</i>        <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></div>
+          <div class="ln"><i>12</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+          <div class="ln"><i>13</i>        <span class="k">status</span><span class="p">:</span> <span class="v">active</span></div>
+          <div class="ln"><i>14</i></div>
+          <div class="ln cur"><i>15</i>      <span class="k">settle-worker</span><span class="p">:</span></div>
+          <div class="ln leash"><i>16</i>        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></div>
+          <div class="ln leash"><i>17</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+          <div class="ln leash"><i>18</i>        <span class="k">status</span><span class="p">:</span> <span class="v">active</span></div>
+          <div class="ln leash"><i>19</i>        <span class="k">rate_limit</span><span class="p">:</span> <span class="n">200</span></div>
+          <div class="ln leash"><i>20</i>        <span class="k">throttled</span><span class="p">:</span> <span class="v">false</span></div>
+          <div class="ln leash"><i>21</i>        <span class="k">connections</span><span class="p">:</span></div>
+          <div class="ln leash"><i>22</i>          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">ledger</span></div>
+          <div class="ln leash"><i>23</i>            <span class="k">label</span><span class="p">:</span> <span class="v">writes entries</span></div>
+          <div class="ln"><i>24</i></div>
+          <div class="ln"><i>25</i>      <span class="k">ledger</span><span class="p">:</span></div>
+          <div class="ln"><i>26</i>        <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span></div>
+          <div class="ln"><i>27</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+        </div>
+      </div>
+
+      <div class="split"></div>
+
+      <!-- adaptive drawer: COMPONENT form (settle-worker) -->
+      <div class="drawer">
+        <div class="dhead">
+          <span class="title">settle-worker</span>
+          <span class="chip st">Stage</span>
+          <span class="rt">
+            <span class="dockbtn" title="Dock right as an inspector column">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+              Dock right
+            </span>
+          </span>
+        </div>
+        <div class="dbody">
+          <div class="grid2">
+            <div class="field">
+              <div class="lab">Name</div>
+              <div class="inp focus">settle-worker<span class="caret"></span></div>
+            </div>
+            <div class="field">
+              <div class="lab">Status</div>
+              <div class="inp">active <span class="muted">▾</span></div>
+            </div>
+          </div>
+          <div class="field">
+            <div class="lab">Owner</div>
+            <div class="inp">payments-team</div>
+          </div>
+
+          <div class="subhead">Connections <span class="c">1 in · 1 out</span></div>
+          <div class="row">
+            <span class="dir">in ←</span><span class="nm">web-gateway</span>
+            <span class="rt"><span class="tag-ext">outside payments</span></span>
+          </div>
+          <div class="row">
+            <span class="dir">out →</span><span class="nm">ledger</span><span class="meta">· writes entries</span>
+          </div>
+
+          <div class="subhead">Diagnostics <span class="c">1</span></div>
+          <div class="diagcard">
+            <div class="msg">
+              <span class="gl err">✕</span>
+              <span>This connection enters from outside and targets <b style="color:var(--fg)">settle-worker</b>, which payments doesn't expose.</span>
+            </div>
+            <div class="fixrow">
+              <span class="qfix">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
+                Retarget to payment-api
+              </span>
+              <span class="secondary">or <u>expose settle-worker instead</u></span>
+            </div>
+          </div>
+
+          <a class="openref">Open in editor →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS PANE -->
+    <div class="cpane">
+      <div class="ctool">
+        <span class="ascend" title="Ascend one level (Esc)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+          Ascend
+        </span>
+        <span class="crumb">
+          <span class="anc">System</span><span class="sep">▸</span><span class="cur">payments</span>
+        </span>
+        <span class="rt">
+          <span class="vsw"><span class="mk"></span>Static<span class="car">▾</span></span>
+          <span class="fit" title="Fit to screen (⇧1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </span>
+        </span>
+      </div>
+
+      <div class="canvas">
+        <!-- edges -->
+        <svg class="edges" viewBox="0 0 864 600" preserveAspectRatio="none">
+          <defs>
+            <marker id="ah-c" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#6e6c67"/></marker>
+            <marker id="ah-d" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#ef6d70"/></marker>
+          </defs>
+          <!-- boundary pin -> settle-worker : the encapsulation violation (dashed danger) -->
+          <path d="M44 300 C 150 300, 220 296, 296 296" fill="none" stroke="#ef6d70" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#ah-d)"/>
+          <!-- settle-worker -> ledger : writes entries (solid connection) -->
+          <path d="M404 344 C 470 372, 512 398, 556 410" fill="none" stroke="#6e6c67" stroke-width="1.6" marker-end="url(#ah-c)"/>
+        </svg>
+
+        <!-- boundary pin at the fitted-bounds edge, nearest its external counterpart -->
+        <div class="bpin" style="left:36px;top:292px"></div>
+        <div class="bpin-lbl" style="left:58px;top:286px">web-gateway<small>enters via boundary pin</small></div>
+
+        <!-- payment-api : Gateway, the exposed member (intended target) -->
+        <div class="node n-gw" style="left:300px;top:70px">
+          <div class="exppin" style="left:-7px;top:34px"></div>
+          <div class="exppin-lbl" style="left:-4px;top:56px">exposed</div>
+          <div class="nm">payment-api</div>
+          <div class="tc"><span class="chip gw">Gateway</span></div>
+        </div>
+
+        <!-- settle-worker : Stage, SELECTED (ring + handles) OVER error (dashed + glyph) -->
+        <div class="node n-st err sel" style="left:300px;top:252px">
+          <div class="errbadge">✕ 1</div>
+          <div class="nm">settle-worker</div>
+          <div class="tc"><span class="chip st">Stage</span></div>
+          <span class="handle" style="left:-4px;top:-4px"></span>
+          <span class="handle" style="right:-4px;top:-4px"></span>
+          <span class="handle" style="left:-4px;bottom:-4px"></span>
+          <span class="handle" style="right:-4px;bottom:-4px"></span>
+        </div>
+
+        <!-- ledger : Store -->
+        <div class="node n-sr" style="left:556px;top:372px">
+          <div class="nm">ledger</div>
+          <div class="tc"><span class="chip sr">Store</span></div>
+        </div>
+
+        <div class="elbl" style="left:486px;top:378px">writes entries</div>
+
+        <div class="sync" title="Diagram and spec are in sync">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l4 4L19 6"/></svg>
+          In sync
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- diagnostics strip (collapsed) -->
+  <div class="dstrip">
+    <span class="dt"></span><span class="lbl">1 error</span>
+    <span style="color:var(--fg-dim)">·&nbsp; payments · encapsulation violation</span>
+    <span class="rt">Diagnostics <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+  </div>
+
+  <!-- status bar: true path + Unsaved -->
+  <div class="statusbar">
+    <span class="path">acme-checkout / payments.spec.yaml</span>
+    <span class="unsaved"><span class="d"></span>Unsaved</span>
+    <span class="rt"><span>Static · payments</span><span>Ln 15, Col 7</span></span>
+  </div>
+
+</div>
+</div>
+
+<div class="cap"><b>Descended into payments, component selected.</b> The canvas shows only payments' members
+(payment-api · settle-worker · ledger), fitted to their bounds; <b>web-gateway</b> arrives through a boundary
+pin at the left edge. settle-worker is selected (accent ring + handles) and also carries its error state
+(dashed danger border + rolled-up glyph) — the two cues stack, ring outermost. The editor has leash-followed
+to the payments block with the settle-worker line lit; the drawer shows the component form, and its one
+diagnostic offers the FR9 retarget-default quick-fix (expose stays an explicit secondary).</div>
+<div class="spinechips">
+  <span>DESIGN · boundary-pin</span><span>DESIGN · component-node state-stack</span>
+  <span>DESIGN · type-chip + hues</span><span>DESIGN · detail-drawer (dock-right)</span>
+  <span>DESIGN · quick-fix-button</span><span>DESIGN · diagnostics-strip</span>
+  <span>DESIGN · sync-health-chip + status-bar</span><span>DESIGN · editor line-highlight</span>
+  <span>EXP · descend coordinate model</span><span>EXP · leash-follow + line-jump</span>
+  <span>EXP · view switcher scoped</span><span>EXP · quick-fix retarget-default</span>
+  <span>EXP · voice &amp; tone</span>
+</div>
+
+<!-- ==================================================================
+     SECTION 2 — Module details in the drawer (adaptive content swap)
+================================================================== -->
+<div class="seclabel">2 · Same descended scope — module selected via breadcrumb <em>· adaptive drawer swaps to the module form</em></div>
+<div class="scrollwrap">
+<div class="frame">
+
+  <div class="chrome">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="url">spec-yard.local/acme-checkout</div>
+  </div>
+
+  <div class="tbar">
+    <span class="brand">Spec-Yard<span class="dot">·</span><span class="proj">acme-checkout</span></span>
+    <span class="rt">
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7 4 12l5 5"/><path d="M20 6v4a4 4 0 0 1-4 4H4"/></svg></span>
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 7l5 5-5 5"/><path d="M4 6v4a4 4 0 0 0 4 4h12"/></svg></span>
+      <span class="icobtn" title="Help">Help</span>
+    </span>
+  </div>
+
+  <div class="main">
+    <div class="rail">
+      <span class="on" title="Files">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h6l2 2h8v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
+      </span>
+      <span title="Command palette">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/></svg>
+      </span>
+    </div>
+
+    <div class="lpane">
+      <!-- editor still leashed to the payments block; module scope, so the whole block is tinted -->
+      <div class="editor">
+        <div class="code">
+          <div class="ln"><i>1</i><span class="k">system</span><span class="p">:</span> <span class="v">acme-checkout</span></div>
+          <div class="ln"><i>2</i><span class="k">version</span><span class="p">:</span> <span class="n">0.4.2</span></div>
+          <div class="ln"><i>3</i></div>
+          <div class="ln"><i>4</i><span class="k">modules</span><span class="p">:</span></div>
+          <div class="ln cur"><i>5</i>  <span class="k">payments</span><span class="p">:</span></div>
+          <div class="ln leash"><i>6</i>    <span class="k">kind</span><span class="p">:</span> <span class="v">module</span></div>
+          <div class="ln leash"><i>7</i>    <span class="k">exposes</span><span class="p">:</span></div>
+          <div class="ln leash"><i>8</i>      <span class="p">-</span> <span class="v">payment-api</span></div>
+          <div class="ln leash"><i>9</i>    <span class="k">members</span><span class="p">:</span></div>
+          <div class="ln leash"><i>10</i>      <span class="k">payment-api</span><span class="p">:</span></div>
+          <div class="ln leash"><i>11</i>        <span class="k">type</span><span class="p">:</span> <span class="tg">Gateway</span></div>
+          <div class="ln leash"><i>12</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+          <div class="ln leash"><i>13</i>        <span class="k">status</span><span class="p">:</span> <span class="v">active</span></div>
+          <div class="ln leash"><i>14</i></div>
+          <div class="ln leash"><i>15</i>      <span class="k">settle-worker</span><span class="p">:</span></div>
+          <div class="ln leash"><i>16</i>        <span class="k">type</span><span class="p">:</span> <span class="tt">Stage</span></div>
+          <div class="ln leash"><i>17</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+          <div class="ln leash"><i>18</i>        <span class="k">status</span><span class="p">:</span> <span class="v">active</span></div>
+          <div class="ln leash"><i>19</i>        <span class="k">rate_limit</span><span class="p">:</span> <span class="n">200</span></div>
+          <div class="ln leash"><i>20</i>        <span class="k">throttled</span><span class="p">:</span> <span class="v">false</span></div>
+          <div class="ln leash"><i>21</i>        <span class="k">connections</span><span class="p">:</span></div>
+          <div class="ln leash"><i>22</i>          <span class="p">-</span> <span class="k">target</span><span class="p">:</span> <span class="v">ledger</span></div>
+          <div class="ln leash"><i>23</i>            <span class="k">label</span><span class="p">:</span> <span class="v">writes entries</span></div>
+          <div class="ln"><i>24</i></div>
+          <div class="ln"><i>25</i>      <span class="k">ledger</span><span class="p">:</span></div>
+          <div class="ln"><i>26</i>        <span class="k">type</span><span class="p">:</span> <span class="ts">Store</span></div>
+          <div class="ln"><i>27</i>        <span class="k">owner</span><span class="p">:</span> <span class="v">payments-team</span></div>
+        </div>
+      </div>
+
+      <div class="split"></div>
+
+      <!-- adaptive drawer: MODULE form (payments) — same geometry, swapped content -->
+      <div class="drawer">
+        <div class="dhead">
+          <span class="title">payments</span>
+          <span class="chip mod">Module</span>
+          <span class="chip count">3 members</span>
+          <span class="rt">
+            <span class="dockbtn" title="Dock right as an inspector column">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+              Dock right
+            </span>
+          </span>
+        </div>
+        <div class="dbody">
+          <div class="subhead">Interface — exposed <span class="c">1</span></div>
+          <div class="row">
+            <span class="nm">payment-api</span><span class="chip gw" style="transform:scale(.92)">Gateway</span>
+            <span class="rt"><span class="tag-exp">exposed</span></span>
+          </div>
+          <div style="font-size:12px;color:var(--fg-dim);margin-top:8px">Only exposed members are legal targets for connections from outside. <span style="color:var(--fg-muted)"><u>Expose a member</u></span></div>
+
+          <div class="subhead">Members <span class="c">3</span></div>
+          <div class="row"><span class="nm">payment-api</span><span class="rt"><span class="chip gw" style="transform:scale(.92)">Gateway</span></span></div>
+          <div class="row"><span class="nm">settle-worker</span><span class="rt"><span class="gl err" style="width:16px;height:16px">✕</span><span class="chip st" style="transform:scale(.92)">Stage</span></span></div>
+          <div class="row"><span class="nm">ledger</span><span class="rt"><span class="chip sr" style="transform:scale(.92)">Store</span></span></div>
+
+          <div class="subhead">Diagnostics — rolled up <span class="c">worst: error</span></div>
+          <div class="diagcard">
+            <div class="msg">
+              <span class="gl err">✕</span>
+              <span><b style="color:var(--fg)">settle-worker</b> — a connection from outside targets a member payments doesn't expose. <span style="color:var(--fg-muted)">1 error inside this module.</span></span>
+            </div>
+            <div class="fixrow">
+              <span class="qfix">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/></svg>
+                Review in settle-worker
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS PANE: same fitted scope; component deselected, breadcrumb scope selected -->
+    <div class="cpane">
+      <div class="ctool">
+        <span class="ascend" title="Ascend one level (Esc)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+          Ascend
+        </span>
+        <span class="crumb">
+          <span class="anc">System</span><span class="sep">▸</span><span class="cur sel">payments</span>
+        </span>
+        <span class="rt">
+          <span class="vsw"><span class="mk"></span>Static<span class="car">▾</span></span>
+          <span class="fit" title="Fit to screen (⇧1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </span>
+        </span>
+      </div>
+
+      <div class="canvas">
+        <svg class="edges" viewBox="0 0 864 600" preserveAspectRatio="none">
+          <defs>
+            <marker id="ah-c2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#6e6c67"/></marker>
+            <marker id="ah-d2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#ef6d70"/></marker>
+          </defs>
+          <path d="M44 300 C 150 300, 220 296, 296 296" fill="none" stroke="#ef6d70" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#ah-d2)"/>
+          <path d="M404 344 C 470 372, 512 398, 556 410" fill="none" stroke="#6e6c67" stroke-width="1.6" marker-end="url(#ah-c2)"/>
+        </svg>
+
+        <div class="bpin" style="left:36px;top:292px"></div>
+        <div class="bpin-lbl" style="left:58px;top:286px">web-gateway<small>enters via boundary pin</small></div>
+
+        <div class="node n-gw" style="left:300px;top:70px">
+          <div class="exppin" style="left:-7px;top:34px"></div>
+          <div class="exppin-lbl" style="left:-4px;top:56px">exposed</div>
+          <div class="nm">payment-api</div>
+          <div class="tc"><span class="chip gw">Gateway</span></div>
+        </div>
+
+        <!-- settle-worker still carries its error, but is no longer selected -->
+        <div class="node n-st err" style="left:300px;top:252px">
+          <div class="errbadge">✕ 1</div>
+          <div class="nm">settle-worker</div>
+          <div class="tc"><span class="chip st">Stage</span></div>
+        </div>
+
+        <div class="node n-sr" style="left:556px;top:372px">
+          <div class="nm">ledger</div>
+          <div class="tc"><span class="chip sr">Store</span></div>
+        </div>
+
+        <div class="elbl" style="left:486px;top:378px">writes entries</div>
+
+        <div class="sync" title="Diagram and spec are in sync">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l4 4L19 6"/></svg>
+          In sync
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dstrip">
+    <span class="dt"></span><span class="lbl">1 error</span>
+    <span style="color:var(--fg-dim)">·&nbsp; payments · encapsulation violation</span>
+    <span class="rt">Diagnostics <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+  </div>
+
+  <div class="statusbar">
+    <span class="path">acme-checkout / payments.spec.yaml</span>
+    <span class="unsaved"><span class="d"></span>Unsaved</span>
+    <span class="rt"><span>Static · payments</span><span>Ln 5, Col 3</span></span>
+  </div>
+
+</div>
+</div>
+
+<div class="cap"><b>Module details in the drawer.</b> Same descended scope and the same canvas — only the
+selection changed: clicking <b>payments</b> in the breadcrumb selects the module itself, and the one adaptive
+drawer swaps its whole content to the module form: the interface list (exposed: payment-api), the three
+members with their types, and a rolled-up diagnostics summary (worst: error). This is the same drawer surface
+in the same geometry, proving the content adapts to what is selected — component form vs. module
+interface/members.</div>
+<div class="spinechips">
+  <span>DESIGN · detail-drawer (module content)</span><span>DESIGN · member-count chip</span>
+  <span>DESIGN · breadcrumb (scope selected)</span><span>DESIGN · diagnostic-badge rollup</span>
+  <span>EXP · detail drawer adaptive content swap</span><span>EXP · interface / exposed member editor</span>
+  <span>EXP · voice &amp; tone</span>
+</div>
+
+</body>
+</html>

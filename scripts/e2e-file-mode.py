@@ -41,11 +41,25 @@ with sync_playwright() as p:
 
     ta = page.locator('[data-testid="spec-textarea"]')
     initial = ta.input_value()
-    check("fresh mount loads built-in initial spec (no repo file yet)", "External Brain" in initial)
-    check("no repo spec file before first edit", not os.path.exists(os.path.join(CLIENT_REPO, "main.spec.yaml")))
+    # A fresh file-backed project opens with the labeled blank skeleton —
+    # never the built-in "External Brain" demo (which is standalone-only).
+    check("fresh project opens a labeled blank spec", "New System" in initial and "# New project" in initial)
+    check("demo spec never shown for a fresh project", "External Brain" not in initial)
+    check("blank slate not autosaved: no repo spec file before first edit",
+          not os.path.exists(os.path.join(CLIENT_REPO, "main.spec.yaml")))
+
+    # Mode visibility: the header badge shows the active project folder.
+    badge = page.locator('[data-testid="project-picker-badge"]')
+    check("header project badge shows the active project dir",
+          badge.count() > 0 and os.path.basename(CLIENT_REPO) in badge.inner_text())
+    badge.click()
+    panel = page.locator('[data-testid="project-picker-panel"]')
+    check("project picker panel shows the full project path",
+          panel.count() > 0 and CLIENT_REPO in panel.inner_text())
+    badge.click()  # toggle the panel closed again
     shot(page, "01-fresh-mount")
 
-    # Canvas rendered with nodes?
+    # Canvas rendered?
     canvas_content = page.locator("canvas").count()
     check("excalidraw canvas present", canvas_content > 0)
 

@@ -23,6 +23,23 @@ import {
   type SpecStore,
 } from "./spec-store"
 
+/**
+ * Where saves are going, for the UI to display.
+ * - "unconfigured": nothing chosen yet (first run) — the picker is asking.
+ * - "local-only": browser storage by deliberate opt-out — calm.
+ * - "synced": a project is active and mirroring is healthy.
+ * - "halted": mirroring latched off mid-session (conflict, project switched
+ *   elsewhere, broken store) — edits stay in the browser; reload to resync.
+ *
+ * "unconfigured" and "local-only" both mean "not writing files", but they are
+ * different stories to the user, and the workspace opens a different starting
+ * spec for each — so they stay distinct rather than collapsing into one.
+ */
+export interface SyncState {
+  status: "unconfigured" | "local-only" | "synced" | "halted"
+  reason?: string
+}
+
 export class RemoteSyncSpecStore implements SpecStore {
   private local = new LocalStorageSpecStore()
   // Flipped when loadFromServer sees file mode off / unreachable, or a
@@ -33,6 +50,10 @@ export class RemoteSyncSpecStore implements SpecStore {
   // The spec-index rev this session's edits are based on (echoed back as
   // baseRev on PUT). null until the server tells us.
   private serverRev: string | null = null
+  // The project epoch this session hydrated under (?epoch= on every PUT).
+  // The server re-mints it when the picker switches projects, so a tab armed
+  // on the previous project 409s instead of writing into the new one.
+  private serverEpoch: string | null = null
   // The yamlContent of the most recent PUT we attempted — lets a 409 caused
   // by a lost ack be distinguished from a genuine external edit.
   private lastMirroredYaml: string | null = null
@@ -45,6 +66,9 @@ export class RemoteSyncSpecStore implements SpecStore {
   // simulation run isn't silently discarded. The apply fn re-syncs the local
   // delegate, which pullMeta may have overwritten with server state.
   private pendingMeta = new Map<string, { body: unknown; apply: (v: any) => void }>()
+  // Current sync state + subscribers (plain callbacks — lib stays React-free).
+  private syncState: SyncState = { status: "local-only" }
+  private syncListeners = new Set<(s: SyncState) => void>()
 
   /** Called by the workspace when hydration completes; arms mirroring and
    *  flushes any pre-hydration meta writes on top of the pulled state. */
@@ -57,12 +81,28 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.pendingMeta.clear()
   }
 
+  getSyncState(): SyncState {
+    return this.syncState
+  }
+
+  /** Returns an unsubscribe function. */
+  subscribeSyncState(listener: (s: SyncState) => void): () => void {
+    this.syncListeners.add(listener)
+    return () => this.syncListeners.delete(listener)
+  }
+
+  private setSyncState(next: SyncState): void {
+    this.syncState = next
+    this.syncListeners.forEach((l) => l(next))
+  }
+
   getSpec(id: string): SpecDocument | null {
     return this.local.getSpec(id)
   }
 
   saveSpec(id: string, title: string, yamlContent: string): SpecDocument {
     const doc = this.local.saveSpec(id, title, yamlContent)
+    this.setCacheOrigin(id, this.originForWrites())
     if (!this.canMirror()) return doc
     this.specPutChain = this.specPutChain.then(() =>
       this.putSpec(`/api/store/spec/${encodeURIComponent(id)}`, { title, yamlContent })
@@ -96,6 +136,7 @@ export class RemoteSyncSpecStore implements SpecStore {
   // mirrored: the project file is never deleted by the store.
   removeSpec(id: string): void {
     this.local.removeSpec(id)
+    this.clearCacheOrigin(id)
   }
 
   /**
@@ -114,37 +155,56 @@ export class RemoteSyncSpecStore implements SpecStore {
       // 501 — so standalone mode stays quiet and local-only.
       if (specRes.status === 501) {
         this.fileModeDisabled = true
+        this.setSyncState({ status: "local-only" })
         return false
       }
       if (!specRes.ok) {
         // 5xx: the launch intended file mode but the server is broken (e.g.
-        // typo'd SPEC_YARD_PROJECT_DIR). Loud log, local-only for the session.
+        // missing project dir). Loud log, local-only for the session.
         console.error(`[spec-yard] Store API returned ${specRes.status} — file persistence disabled for this session`)
         this.fileModeDisabled = true
+        this.setSyncState({ status: "halted", reason: "Project store error — saving to browser only. Fix the project and reload." })
         return false
       }
       const body = await specRes.json()
       if (body && body.enabled === false) {
         this.fileModeDisabled = true
+        this.setSyncState({ status: body.mode === "unconfigured" ? "unconfigured" : "local-only" })
         return false
       }
       // File mode confirmed on — clear any latch from a previous failed
       // attempt (e.g. a Fast Refresh remount after a transient error).
       this.fileModeDisabled = false
+      this.setSyncState({ status: "synced" })
+      this.serverEpoch = body && typeof body.epoch === "string" ? body.epoch : null
       if (body && typeof body.id === "string" && typeof body.yamlContent === "string") {
         this.local.saveSpec(body.id, typeof body.title === "string" ? body.title : "Untitled Spec", body.yamlContent)
+        // "unknown-project" (server sent no epoch) never satisfies the
+        // standalone-adoption check below — fail closed against bleed.
+        this.setCacheOrigin(body.id, this.serverEpoch ?? "unknown-project")
         this.serverRev = typeof body.rev === "string" ? body.rev : null
         this.lastMirroredYaml = body.yamlContent
       } else {
-        // {found:false}: file mode on, nothing stored for THIS project. Drop
-        // the cached spec so another project's spec is never written here.
-        this.local.removeSpec("main")
+        // {found:false}: file mode on, nothing stored for THIS project.
+        // A cache tagged "standalone" is the user's browser-only sketch and
+        // this is their first project — adopt it rather than deleting their
+        // only copy (it is still not written until they edit). Any other
+        // cache (another project's, or untagged legacy) is dropped so it is
+        // never written into this project.
+        const origin = this.getCacheOrigin("main")
+        if (origin !== "standalone" || !this.local.getSpec("main")) {
+          this.local.removeSpec("main")
+          this.clearCacheOrigin("main")
+        }
         this.serverRev = null
         this.lastMirroredYaml = null
       }
     } catch (e) {
       console.error("Failed to load spec store from server", e)
       this.fileModeDisabled = true
+      // Server unreachable: the whole app is served by it, so this is either
+      // a dying dev server or a test environment — browser-only is accurate.
+      this.setSyncState({ status: "local-only" })
       return false
     }
     // Meta pulls are best-effort and scoped: a failure here never gates mode.
@@ -177,21 +237,34 @@ export class RemoteSyncSpecStore implements SpecStore {
     const prevMirrored = this.lastMirroredYaml
     this.lastMirroredYaml = body.yamlContent
     try {
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, baseRev: this.serverRev }),
-      })
+      const res = await this.putJson(url, { ...body, baseRev: this.serverRev })
       if (res.status === 409) {
+        // The picker retargeted the server in another tab. Never reconcile
+        // there — a lost-ack retry would push THIS project's spec into the
+        // newly selected one.
+        if (await this.isProjectSwitch(res)) {
+          this.latchProjectSwitched()
+          return
+        }
         await this.reconcileAfterConflict(url, body, prevMirrored)
         return
       }
       if (!res.ok) {
+        // Not a conflict — a broken store (project dir deleted mid-session,
+        // disk full, permissions). Say so instead of leaving the status bar
+        // claiming "synced", but do NOT latch file mode off: the next
+        // autosave may well land, and a success below clears this.
         console.error(`[spec-yard] Spec save failed (${res.status}) — latest edits are only in browser storage`)
+        this.setSyncState({
+          status: "halted",
+          reason: `Last save failed (${res.status}) — edits are in browser storage; still retrying.`,
+        })
         return
       }
-      const ack = await res.json().catch(() => null)
-      if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+      await this.adoptAckRev(res)
+      // A save landed: clear a transient-failure alarm. A latched conflict
+      // never reaches here (fileModeDisabled stops the PUT).
+      if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
     } catch (e) {
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
     }
@@ -214,14 +287,9 @@ export class RemoteSyncSpecStore implements SpecStore {
         const current = await res.json().catch(() => null)
         if (current && current.yamlContent === prevMirrored && typeof current.rev === "string") {
           this.serverRev = current.rev
-          const retry = await fetch(url, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...body, baseRev: this.serverRev }),
-          })
+          const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
           if (retry.ok) {
-            const ack = await retry.json().catch(() => null)
-            if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+            await this.adoptAckRev(retry)
             return
           }
         }
@@ -230,6 +298,10 @@ export class RemoteSyncSpecStore implements SpecStore {
       // Fall through to latch-off below.
     }
     this.fileModeDisabled = true
+    this.setSyncState({
+      status: "halted",
+      reason: "main.spec.yaml changed outside this session — reload to adopt it. Edits stay in browser storage.",
+    })
     console.error(
       "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
     )
@@ -250,15 +322,95 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   private async putMeta(url: string, body: unknown): Promise<void> {
     try {
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
+      const res = await this.putJson(url, body)
+      if (res.status === 409 && (await this.isProjectSwitch(res))) {
+        this.latchProjectSwitched()
+        return
+      }
       if (!res.ok) console.error(`[spec-yard] Mirror to ${url} failed (${res.status}) — data is only in browser storage`)
     } catch (e) {
       console.error(`Failed to mirror ${url} to server`, e)
     }
+  }
+
+  /**
+   * Where the content being cached belongs. loadFromServer uses this tag to
+   * migrate a browser-only sketch into the first project the user picks,
+   * while dropping any cache that belongs to a different project.
+   *
+   * Only genuinely project-less work is portable. Anything written while a
+   * project is (or was) active is tagged with that project's epoch — or
+   * "unknown-project" when the server never volunteered one, which the
+   * migration check never adopts. Failing closed matters here: "standalone"
+   * is the one tag that gets adopted, so guessing it wrong bleeds one
+   * project's spec into another.
+   */
+  private originForWrites(): string {
+    const status = this.syncState.status
+    if (status === "unconfigured" || status === "local-only") return "standalone"
+    return this.serverEpoch ?? "unknown-project"
+  }
+
+  // Provenance tag for the cached spec (sits beside spec_<id> in
+  // localStorage). Reads/writes are best-effort — a storage failure only
+  // costs the migration convenience, never correctness.
+  private setCacheOrigin(id: string, origin: string): void {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.setItem(`spec_${id}_origin`, origin)
+    } catch {}
+  }
+
+  private getCacheOrigin(id: string): string | null {
+    if (typeof window === "undefined") return null
+    try {
+      return localStorage.getItem(`spec_${id}_origin`)
+    } catch {
+      return null
+    }
+  }
+
+  private clearCacheOrigin(id: string): void {
+    if (typeof window === "undefined") return
+    try {
+      localStorage.removeItem(`spec_${id}_origin`)
+    } catch {}
+  }
+
+  /** The one shape every mirror write takes: JSON envelope, and ?epoch= once
+   *  the server has told us which project this session is bound to (a stale
+   *  epoch 409s instead of writing into a project the user switched away
+   *  from). */
+  private putJson(url: string, payload: unknown): Promise<Response> {
+    const target = this.serverEpoch ? `${url}?epoch=${encodeURIComponent(this.serverEpoch)}` : url
+    return fetch(target, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  }
+
+  /** Consumes the 409 body: true when the picker retargeted the server. */
+  private async isProjectSwitch(res: Response): Promise<boolean> {
+    const conflict: any = await res.json().catch(() => null)
+    return !!conflict && conflict.reason === "project-switched"
+  }
+
+  /** Chain the next PUT on the rev the server just minted. */
+  private async adoptAckRev(res: Response): Promise<void> {
+    const ack: any = await res.json().catch(() => null)
+    if (ack && typeof ack.rev === "string") this.serverRev = ack.rev
+  }
+
+  private latchProjectSwitched(): void {
+    this.fileModeDisabled = true
+    this.setSyncState({
+      status: "halted",
+      reason: "The active project changed in another tab — reload to rejoin it. Edits stay in browser storage.",
+    })
+    console.error(
+      "[spec-yard] The active project changed in another tab/window; this session stopped mirroring. Reload the workspace to join the new project."
+    )
   }
 
   private canMirror(): boolean {

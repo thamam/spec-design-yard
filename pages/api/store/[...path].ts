@@ -2,6 +2,9 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { randomUUID } from "crypto"
 import fs from "fs"
 import path from "path"
+import { writeFileAtomic } from "../../../lib/server-atomic-write"
+import { getProjectEpoch, getProjectStatus } from "../../../lib/server-project-config"
+import { isLoopbackHost } from "../../../lib/server-request-guards"
 
 // File-backed persistence for the workspace store, active only when the app is
 // launched with SPEC_YARD_PROJECT_DIR pointing at a client repo. Keys are
@@ -87,15 +90,6 @@ function resolveIndexPath(realRoot: string): string | null {
   return file
 }
 
-/** Tmp files stage in the sidecar so a crash never litters the repo root. */
-function writeFileAtomic(file: string, contents: string, stagingDir: string) {
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.mkdirSync(stagingDir, { recursive: true })
-  const tmp = path.join(stagingDir, `.tmp-${path.basename(file)}-${process.pid}`)
-  fs.writeFileSync(tmp, contents, "utf8")
-  fs.renameSync(tmp, file)
-}
-
 /**
  * Missing or corrupted index is an empty index; an unreadable-but-present
  * index is a fault — treating it as empty would make the PUT path treat a
@@ -128,20 +122,50 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
 }
 
 function handle(req: NextApiRequest, res: NextApiResponse) {
-  const projectDir = process.env.SPEC_YARD_PROJECT_DIR
-  if (!projectDir) {
-    // 200-with-flag rather than 501: standalone mode is a normal configuration,
-    // and an error status would surface in the browser console on every load.
-    return res.status(200).json({ enabled: false })
+  // File persistence is armed by default (project-first), so this route needs
+  // the same DNS-rebinding defense as the project route — a rebinding page is
+  // same-origin and could otherwise read or overwrite the project's files.
+  if (!isLoopbackHost(req.headers?.host)) {
+    return res.status(403).json({ error: "Store API is loopback-only" })
   }
+
+  // Project-first resolution: session switch > SPEC_YARD_PROJECT_DIR >
+  // persisted config (see lib/server-project-config.ts). Null means
+  // standalone opt-out or a first run with no project chosen yet.
+  const status = getProjectStatus()
+  if (status.mode !== "project" || !status.dir) {
+    // 200-with-flag rather than 501: having no project is a normal state, and
+    // an error status would surface in the browser console on every load.
+    // The mode rides along because the two no-project states are different
+    // stories: "unconfigured" has chosen nothing yet and must open a calm
+    // blank slate behind the picker, while "standalone" is a deliberate
+    // browser-only opt-out that keeps the demo spec to play with.
+    return res.status(200).json({ enabled: false, mode: status.mode })
+  }
+  const projectDir = status.dir
   let realRoot: string
   try {
     realRoot = fs.realpathSync(projectDir)
   } catch {
-    return res.status(500).json({ error: "SPEC_YARD_PROJECT_DIR does not exist" })
+    // Loud 500: the client latches file mode off for the session; the picker
+    // (project API) stays available to select a valid folder and heal this.
+    return res.status(500).json({ error: "Active project directory does not exist" })
   }
   if (req.method !== "GET" && req.method !== "PUT") {
     return res.status(405).json({ error: "Method not allowed" })
+  }
+  // Derived from the realpath we just resolved, so the whole request costs a
+  // single project resolution.
+  const epoch = getProjectEpoch(realRoot)
+
+  // Project-epoch guard: the client echoes the epoch it hydrated under (query
+  // param). After a picker switch the epoch changes, so a tab still armed on
+  // the previous project 409s instead of writing into the new one. A PUT with
+  // no epoch is allowed — hand-rolled loopback requests were always trusted;
+  // this guard targets stale in-app sessions, not curl.
+  const claimedEpoch = req.query.epoch
+  if (req.method === "PUT" && typeof claimedEpoch === "string" && claimedEpoch !== epoch) {
+    return res.status(409).json({ conflict: true, reason: "project-switched" })
   }
 
   const raw = req.query.path
@@ -166,7 +190,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         // console). EACCES/EISDIR/EIO mean a spec exists but can't be read —
         // answering found:false there would let autosave overwrite a file we
         // failed to read, so those are 500s.
-        if (e?.code === "ENOENT") return res.status(200).json({ found: false })
+        if (e?.code === "ENOENT") return res.status(200).json({ found: false, epoch })
         return res.status(500).json({ error: "Failed to read spec file" })
       }
       const index = readSpecIndex(indexPath)
@@ -183,6 +207,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         yamlContent: contents,
         updatedAt: index[SPEC_ID]?.updatedAt || null,
         rev: index[SPEC_ID]?.rev || null,
+        epoch,
       })
     }
     try {

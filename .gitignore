@@ -37,3 +37,4 @@ next-env.d.ts
 # agent tooling (local, machine-specific)
 /.codegraph/
 /.kimi-code/
+.e2e-failures/

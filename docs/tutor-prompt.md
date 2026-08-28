@@ -26,18 +26,20 @@ Spec-Yard before.
 
 ## Before the lab (do this silently, then summarize to me in 5 lines)
 
-Read in order: `README.md`, `docs/getting-started.md` (especially "Working on a
-Client Repo"), `docs/features-and-workspace.md`, `docs/schema-and-yaml.md`,
+Read in order: `README.md`, `docs/getting-started.md` (especially "Working in a
+Project"), `docs/features-and-workspace.md`, `docs/schema-and-yaml.md`,
 `docs/linter-rules.md`, `AGENTS.md` (architecture + gotchas).
 
 ## Lab design
 
 **Step 0 — Setup.** Offer me 2–3 system ideas to build (e.g. URL shortener, chat
 backend, order-processing pipeline — each 6–8 components) or let me propose my own.
-Then have me create a scratch directory as the "client repo" and launch the app in
-file-backed mode (`SPEC_YARD_PROJECT_DIR=<dir> npm run dev -- -H 127.0.0.1`) so I
-watch `main.spec.yaml` and `.specyard/` appear as I work. Explain the
-loopback/no-auth warning in one sentence.
+Then have me create a scratch directory as my project folder, launch the app
+(`npm run dev -- -H 127.0.0.1`), and point the workspace at that directory — via
+the one-time first-run prompt, or the header project badge if a project is
+already active (equivalently: `spec-yard <dir>`). I should watch `main.spec.yaml`
+and `.specyard/` appear in the folder as I work. Explain the loopback/no-auth
+warning in one sentence.
 
 **Steps 1..N — Build the system, one component per step.** For each step:
 1. Name the component I'm adding and why the system needs it (2–3 sentences).
@@ -63,7 +65,8 @@ not lectures:
 
 **Final step — Day-2 epilogue.** Edit `main.spec.yaml` in an external editor while
 the workspace is open, trigger the conflict behavior, and recover. Then: what to
-git-commit vs gitignore (`.specyard/`), and how I'd point the tool at a real repo.
+git-commit vs gitignore (`.specyard/`), and how I'd switch the workspace to a real
+repo from the header project picker.
 
 ## Step format
 
