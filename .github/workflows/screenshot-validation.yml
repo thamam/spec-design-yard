@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python Dependencies
-        run: pip install pillow numpy
+        run: pip install pillow numpy playwright
 
       - name: Build Next.js App
         run: npm run build
