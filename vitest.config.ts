@@ -8,6 +8,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './tests/setup.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'lcov'],
+      include: ['lib/**', 'components/**', 'pages/**', 'scripts/check-diff-coverage.mjs'],
+      reportsDirectory: './coverage',
+    },
   },
   resolve: {
     alias: {
