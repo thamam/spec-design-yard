@@ -125,6 +125,13 @@ run_scenario "first-run" "$((BASE_PORT + 1))" "scripts/e2e-first-run.py"
 SCENARIO_ENV=()
 run_scenario "standalone" "$((BASE_PORT + 2))" "scripts/e2e-standalone-mode.py"
 
+# --- 4. editor ergonomics: extension point for Lanes A and B ---
+EDITOR_CLIENT="$TMP/editor-ergonomics-repo"
+mkdir -p "$EDITOR_CLIENT"
+SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)")
+run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
+  "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
+
 echo
 for name in ${PASSED[@]+"${PASSED[@]}"}; do echo "PASS  $name"; done
 for name in ${FAILED[@]+"${FAILED[@]}"}; do echo "FAIL  $name"; done
