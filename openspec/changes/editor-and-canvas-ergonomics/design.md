@@ -1,0 +1,161 @@
+# Design: Editor and canvas ergonomics
+
+## Decision 1: Tab/Shift+Tab handled inside `handleKeyDown`, before the autocomplete branch
+
+Restructure `CodeTab.handleKeyDown` (`editor-panel.tsx:111-140`) so the
+autocomplete branch keeps first claim on Tab/Enter while the popup is open,
+and a new default branch handles Tab (insert 2-space indent at caret) and
+Shift+Tab (outdent) when it is closed. Multi-line selections indent/outdent
+every line the selection touches, preserving the selection. Edits go through
+the React `onChange` path (single `onChange` with the new string plus a
+`setSelectionRange` after), so undo history and the parse effect see one
+atomic change.
+
+The keyboard-accessibility escape hatch is preserved by construction: Esc
+already sets `suppressAutocomplete` (`editor-panel.tsx:135-138`), which
+empties `autocomplete` — but Tab-indent would then swallow Tab forever. So
+Esc additionally arms a one-shot "release focus" state: the next Tab after
+Esc performs the browser default (focus moves out), and any other key or
+edit disarms it.
+
+- **Rationale**: keyboard users must always have a way out of a
+  Tab-swallowing textarea (WCAG 2.1.2 no-keyboard-trap). Esc-then-Tab is
+  the established convention, and Esc already exists in this handler.
+- **Rejected**: a `document`-level key listener for Tab — the existing
+  global handler (`workspace-layout.tsx:126-153`) deliberately handles only
+  undo/redo, and textarea-local behaviour belongs on the textarea; a global
+  listener would race the autocomplete branch and fire in other inputs.
+
+## Decision 2: Enter auto-indent reuses the detector extracted from `lib/autocomplete.ts`
+
+`lib/autocomplete.ts:123-152` already computes `indentLevel =
+currentLine.search(/\S/)` and classifies the parent block
+(`metadata`/`connections`/`component`) by scanning backward for the nearest
+less-indented non-blank line. Extract that logic into a shared, exported
+pure function (e.g. `detectIndentContext(specText, cursorPosition)`), make
+autocomplete call it, and have the Enter branch use it to insert
+`"\n" + indent` — deepening one level (2 spaces) after a line that opens a
+block (ends with `:` or is a list-item parent), otherwise matching the
+current line's indent.
+
+- **Rationale**: the detector is proven in production via autocomplete; two
+  copies of YAML-context inference would drift and disagree, and the brief
+  for this change explicitly mandates reuse via extraction.
+- **Rejected**: reimplementing indent detection inside `CodeTab` — the
+  backward-scan classification has non-obvious cases (list items at indent
+  ≥ 6 are connections) that a second implementation would get subtly wrong.
+- **Rejected**: full YAML re-parse on every Enter (`yaml.parseDocument`) to
+  find the node path — correct but heavyweight per keystroke, and the text
+  is frequently mid-edit invalid YAML exactly when auto-indent matters.
+
+## Decision 3: Syntax colour via a highlight overlay, not an editor swap
+
+Keep the `<textarea>` (`editor-panel.tsx:144-155`) as the single source of
+input events. Behind it, render an aligned `<pre>`/`<div>` backdrop that
+shows the same text tokenised into spans — component ids, connection
+targets, metadata keys in distinct colours — while the textarea's own text
+becomes transparent (`text-transparent` + explicit `caret-color`). Both
+layers share identical font, padding, line-height, and whitespace handling;
+the overlay mirrors the textarea's `scrollTop`/`scrollLeft` on the scroll
+event. Tokenisation is line-based regex over the YAML shape (id/target/key
+positions), not a full parse, so invalid mid-edit YAML degrades to plain
+text rather than erroring.
+
+- **Rationale (maintainer's chosen approach)**: preserves every existing
+  behaviour and contract for free — the `spec-textarea` id and test ids,
+  the autocomplete popup positioning, `data-focus-field` special-casing in
+  the global undo/redo handler, the hydration `disabled` lockout, and all
+  existing tests that type into a real textarea.
+- **Rejected**: CodeMirror or Monaco. Either would bring real syntax
+  highlighting for a large dependency and a rewrite: the autocomplete UI,
+  key handling, undo/redo integration (the app has its own undo history via
+  `useUndoRedo`), the `spec-textarea` DOM contract used by tests and the
+  global key handler, and the hydration lockout would all need porting.
+  That is a platform migration, not an ergonomics fix — out of proportion
+  to colouring three token classes.
+
+## Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct
+
+Add a thin drag-handle strip on the panel's top edge (above the header at
+`editor-panel.tsx:2127`). Pointer-down captures the pointer and tracks
+vertical movement; the panel body's height becomes a state-driven inline
+height (replacing the `max-h-32` cap at `editor-panel.tsx:2162`), clamped
+to a minimum (~one row) and a maximum (a fraction of the editor pane so the
+textarea can never be squeezed out). The existing collapse toggle — state
+`showDiagnostics` at line 1830, header `onClick` at 2127-2129 — is
+untouched; the handle is a separate element outside the header's click
+target, and a drag gesture (movement beyond a small threshold) never
+synthesises a click on the header.
+
+- **Rationale**: pointer events with capture are the one drag mechanism
+  that works for mouse and touch without a document-level listener
+  teardown dance; keeping the handle out of the header's DOM makes
+  "drag must not collapse" true structurally instead of via event
+  gymnastics.
+- **Rejected**: CSS `resize: vertical` on the panel — free, but the browser
+  puts the grip on the bottom-right corner while this panel is anchored to
+  the bottom edge and must resize from its *top*; no control over clamps;
+  inconsistent rendering across browsers.
+- **Rejected**: making the whole header draggable and distinguishing
+  click-vs-drag by movement threshold on the same element — workable but
+  fragile (threshold tuning, accidental collapses), and it overloads one
+  element with two opposing gestures.
+
+## Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec
+
+Three coordinated moves:
+
+1. **Affordance**: rename the `canvas-panel.tsx:167-181` button from
+   "Reset view" (refresh icon) to "Zoom to fit" with a fit-style icon.
+2. **API plumbing**: `excalidraw-canvas.tsx` already holds the API in state
+   (line 573) and mirrors it onto `window.excalidrawAPI` (line 579). Expose
+   a `zoomToFit()` callback to the parent via prop/ref; the button and the
+   shortcut call that, not the global. The `window` mirror stays (other
+   code and tests use it) but gains no new callers.
+3. **Re-fit on new content**: replace the per-mount `hasInitialScrolled`
+   boolean ref (`excalidraw-canvas.tsx:655`) with a latch keyed on the
+   loaded spec/project identity, so switching project or spec triggers one
+   fresh fit while ordinary edits to the same spec never re-fit under the
+   user.
+4. **Shortcut**: `Shift+1` — Excalidraw's own zoom-to-fit binding, so it
+   matches what canvas-literate users already expect — registered in the
+   global handler in `workspace-layout.tsx`, with an explicit skip when the
+   event target is any input/textarea *including* the spec textarea. The
+   existing handler (`workspace-layout.tsx:126-153`) deliberately
+   special-cases the spec textarea via `isSpecTextarea` so undo/redo works
+   while typing; the new shortcut must NOT inherit that pass-through, or
+   typing `!` in the YAML would yank the canvas.
+
+- **Rationale**: the fit logic is proven; the failures are naming,
+  reachability, and lifetime. Fixing those three without touching the fit
+  math is the minimal change. Prop plumbing (not the global) is the
+  direction the codebase wants to go and makes the call testable.
+- **Rejected**: `Cmd/Ctrl+0` as the shortcut — collides with the browser's
+  own zoom-reset, which cannot be reliably preempted.
+- **Rejected**: remounting `ExcalidrawCanvas` on project switch to reset
+  the latch — nukes canvas-local state and is exactly the remount-churn the
+  `updateScene` sync path (line 671-679) exists to avoid.
+- **Rejected**: removing `window.excalidrawAPI` in this change — it has
+  existing consumers; deleting it is cleanup beyond this change's scope.
+
+## Decision 6: Invariants carried as requirements, not implementation notes
+
+Two standing product invariants are encoded as spec requirements so the
+implementation session cannot miss them:
+
+- **Canvas normalizer**: every element reaching Excalidraw keeps passing
+  the normalizer at `excalidraw-canvas.tsx:540-548` (`angle: 0`,
+  `opacity: 100`, `strokeStyle: 'solid'`, `lineHeight: 1.25` on text).
+  Excalidraw 0.18 computes bounds via `Math.cos(element.angle)`; a missing
+  `angle` yields NaN, poisons `getCommonBounds`, and makes `scrollToContent`
+  set scroll/zoom to NaN — a blank canvas. This has broken zoom-to-fit
+  before.
+- **YAML writes**: any code path in this change that writes YAML uses
+  `yaml.parseDocument`, never `parse` — comment preservation is a product
+  invariant (`AGENTS.md`).
+
+- **Rationale**: both invariants have bitten this codebase already; a
+  requirement with a scenario forces a test, a note in a design doc forces
+  nothing.
+- **Rejected**: relying on the existing normalizer call sites and code
+  review — that is how it broke last time.
