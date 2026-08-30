@@ -124,6 +124,7 @@ export function uncoveredLines(coverageJson, fileLinesMap, repoRoot = process.cw
   return report
 }
 
+/* v8 ignore start -- CLI wiring; exercised via the run-e2e-style manual gate demonstration, not unit tests */
 function main() {
   const base = process.argv[2] || 'origin/main'
   const repoRoot = process.cwd()
@@ -175,3 +176,4 @@ function main() {
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
 }
+/* v8 ignore stop */
