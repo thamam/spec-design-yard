@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "install-cli": "bash scripts/install-cli.sh",
-    "test:e2e": "bash scripts/run-e2e.sh"
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "test:coverage-gate": "node scripts/check-diff-coverage.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
