@@ -1772,6 +1772,19 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
+// Diagnostics panel sizing. The clamps are constants rather than a measured
+// rect: the panel is the last flex child of a `flex flex-col h-full` section
+// whose active tab panel above it is `flex-1 min-h-0`, so it simply takes the
+// height it asks for — and jsdom's getBoundingClientRect() returns all zeros,
+// which would make a measured clamp impossible to unit-test.
+const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
+const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
+const DIAGNOSTICS_MAX_HEIGHT = 480 // leaves the spec textarea a usable pane
+
+function clampDiagnosticsHeight(height: number) {
+  return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), DIAGNOSTICS_MAX_HEIGHT)
+}
+
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -1828,6 +1841,45 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const [diagnosticsHeight, setDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
+  const diagnosticsDragStartY = useRef(0)
+  const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+
+  // Drag-to-resize, adapted from the pane splitter in workspace-layout.tsx:
+  // clientX becomes clientY, and the delta sign is inverted because the handle
+  // sits on the panel's TOP edge — dragging up has to make the panel taller.
+  const startDiagnosticsResize = (clientY: number) => {
+    diagnosticsDragStartY.current = clientY
+    diagnosticsDragStartHeight.current = diagnosticsHeight
+    setIsResizingDiagnostics(true)
+  }
+
+  useEffect(() => {
+    if (!isResizingDiagnostics) return
+
+    const resizeTo = (clientY: number) => {
+      const delta = clientY - diagnosticsDragStartY.current
+      setDiagnosticsHeight(clampDiagnosticsHeight(diagnosticsDragStartHeight.current - delta))
+    }
+    const onMouseMove = (e: MouseEvent) => resizeTo(e.clientY)
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      if (touch) resizeTo(touch.clientY)
+    }
+    const onRelease = () => setIsResizingDiagnostics(false)
+
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onRelease)
+    window.addEventListener("touchmove", onTouchMove)
+    window.addEventListener("touchend", onRelease)
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onRelease)
+      window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("touchend", onRelease)
+    }
+  }, [isResizingDiagnostics])
   const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
   const lastParsedTextRef = useRef<string>("")
 
@@ -2123,8 +2175,53 @@ export function EditorPanel({
           borderColor: "var(--border)",
         }}
       >
+        {/* Resize handle. Deliberately its own strip ABOVE the header: the
+            collapse toggle is the entire header div's onClick, so a handle
+            placed inside it would collapse the panel on mouseup. */}
+        {showDiagnostics && (
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize diagnostics panel"
+            data-testid="diagnostics-resize-handle"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              startDiagnosticsResize(e.clientY)
+            }}
+            onTouchStart={(e) => {
+              const touch = e.touches[0]
+              if (touch) startDiagnosticsResize(touch.clientY)
+            }}
+            className="relative flex items-center justify-center h-[5px] shrink-0 group cursor-row-resize select-none z-10"
+            style={{ background: "var(--border)" }}
+          >
+            {/* Visual track + dots */}
+            <div
+              className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors duration-150"
+              style={{
+                background: isResizingDiagnostics ? "var(--accent)" : "var(--border-subtle)",
+              }}
+            />
+            <div
+              className="relative flex gap-[3px] z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              aria-hidden="true"
+            >
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="block w-[3px] h-[3px] rounded-full"
+                  style={{
+                    background: isResizingDiagnostics ? "var(--accent)" : "var(--foreground-muted)",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Panel header */}
         <div
+          data-testid="diagnostics-header"
           onClick={() => setShowDiagnostics((s) => !s)}
           className="flex items-center justify-between px-3 h-8 cursor-pointer hover:bg-zinc-900/30 transition-colors"
         >
@@ -2159,8 +2256,9 @@ export function EditorPanel({
         {/* Panel body */}
         {showDiagnostics && (
           <div
-            className="border-t overflow-y-auto max-h-32 p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
-            style={{ borderColor: "var(--border)" }}
+            data-testid="diagnostics-body"
+            className="border-t overflow-y-auto p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
+            style={{ borderColor: "var(--border)", height: diagnosticsHeight }}
           >
             {yamlSyntaxError && (
               <div className="text-red-400 flex items-start gap-1.5">
