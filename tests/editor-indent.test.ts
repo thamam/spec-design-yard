@@ -132,7 +132,11 @@ describe('CodeTab Tab/Shift+Tab wiring', () => {
     fireEvent.select(textarea)
 
     fireEvent.keyDown(textarea, { key: 'Escape' })
-    fireEvent.keyDown(textarea, { key: 'Tab' })
+    // jsdom won't actually move focus on Tab, so the observable proxy for
+    // "the browser default will run" is that the handler did not call
+    // preventDefault — fireEvent's return value reflects that.
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(notPrevented).toBe(true)
     expect(textarea.value).toBe(value)
 
     fireEvent.keyDown(textarea, { key: 'Tab' })
@@ -206,5 +210,56 @@ describe('CodeTab Tab/Shift+Tab caret restore (setTimeout flush)', () => {
     expect(textarea.value).toBe('  id: inbox')
     expect(textarea.selectionStart).toBe(6)
     expect(textarea.selectionEnd).toBe(6)
+  })
+})
+
+describe('CodeTab Tab indent + undo', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('Tab indent, then Cmd+Z, restores the pre-indent text exactly once', async () => {
+    render(React.createElement(Workspace))
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const baseline = 'system:\n  name: hello'
+    act(() => {
+      fireEvent.change(textarea, { target: { value: baseline } })
+    })
+    // Let the baseline commit to undo history before the indent edit — the
+    // history debounce is 800ms, so this must be explicit or the two edits
+    // coalesce into a single checkpoint.
+    act(() => {
+      vi.advanceTimersByTime(800)
+    })
+
+    textarea.focus()
+    const caret = baseline.length
+    textarea.setSelectionRange(caret, caret)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Tab' })
+    })
+    expect(textarea.value).toBe(baseline + '  ')
+
+    act(() => {
+      vi.advanceTimersByTime(800)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'z', metaKey: true })
+    })
+
+    expect(textarea.value).toBe(baseline)
   })
 })

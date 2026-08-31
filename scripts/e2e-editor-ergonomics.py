@@ -155,6 +155,47 @@ with sync_playwright() as p:
     )
     shot(page, "08-editor-ergonomics-overlay-scroll-sync")
 
+    # ---------- Lane A: typing while scrolled keeps the overlay aligned and colours the new text ----------
+    page.evaluate(
+        """() => {
+          const el = document.querySelector('[data-testid="spec-textarea"]');
+          el.focus();
+          const pos = el.value.length;
+          el.setSelectionRange(pos, pos);
+        }"""
+    )
+    page.keyboard.type("\n    - id: scrolledtype\n      type: Stage\n")
+    time.sleep(0.2)
+    scroll_after_type = page.evaluate(
+        """() => {
+          const ta = document.querySelector('[data-testid="spec-textarea"]');
+          const overlay = document.querySelector('[data-testid="yaml-highlight-overlay"]');
+          return { textarea: ta.scrollTop, overlay: overlay.scrollTop };
+        }"""
+    )
+    check(
+        "the overlay stays scroll-aligned with the textarea after typing while scrolled",
+        scroll_after_type["textarea"] == scroll_after_type["overlay"],
+        str(scroll_after_type),
+    )
+    typed_span_color = page.evaluate(
+        """() => {
+          const overlay = document.querySelector('[data-testid="yaml-highlight-overlay"]');
+          const spans = Array.from(overlay.querySelectorAll('span'));
+          const span = spans.find((s) => s.textContent === 'scrolledtype');
+          return span ? getComputedStyle(span).color : null;
+        }"""
+    )
+    body_color_after_type = page.evaluate(
+        "getComputedStyle(document.querySelector('[data-testid=\"yaml-highlight-overlay\"]')).color"
+    )
+    check(
+        "the newly typed id is coloured while the view is scrolled, not left plain",
+        typed_span_color is not None and typed_span_color != body_color_after_type,
+        f"typed={typed_span_color} body={body_color_after_type}",
+    )
+    shot(page, "08a-editor-ergonomics-scroll-then-type")
+
     # ---------- Lane A: the overlay actually colours tokens, and stays pixel-aligned ----------
     # Scroll-sync (above) would still pass if every token rendered the same
     # colour, or if the overlay's padding drifted a few pixels off the
