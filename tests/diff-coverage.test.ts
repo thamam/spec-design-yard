@@ -105,6 +105,38 @@ index abc123..0000000
     const result = parseDiffLines(diff)
     expect(result.has('lib/gone.ts')).toBe(false)
   })
+
+  it('keeps an added line attributed to its real file when the line content starts with "++ "', () => {
+    // An added line whose own content begins with "++ " is rendered by git as
+    // "+++ <content>" — indistinguishable from a "+++ b/path" file header by
+    // prefix alone. This must not be mistaken for a new file header mid-hunk.
+    const diff = `diff --git a/lib/foo.ts b/lib/foo.ts
+index abc123..def456 100644
+--- a/lib/foo.ts
++++ b/lib/foo.ts
+@@ -1,0 +2,3 @@
++first line
++++ line starting with plus plus
++third line
+`
+    const result = parseDiffLines(diff)
+    expect(result.has('line starting with plus plus')).toBe(false)
+    expect([...result.get('lib/foo.ts')].sort((a, b) => a - b)).toEqual([2, 3, 4])
+  })
+
+  it('advances the new-file line number across context lines instead of only additions', () => {
+    const diff = `diff --git a/lib/qux.ts b/lib/qux.ts
+index abc123..def456 100644
+--- a/lib/qux.ts
++++ b/lib/qux.ts
+@@ -1 +1,3 @@
+ context line
++added at 2
++added at 3
+`
+    const result = parseDiffLines(diff)
+    expect([...result.get('lib/qux.ts')].sort((a, b) => a - b)).toEqual([2, 3])
+  })
 })
 
 describe('isTrackedFile', () => {

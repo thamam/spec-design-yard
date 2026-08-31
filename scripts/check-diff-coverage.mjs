@@ -12,21 +12,31 @@ import { TRACKED_EXTENSIONS, TRACKED_ROOTS, TRACKED_SINGLE_FILE } from './tracke
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/
 
 /**
- * Parse `git diff --unified=0` output into a map of file path -> set of
- * new-file line numbers that were added or modified. Deleted files (new side
- * is /dev/null) are omitted; pure deletion hunks contribute no lines.
+ * Parse `git diff` output (any context width, `--unified=0` or otherwise)
+ * into a map of file path -> set of new-file line numbers that were added or
+ * modified. Deleted files (new side is /dev/null) are omitted; pure deletion
+ * hunks contribute no lines. Context lines advance the new-file line counter
+ * without being reported.
  */
 export function parseDiffLines(diffText) {
   const result = new Map()
   let currentFile = null
   let newLine = 0
+  let inHunk = false
 
   for (const line of diffText.split('\n')) {
     if (line.startsWith('diff --git ')) {
       currentFile = null
+      inHunk = false
       continue
     }
-    if (line.startsWith('+++ ')) {
+    // "+++ " / "--- " are file headers only in a diff's header block, which
+    // git emits right after "diff --git " and before the first "@@" hunk. An
+    // added line whose own content starts with "++ " or "-- " renders as
+    // "+++ <content>" / "--- <content>" inside a hunk body — indistinguishable
+    // from a header by prefix alone, so gate recognition on hunk state, not
+    // on the prefix.
+    if (!inHunk && line.startsWith('+++ ')) {
       const raw = line.slice(4).trim()
       if (raw === '/dev/null') {
         currentFile = null
@@ -36,10 +46,11 @@ export function parseDiffLines(diffText) {
       }
       continue
     }
-    if (line.startsWith('--- ')) {
+    if (!inHunk && line.startsWith('--- ')) {
       continue
     }
     if (line.startsWith('@@')) {
+      inHunk = true
       const match = HUNK_HEADER.exec(line)
       if (match) newLine = parseInt(match[1], 10)
       continue
@@ -50,6 +61,11 @@ export function parseDiffLines(diffText) {
       newLine++
     } else if (line.startsWith('-')) {
       // deleted line: does not exist in the new file, does not advance newLine
+    } else if (line.startsWith('\\')) {
+      // "\ No newline at end of file" — not a real line, does not advance newLine
+    } else {
+      // context line: unchanged, exists in the new file
+      newLine++
     }
   }
 
