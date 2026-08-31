@@ -696,19 +696,32 @@ export function ExcalidrawCanvas({
   // identity, so a different spec or project loading into an already-mounted
   // canvas re-fits, and ordinary edits do not.
   //
-  // The latch advances only once scrollToContent has actually run. Advancing
-  // it at scheduling time lost the fit outright: `elements` changing inside
-  // the 300ms window re-ran the effect, the cleanup cancelled the timer, and
-  // the guard already read as fitted — which is exactly what workspace
-  // hydration does on first load, the case the fit exists for.
+  // The latch records that an identity has been HANDLED, which is not the same
+  // as fitted. An empty spec has nothing to frame, but loading one is still
+  // that identity's load: leaving it unhandled meant the first component the
+  // user added — an ordinary edit under the same identity — read as a fresh
+  // load and threw away their pan.
+  //
+  // For a spec that does have content the latch advances only once
+  // scrollToContent has actually run. Advancing it at scheduling time lost the
+  // fit outright: `elements` changing inside the 300ms window re-ran the
+  // effect, the cleanup cancelled the timer, and the guard already read as
+  // handled — which is exactly what workspace hydration does on first load,
+  // the case the fit exists for.
   const latestElementsRef = useRef(elements)
   latestElementsRef.current = elements
-  const fittedSpecIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
+  const handledSpecIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
   const scheduledFitIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
   const fitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (!excalidrawAPI || elements.length === 0) return
-    if (fittedSpecIdentityRef.current === specIdentity) return
+    if (!excalidrawAPI) return
+    if (handledSpecIdentityRef.current === specIdentity) return
+    if (elements.length === 0) {
+      // Nothing to fit to — but this identity is now handled, so the first
+      // element added to it is an edit, not a load.
+      handledSpecIdentityRef.current = specIdentity
+      return
+    }
     // A fit for this same spec is already in flight — let it land rather than
     // cancelling and re-queueing it on every elements churn.
     if (fitTimerRef.current !== null && scheduledFitIdentityRef.current === specIdentity) return
@@ -718,7 +731,7 @@ export function ExcalidrawCanvas({
       fitTimerRef.current = null
       try {
         excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
-        fittedSpecIdentityRef.current = specIdentity
+        handledSpecIdentityRef.current = specIdentity
       } catch (e) {
         console.error("Failed to scroll to content: ", e)
       }

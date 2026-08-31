@@ -298,6 +298,41 @@ describe('zoom to fit — one fit per loaded spec', () => {
     await flushInitialFit()
     expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
   })
+
+  test('an empty spec is handled without fitting, so its first component is an ordinary edit', async () => {
+    // The latch has to distinguish "handled" from "fitted". An empty spec has
+    // nothing to frame, but it is still this identity's load: if it leaves the
+    // latch reading "not yet fitted", the first component the user adds — an
+    // ordinary edit, same identity — schedules a fit and throws away their pan.
+    const emptySpec = { system: { name: 'Empty', components: [] } }
+    const firstComponent = {
+      system: { name: 'Empty', components: [{ id: 'c1', type: 'Stage', x: 0, y: 0 }] },
+    }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={emptySpec} specIdentity="spec-empty" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={firstComponent} specIdentity="spec-empty" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
+  test('a spec loaded after an empty one still gets its own fit', async () => {
+    // The guard above must not become a blanket "never fit again": a real
+    // project loading in after an empty one is a fresh load and is owed a fit.
+    const emptySpec = { system: { name: 'Empty', components: [] } }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={emptySpec} specIdentity="spec-empty" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={specB} specIdentity="spec-2" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('zoom to fit — the NaN-bounds invariant', () => {
