@@ -19,6 +19,7 @@ import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions } from "../../lib/autocomplete"
+import { applyIndent } from "../../lib/editor-indent"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
@@ -53,7 +54,9 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(false)
+  const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     return () => {
@@ -66,6 +69,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
     setSuppressAutocomplete(false)
+    setReleaseFocusOnTab(false)
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -98,7 +102,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     // Return focus to textarea and adjust cursor position
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
-      const textarea = document.getElementById("spec-textarea") as HTMLTextAreaElement
+      const textarea = textareaRef.current
       if (textarea) {
         textarea.focus()
         const newCursorPos = start + sug.length
@@ -108,7 +112,43 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     }, 0)
   }
 
+  const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
+      outdent: e.shiftKey,
+    })
+    onChange(text)
+
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      const textarea = textareaRef.current
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(selStart, selEnd)
+        setCursorPos(selStart)
+      }
+    }, 0)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // WCAG 2.1.2 keyboard-trap escape hatch: Esc arms a one-shot release so
+    // the very next Tab moves focus out via the browser default, regardless
+    // of whether the suggestion popup was open.
+    if (e.key === "Escape") {
+      e.preventDefault()
+      setSuppressAutocomplete(true)
+      setReleaseFocusOnTab(true)
+      return
+    }
+
+    if (releaseFocusOnTab) {
+      setReleaseFocusOnTab(false)
+      if (e.key === "Tab") {
+        return
+      }
+    }
+
     if (autocomplete && autocomplete.suggestions.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault()
@@ -132,16 +172,16 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
             handleApplySuggestion(selectedSug)
           }
         }
-      } else if (e.key === "Escape") {
-        e.preventDefault()
-        setSuppressAutocomplete(true)
       }
+    } else if (e.key === "Tab") {
+      handleIndent(e)
     }
   }
 
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
       <textarea
+        ref={textareaRef}
         data-testid="spec-textarea"
         data-focus-field="spec-textarea"
         id="spec-textarea"

@@ -5,7 +5,7 @@ an e2e scenario, independently verifiable with the full suite green before
 it is checked off. Diff coverage must be 100% on lines each task adds or
 modifies.
 
-- [ ] **Task 1: Tab / Shift+Tab indentation**
+- [x] **Task 1: Tab / Shift+Tab indentation**
   - Restructure `CodeTab.handleKeyDown` (`editor-panel.tsx:111-140`):
     popup-open branch unchanged (Tab still accepts the highlighted
     suggestion); popup-closed branch inserts a 2-space indent at the caret
