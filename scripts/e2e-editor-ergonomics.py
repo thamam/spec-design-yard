@@ -18,6 +18,11 @@ from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3112")
 CLIENT_REPO = os.environ.get("SPEC_YARD_E2E_CLIENT", "/tmp/specyard-editor-ergonomics-client")
+# The second project the canvas beats switch INTO. realpath because the project
+# API reports the resolved path back to the picker badge (macOS /tmp symlink).
+CLIENT_REPO_B = os.path.realpath(
+    os.environ.get("SPEC_YARD_E2E_CLIENT_B", "/tmp/specyard-editor-ergonomics-client-b")
+)
 SHOTS = os.environ.get("SPEC_YARD_E2E_SHOTS", "/tmp/specyard-editor-ergonomics-shots")
 os.makedirs(SHOTS, exist_ok=True)
 
@@ -144,18 +149,44 @@ with sync_playwright() as p:
         return (inner["y"] >= outer["y"] - 1
                 and inner["y"] + inner["height"] <= outer["y"] + outer["height"] + 1)
 
-    def visible_add_description_count():
+    # Each ADD DESCRIPTION button is named by its own diagnostic row's text —
+    # the message plus the `system.components[n]` path badge. That name is what
+    # lets the post-resize assertion point at the SAME button that was clipped
+    # before the drag, instead of whichever one happens to be visible.
+    ROW_NAME_JS = """el => {
+        let n = el
+        while (n && n.parentElement) {
+            if (n.parentElement.getAttribute('data-testid') === 'diagnostics-body') {
+                return n.innerText.replace(/\\s+/g, ' ').trim()
+            }
+            n = n.parentElement
+        }
+        return ''
+    }"""
+
+    def add_description_rows():
+        """[(row name, is fully visible)] for every ADD DESCRIPTION button."""
         outer = body.bounding_box()
         buttons = page.get_by_role("button", name="Add Description")
-        return sum(1 for i in range(buttons.count())
-                   if fully_inside(buttons.nth(i).bounding_box(), outer))
+        return [
+            (buttons.nth(i).evaluate(ROW_NAME_JS),
+             fully_inside(buttons.nth(i).bounding_box(), outer))
+            for i in range(buttons.count())
+        ]
 
     height_before = body.bounding_box()["height"]
-    visible_before = visible_add_description_count()
-    total_add_description = page.get_by_role("button", name="Add Description").count()
+    rows_before = add_description_rows()
+    # THE recorded set: the buttons a user genuinely cannot reach right now.
+    # Without it, "click the first visible button" passes on a button that was
+    # never clipped, and a regression where the revealed rows stay unclickable
+    # goes unnoticed.
+    clipped_names = {name for name, visible in rows_before if not visible}
+    visible_before = sum(1 for _, visible in rows_before if visible)
     check("the default panel height clips some ADD DESCRIPTION buttons out of view",
-          total_add_description > 0 and visible_before < total_add_description,
-          "visible=%s total=%s" % (visible_before, total_add_description))
+          len(rows_before) > 0 and len(clipped_names) > 0,
+          "clipped=%s total=%s" % (len(clipped_names), len(rows_before)))
+    print("       recorded %d of %d ADD DESCRIPTION buttons as clipped at the default height"
+          % (len(clipped_names), len(rows_before)))
     shot(page, "10-diagnostics-default-height")
 
     hb = handle.bounding_box()
@@ -166,7 +197,8 @@ with sync_playwright() as p:
     time.sleep(0.4)
 
     height_after = body.bounding_box()["height"]
-    visible_after = visible_add_description_count()
+    rows_after = add_description_rows()
+    visible_after = sum(1 for _, visible in rows_after if visible)
     check("dragging the diagnostics top border upward grows the panel",
           height_after > height_before + 50,
           "before=%s after=%s" % (height_before, height_after))
@@ -181,17 +213,26 @@ with sync_playwright() as p:
     check("the panel still reads as expanded after a drag",
           page.locator("text=Collapse").count() > 0)
 
-    # The newly reachable action row is genuinely clickable.
-    outer = body.bounding_box()
-    buttons = page.get_by_role("button", name="Add Description")
-    clickable = next((buttons.nth(i) for i in range(buttons.count())
-                      if fully_inside(buttons.nth(i).bounding_box(), outer)), None)
-    check("a previously clipped ADD DESCRIPTION button is now reachable", clickable is not None)
-    if clickable is not None:
-        clickable.click()
+    # The newly reachable action row is genuinely clickable — and it has to be
+    # one of the rows recorded as clipped BEFORE the drag, named here so the
+    # assertion cannot quietly fall back to a button that was visible all along.
+    revealed = [name for name, visible in rows_after if visible and name in clipped_names]
+    check("a button recorded as clipped before the drag is now inside the panel body",
+          len(revealed) > 0,
+          "clipped_before=%d revealed=%d" % (len(clipped_names), len(revealed)))
+    print("       %d of the %d recorded-clipped buttons are inside the panel after the drag"
+          % (len(revealed), len(clipped_names)))
+    if revealed:
+        target_name = revealed[0]
+        target_index = next(i for i, (name, _) in enumerate(rows_after) if name == target_name)
+        target = page.get_by_role("button", name="Add Description").nth(target_index)
+        yaml_before_fix = ta.input_value()
+        target.click()
         time.sleep(1.5)
-        check("clicking the revealed ADD DESCRIPTION button writes into the YAML",
-              "description:" in ta.input_value())
+        check("clicking the previously clipped ADD DESCRIPTION button writes into the YAML "
+              "(row: %s)" % target_name[:60],
+              ta.input_value() != yaml_before_fix and "description:" in ta.input_value(),
+              "row=%s" % target_name)
     shot(page, "12-diagnostics-quick-fix-reachable")
 
     # ---------- B1: the collapse toggle still works ----------
@@ -332,6 +373,99 @@ with sync_playwright() as p:
           "before=%s after=%s" % (before_typing, after_typing))
     check_finite_view("typing ! in the YAML pane", after_typing)
     shot(page, "17-shortcut-suppressed-in-yaml")
+
+    # ---------- B3: switching projects re-frames the canvas ----------
+    # The automatic fit is latched on `spec-${loadedSpecId}`, and loadedSpecId
+    # is bumped by workspace hydration — i.e. by a project/spec LOAD. Nothing
+    # in jsdom exercises that derivation: those tests hand ExcalidrawCanvas a
+    # fabricated specIdentity prop, so breaking the production wiring leaves
+    # them all green. This beat drives a real switch through the picker.
+    #
+    # Project B's content sits far from project A's, so a viewport left on A's
+    # framing cannot accidentally be framing B's.
+    SPEC_B = """system:
+  name: Project B System
+  components:
+    - id: far_gateway
+      type: Gateway
+      name: far-gateway
+      x: 4200
+      y: 3100
+      connections:
+        - target: far_store
+    - id: far_store
+      type: Store
+      name: far-store
+      x: 4600
+      y: 3400
+"""
+    os.makedirs(CLIENT_REPO_B, exist_ok=True)
+    with open(os.path.join(CLIENT_REPO_B, "main.spec.yaml"), "w") as fh:
+        fh.write(SPEC_B)
+
+    # Pan project A's canvas somewhere a fit must visibly correct, and remember
+    # where — the switch must not leave the user looking at this.
+    push_view_away()
+    parked_in_a = read_view()
+
+    page.locator('[data-testid="project-picker-badge"]').click()
+    time.sleep(0.5)
+    page.locator('[data-testid="project-dir-input"]').fill(CLIENT_REPO_B)
+    switch_btn = page.locator('[data-testid="project-switch-button"]')
+    check("the picker offers a switch to the second project",
+          switch_btn.count() == 1 and "switch" in switch_btn.inner_text().lower(),
+          switch_btn.inner_text() if switch_btn.count() else "no switch button")
+    switch_btn.click()
+
+    # A successful switch reloads the page; poll the badge until it settles.
+    switched = False
+    for _ in range(40):
+        try:
+            if os.path.basename(CLIENT_REPO_B).lower() in page.locator(
+                    '[data-testid="project-picker-badge"]').inner_text().lower():
+                switched = True
+                break
+        except Exception:
+            pass  # mid-reload the node is detached
+        time.sleep(0.5)
+    check("the badge follows the switch into project B", switched)
+
+    page.wait_for_selector('[data-testid="spec-textarea"]', timeout=20000)
+    ta = page.locator('[data-testid="spec-textarea"]')
+    for _ in range(40):
+        if "Project B System" in ta.input_value():
+            break
+        time.sleep(0.5)
+    check("project B's spec is what loaded", "Project B System" in ta.input_value(),
+          ta.input_value()[:120])
+    time.sleep(2.0)  # canvas mount + the 300ms automatic fit
+
+    after_switch = read_view()
+    check("the canvas API is reachable again after the switch", after_switch is not None)
+    check("the switch did not leave the viewport parked where project A was",
+          after_switch != parked_in_a,
+          "parked=%s after=%s" % (parked_in_a, after_switch))
+    check_finite_view("the project switch", after_switch)
+
+    # The teeth: an explicit fit of project B's content must be a no-op,
+    # because the load already framed it. If the identity never advanced on
+    # load, the automatic fit framed project A's spec (or never ran) and this
+    # click moves the viewport.
+    page.locator('[data-testid="canvas-zoom-to-fit"]').click()
+    time.sleep(1.0)
+    after_explicit_fit = read_view()
+
+    def same_view(a, b):
+        if a is None or b is None:
+            return False
+        return (abs(a["zoom"] - b["zoom"]) < 1e-6
+                and abs(a["scrollX"] - b["scrollX"]) < 0.5
+                and abs(a["scrollY"] - b["scrollY"]) < 0.5)
+
+    check("loading project B already framed it — an explicit fit changes nothing",
+          same_view(after_switch, after_explicit_fit),
+          "on-load=%s explicit-fit=%s" % (after_switch, after_explicit_fit))
+    shot(page, "18-project-switch-refit")
 
     # --- end of appended beats: this assertion must stay last, so that a
     # console error raised by any beat above still fails the scenario ---
