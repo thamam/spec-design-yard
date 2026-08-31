@@ -137,6 +137,21 @@ index abc123..def456 100644
     const result = parseDiffLines(diff)
     expect([...result.get('lib/qux.ts')].sort((a, b) => a - b)).toEqual([2, 3])
   })
+
+  it('ignores a "no newline at end of file" marker without advancing the line counter', () => {
+    const diff = `diff --git a/lib/nl.ts b/lib/nl.ts
+index abc123..def456 100644
+--- a/lib/nl.ts
++++ b/lib/nl.ts
+@@ -1 +1 @@
+-old line
+\\ No newline at end of file
++new line
+\\ No newline at end of file
+`
+    const result = parseDiffLines(diff)
+    expect([...result.get('lib/nl.ts')]).toEqual([1])
+  })
 })
 
 describe('isTrackedFile', () => {
