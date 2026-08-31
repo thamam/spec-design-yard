@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -1851,6 +1851,38 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
+// Diagnostics panel sizing. The panel is the last flex child of a
+// `flex flex-col h-full` section whose active tab panel above it is
+// `flex-1 min-h-0`, so it simply takes the height it asks for — which is why
+// an unclamped ask can eat the YAML textarea whole on a short pane.
+const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
+const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
+const DIAGNOSTICS_MAX_HEIGHT = 480 // the ceiling on a tall viewport
+// Everything in the pane that is not diagnostics body: the fixed chrome (tab
+// bar 36 + breadcrumb 28 + resize handle 5 + panel header 32 = 101) plus a
+// ~160px floor for the spec textarea, so the editor stays usable.
+const DIAGNOSTICS_RESERVED_HEIGHT = 261
+
+/**
+ * The panel's ceiling for a pane of `paneHeight`. A measurement of 0 — jsdom,
+ * or a first render before layout — falls back to the flat constant so the
+ * behaviour stays deterministic.
+ */
+function diagnosticsMaxHeight(paneHeight: number) {
+  if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
+  const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
+  return Math.max(DIAGNOSTICS_MIN_HEIGHT, Math.min(DIAGNOSTICS_MAX_HEIGHT, available))
+}
+
+function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIGHT) {
+  return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), maxHeight)
+}
+
+// The pane measurement has to happen before paint, but this page is
+// server-rendered and useLayoutEffect warns there — so fall back to useEffect
+// on the server, where there is no layout to measure anyway.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
+
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -1907,6 +1939,76 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  const [diagnosticsHeight, setDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
+  const diagnosticsDragStartY = useRef(0)
+  const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
+  // The pane the panel lives in — measured, so the ceiling tracks a 900px
+  // laptop or a short split instead of assuming a tall viewport.
+  const editorPaneRef = useRef<HTMLElement>(null)
+  const measureDiagnosticsMax = () =>
+    diagnosticsMaxHeight(editorPaneRef.current?.getBoundingClientRect().height ?? 0)
+
+  // Drag-to-resize, adapted from the pane splitter in workspace-layout.tsx:
+  // clientX becomes clientY, and the delta sign is inverted because the handle
+  // sits on the panel's TOP edge — dragging up has to make the panel taller.
+  const startDiagnosticsResize = (clientY: number) => {
+    diagnosticsDragStartY.current = clientY
+    diagnosticsDragStartHeight.current = diagnosticsHeight
+    diagnosticsMaxRef.current = measureDiagnosticsMax()
+    setIsResizingDiagnostics(true)
+  }
+
+  // The default height is an ask, not a measurement, so it needs the same
+  // ceiling as a drag does — on first layout, before the user sees anything.
+  // A short pane plus the unclamped 128px default collapsed the YAML editor on
+  // first paint. And a window that shrinks after a drag would otherwise leave
+  // the panel taller than the pane now allows, so the same clamp runs on
+  // resize. Layout phase, so no over-tall frame is ever painted; jsdom and any
+  // pre-layout render measure 0 and keep the constant default.
+  useIsomorphicLayoutEffect(() => {
+    const applyPaneCeiling = () => {
+      const max = measureDiagnosticsMax()
+      diagnosticsMaxRef.current = max
+      setDiagnosticsHeight((h) => clampDiagnosticsHeight(h, max))
+    }
+    applyPaneCeiling()
+    window.addEventListener("resize", applyPaneCeiling)
+    return () => window.removeEventListener("resize", applyPaneCeiling)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizingDiagnostics) return
+
+    const resizeTo = (clientY: number) => {
+      const delta = clientY - diagnosticsDragStartY.current
+      setDiagnosticsHeight(
+        clampDiagnosticsHeight(diagnosticsDragStartHeight.current - delta, diagnosticsMaxRef.current)
+      )
+    }
+    const onMouseMove = (e: MouseEvent) => resizeTo(e.clientY)
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      if (touch) resizeTo(touch.clientY)
+    }
+    const onRelease = () => setIsResizingDiagnostics(false)
+
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onRelease)
+    window.addEventListener("touchmove", onTouchMove)
+    window.addEventListener("touchend", onRelease)
+    // A gesture the browser cancels never sends touchend; without this the
+    // resize stays armed and the next unrelated touch drags the panel.
+    window.addEventListener("touchcancel", onRelease)
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onRelease)
+      window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("touchend", onRelease)
+      window.removeEventListener("touchcancel", onRelease)
+    }
+  }, [isResizingDiagnostics])
   const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
   const lastParsedTextRef = useRef<string>("")
 
@@ -2009,6 +2111,7 @@ export function EditorPanel({
 
   return (
     <section
+      ref={editorPaneRef}
       data-testid="editor-panel"
       className="flex flex-col h-full"
       style={{ background: "var(--surface)" }}
@@ -2202,8 +2305,53 @@ export function EditorPanel({
           borderColor: "var(--border)",
         }}
       >
+        {/* Resize handle. Deliberately its own strip ABOVE the header: the
+            collapse toggle is the entire header div's onClick, so a handle
+            placed inside it would collapse the panel on mouseup. */}
+        {showDiagnostics && (
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize diagnostics panel"
+            data-testid="diagnostics-resize-handle"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              startDiagnosticsResize(e.clientY)
+            }}
+            onTouchStart={(e) => {
+              const touch = e.touches[0]
+              if (touch) startDiagnosticsResize(touch.clientY)
+            }}
+            className="relative flex items-center justify-center h-[5px] shrink-0 group cursor-row-resize select-none z-10"
+            style={{ background: "var(--border)" }}
+          >
+            {/* Visual track + dots */}
+            <div
+              className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors duration-150"
+              style={{
+                background: isResizingDiagnostics ? "var(--accent)" : "var(--border-subtle)",
+              }}
+            />
+            <div
+              className="relative flex gap-[3px] z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              aria-hidden="true"
+            >
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="block w-[3px] h-[3px] rounded-full"
+                  style={{
+                    background: isResizingDiagnostics ? "var(--accent)" : "var(--foreground-muted)",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Panel header */}
         <div
+          data-testid="diagnostics-header"
           onClick={() => setShowDiagnostics((s) => !s)}
           className="flex items-center justify-between px-3 h-8 cursor-pointer hover:bg-zinc-900/30 transition-colors"
         >
@@ -2238,8 +2386,9 @@ export function EditorPanel({
         {/* Panel body */}
         {showDiagnostics && (
           <div
-            className="border-t overflow-y-auto max-h-32 p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
-            style={{ borderColor: "var(--border)" }}
+            data-testid="diagnostics-body"
+            className="border-t overflow-y-auto p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
+            style={{ borderColor: "var(--border)", height: diagnosticsHeight }}
           >
             {yamlSyntaxError && (
               <div className="text-red-400 flex items-start gap-1.5">

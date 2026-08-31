@@ -1,0 +1,391 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, act, fireEvent } from '@testing-library/react'
+import React from 'react'
+
+// Same stub strategy as canvas-adapter-integration.test.tsx: mocking the
+// specifier intercepts both the static and the dynamic import(). This stub
+// additionally renders its children (so the <Footer> child is reachable),
+// exposes `Footer` as a passthrough, and implements `getSceneElements` — the
+// call the fit path makes and the other two stubs do not have.
+const captured = vi.hoisted(() => ({
+  api: null as any,
+  scene: [] as any[],
+}))
+
+vi.mock('@excalidraw/excalidraw', () => {
+  const Excalidraw = (props: any) => {
+    React.useEffect(() => {
+      const api = {
+        updateScene: vi.fn((payload: any) => {
+          if (payload?.elements) captured.scene = payload.elements
+        }),
+        scrollToContent: vi.fn(),
+        getSceneElements: vi.fn(() => captured.scene),
+        getAppState: vi.fn(() => ({ zoom: { value: 1 }, scrollX: 0, scrollY: 0 })),
+      }
+      captured.api = api
+      props.excalidrawAPI?.(api)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+    return React.createElement('div', { 'data-testid': 'excalidraw-stub' }, props.children)
+  }
+  // The real Footer tunnels its children into Excalidraw's .footer-center —
+  // the same footer strip as the zoom widget, not adjacent to it. A
+  // passthrough is enough to prove the fit button is mounted as a Footer
+  // child, which is the part this suite can check.
+  const Footer = (props: any) =>
+    React.createElement('div', { 'data-testid': 'excalidraw-footer' }, props.children)
+  return { Excalidraw, Footer, WelcomeScreen: undefined, default: Excalidraw }
+})
+
+import Workspace from '../components/Workspace'
+import {
+  ExcalidrawCanvas,
+  compileSpecToExcalidrawElements,
+} from '../components/workspace/excalidraw-canvas'
+
+const FIT_OPTIONS = { fitToViewport: true, viewportZoomFactor: 0.85 }
+
+async function flushUntilCanvasMounted() {
+  for (let i = 0; i < 20 && !captured.api; i++) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10)
+    })
+  }
+  expect(captured.api).not.toBeNull()
+}
+
+/** The initial fit sits behind a 300ms setTimeout. */
+async function flushInitialFit() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(400)
+  })
+}
+
+async function mountWorkspace() {
+  render(<Workspace />)
+  await flushUntilCanvasMounted()
+  await flushInitialFit()
+  captured.api.scrollToContent.mockClear()
+}
+
+describe('zoom to fit — three routes, one implementation', () => {
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('a fit button rides in Excalidraw own footer strip', async () => {
+    await mountWorkspace()
+
+    const footer = screen.getByTestId('excalidraw-footer')
+    const button = screen.getByTestId('canvas-footer-zoom-to-fit')
+    expect(footer.contains(button)).toBe(true)
+    expect(button).toHaveAccessibleName(/zoom to fit/i)
+
+    fireEvent.click(button)
+    expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
+  })
+
+  test('the toolbar control is named "Zoom to fit", not "Reset view"', async () => {
+    await mountWorkspace()
+
+    expect(screen.queryByRole('button', { name: /reset view/i })).toBeNull()
+    const button = screen.getByTestId('canvas-zoom-to-fit')
+    expect(button).toHaveAccessibleName(/zoom to fit/i)
+
+    fireEvent.click(button)
+    expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
+  })
+
+  test('the controls reach the API by prop, not through window.excalidrawAPI', async () => {
+    await mountWorkspace()
+
+    // The window mirror stays for its existing consumers, but nothing added
+    // here may depend on it.
+    expect((window as any).excalidrawAPI).toBeTruthy()
+    delete (window as any).excalidrawAPI
+
+    fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))
+    fireEvent.click(screen.getByTestId('canvas-footer-zoom-to-fit'))
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(2)
+  })
+
+  test('Shift+1 fits the diagram when focus is outside any field', async () => {
+    await mountWorkspace()
+
+    fireEvent.keyDown(document.body, { key: '!', code: 'Digit1', shiftKey: true })
+    expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
+  })
+
+  test('Shift+1 is claimed in the capture phase, ahead of Excalidraw own binding', async () => {
+    await mountWorkspace()
+
+    // Excalidraw binds Shift+1 to its own zoomToFit action, on a listener that
+    // runs after the target. Standing in for it: if this ever fires, the real
+    // one fires too and re-frames with its own options instead of the shared
+    // fit — exactly when focus is on the canvas, the normal case.
+    const excalidrawBinding = vi.fn()
+    document.addEventListener('keydown', excalidrawBinding)
+    const event = new KeyboardEvent('keydown', {
+      key: '!',
+      code: 'Digit1',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    screen.getByTestId('excalidraw-stub').dispatchEvent(event)
+    document.removeEventListener('keydown', excalidrawBinding)
+
+    expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
+    expect(excalidrawBinding).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  test('typing ! in the YAML textarea never yanks the canvas', async () => {
+    await mountWorkspace()
+
+    const textarea = screen.getByTestId('spec-textarea')
+    fireEvent.keyDown(textarea, { key: '!', code: 'Digit1', shiftKey: true })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
+  test('the shortcut also stays out of ordinary inputs', async () => {
+    await mountWorkspace()
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    fireEvent.keyDown(input, { key: '!', code: 'Digit1', shiftKey: true })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+    input.remove()
+  })
+
+  test('undo still reaches the spec textarea — the pass-through is untouched', async () => {
+    await mountWorkspace()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'system:\n  name: Edited\n' } })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600)
+    })
+    expect(textarea.value).toContain('Edited')
+
+    fireEvent.keyDown(textarea, { key: 'z', code: 'KeyZ', metaKey: true })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50)
+    })
+    expect(textarea.value).not.toContain('Edited')
+  })
+
+  test('an unmounting canvas hands the parent a null fit callback', async () => {
+    // Without this the parent keeps a fit bound to a canvas it no longer
+    // renders — clicking "Zoom to fit" from the Grid view, or after a
+    // remount, would drive a dead API.
+    const registrations: (((() => void) | null))[] = []
+    const onZoomToFitReady = (fit: (() => void) | null) => {
+      registrations.push(fit)
+    }
+    const spec = { system: { name: 'Unmount', components: [{ id: 'u1', type: 'Stage', x: 0, y: 0 }] } }
+
+    const { unmount } = render(
+      <ExcalidrawCanvas parsedSpec={spec} onZoomToFitReady={onZoomToFitReady} />
+    )
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(typeof registrations.at(-1)).toBe('function')
+
+    unmount()
+    expect(registrations.at(-1)).toBeNull()
+  })
+})
+
+describe('zoom to fit — a failing fit is reported, never thrown', () => {
+  const spec = { system: { name: 'Boom', components: [{ id: 'b1', type: 'Stage', x: 0, y: 0 }] } }
+
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('a control-driven fit that throws is logged, and the click still returns', async () => {
+    await mountWorkspace()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    captured.api.scrollToContent.mockImplementation(() => {
+      throw new Error('scene bounds unavailable')
+    })
+
+    expect(() => fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))).not.toThrow()
+    expect(errors).toHaveBeenCalledWith('Failed to zoom to fit: ', expect.any(Error))
+    errors.mockRestore()
+  })
+
+  test('an automatic fit that throws is logged, and the canvas survives', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ExcalidrawCanvas parsedSpec={spec} />)
+    await flushUntilCanvasMounted()
+    // The automatic fit sits behind a 300ms timer, so the throwing
+    // implementation is installed after mount but before the fit runs.
+    captured.api.scrollToContent.mockImplementation(() => {
+      throw new Error('scene bounds unavailable')
+    })
+    await flushInitialFit()
+
+    expect(errors).toHaveBeenCalledWith('Failed to scroll to content: ', expect.any(Error))
+    expect(screen.getByTestId('excalidraw-stub')).toBeInTheDocument()
+    errors.mockRestore()
+  })
+})
+
+describe('zoom to fit — one fit per loaded spec', () => {
+  const specA = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 0, y: 0 }] } }
+  const specAEdited = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 40, y: 0 }] } }
+  const specB = { system: { name: 'B', components: [{ id: 'b1', type: 'Store', x: 0, y: 0 }] } }
+
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('a newly loaded spec re-fits; an edit to the same spec does not', async () => {
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-1" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+
+    rerender(<ExcalidrawCanvas parsedSpec={specAEdited} specIdentity="spec-1" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+
+    rerender(<ExcalidrawCanvas parsedSpec={specB} specIdentity="spec-2" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(2)
+  })
+
+  test('elements changing inside the 300ms window still yields exactly one fit', async () => {
+    // Workspace hydration replaces the compiled elements shortly after a spec
+    // identity first appears. The latch must not read as "already fitted"
+    // until a fit has actually run, or that spec never gets framed at all.
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-1" />)
+    await flushUntilCanvasMounted()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={specAEdited} specIdentity="spec-1" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+
+    // ...and the churn must not queue a second fit for the same spec either.
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+  })
+
+  test('an empty spec is handled without fitting, so its first component is an ordinary edit', async () => {
+    // The latch has to distinguish "handled" from "fitted". An empty spec has
+    // nothing to frame, but it is still this identity's load: if it leaves the
+    // latch reading "not yet fitted", the first component the user adds — an
+    // ordinary edit, same identity — schedules a fit and throws away their pan.
+    const emptySpec = { system: { name: 'Empty', components: [] } }
+    const firstComponent = {
+      system: { name: 'Empty', components: [{ id: 'c1', type: 'Stage', x: 0, y: 0 }] },
+    }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={emptySpec} specIdentity="spec-empty" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={firstComponent} specIdentity="spec-empty" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
+  test('a spec loaded after an empty one still gets its own fit', async () => {
+    // The guard above must not become a blanket "never fit again": a real
+    // project loading in after an empty one is a fresh load and is owed a fit.
+    const emptySpec = { system: { name: 'Empty', components: [] } }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={emptySpec} specIdentity="spec-empty" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={specB} specIdentity="spec-2" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('zoom to fit — the NaN-bounds invariant', () => {
+  const SPEC = {
+    system: {
+      name: 'Fit Fixture',
+      components: [
+        { id: 'gate', type: 'Gateway', name: 'Gate', x: 0, y: 0, connections: [{ target: 'store' }] },
+        { id: 'store', type: 'Store', name: 'Store', x: 400, y: 120 },
+      ],
+    },
+  }
+
+  test('every compiled element carries the normalizer fields and finite geometry', () => {
+    const elements = compileSpecToExcalidrawElements(SPEC)
+    expect(elements.length).toBeGreaterThan(0)
+
+    for (const el of elements) {
+      // Excalidraw 0.18 bounds go through Math.cos(element.angle); a missing
+      // angle yields NaN, poisons getCommonBounds, and blanks the canvas.
+      expect(el.angle).toBe(0)
+      expect(Number.isNaN(Math.cos(el.angle))).toBe(false)
+      expect(el.opacity).toBe(100)
+      expect(el.strokeStyle).toBe('solid')
+      if (el.type === 'text') expect(el.lineHeight).toBe(1.25)
+      for (const key of ['x', 'y', 'width', 'height']) {
+        expect(Number.isFinite(el[key])).toBe(true)
+      }
+    }
+  })
+
+  test('the elements handed to scrollToContent are all finite', async () => {
+    vi.useFakeTimers()
+    try {
+      captured.api = null
+      captured.scene = []
+      render(<Workspace />)
+      await flushUntilCanvasMounted()
+      await flushInitialFit()
+      captured.api.scrollToContent.mockClear()
+
+      fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))
+
+      const [elements, options] = captured.api.scrollToContent.mock.calls.at(-1)
+      expect(options).toEqual(FIT_OPTIONS)
+      expect(elements.length).toBeGreaterThan(0)
+      for (const el of elements) {
+        expect(Number.isNaN(Math.cos(el.angle))).toBe(false)
+        expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
+      }
+    } finally {
+      vi.useRealTimers()
+      vi.clearAllMocks()
+    }
+  })
+})

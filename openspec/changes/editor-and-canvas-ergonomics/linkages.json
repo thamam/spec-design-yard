@@ -33,7 +33,7 @@
     },
     {
       "requirement": "diagnostics-panel/Resizable panel height",
-      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct",
+      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct — see the Decision 7 note on pointer events under jsdom 24",
       "tasks": ["Task 4: Resizable diagnostics panel"]
     },
     {
@@ -48,12 +48,17 @@
     },
     {
       "requirement": "diagram-canvas/Zoom-to-fit affordance",
-      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec; amended by Decision 7 — the toolbar control is kept, not replaced",
       "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
     },
     {
       "requirement": "diagram-canvas/Fit on content load",
       "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+    },
+    {
+      "requirement": "diagram-canvas/Fit control in Excalidraw's own footer",
+      "design": "Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas (incl. 'Placement within the footer: centre, not adjacent to the zoom widget')",
       "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
     },
     {

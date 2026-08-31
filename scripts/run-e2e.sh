@@ -127,8 +127,11 @@ run_scenario "standalone" "$((BASE_PORT + 2))" "scripts/e2e-standalone-mode.py"
 
 # --- 4. editor ergonomics: extension point for Lanes A and B ---
 EDITOR_CLIENT="$TMP/editor-ergonomics-repo"
-mkdir -p "$EDITOR_CLIENT"
-SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)")
+# A second project folder, for the beat that switches into one for real.
+EDITOR_CLIENT_B="$TMP/editor-ergonomics-repo-b"
+mkdir -p "$EDITOR_CLIENT" "$EDITOR_CLIENT_B"
+SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)"
+              "SPEC_YARD_E2E_CLIENT_B=$(cd "$EDITOR_CLIENT_B" && pwd -P)")
 run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
   "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
 

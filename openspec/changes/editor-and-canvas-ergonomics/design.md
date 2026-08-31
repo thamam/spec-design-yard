@@ -195,3 +195,88 @@ change confined to the middle of a multi-line ternary can pass the gate without
 a test touching that branch. Reviewers should read the requirement that way, and
 lanes must not treat a green gate as proof that a branch is tested — that is
 what the red-before-green rule is for.
+
+## Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas
+
+Issued by the binding amendment
+(`.orchestrator/canvas/AMENDMENT-zoom-to-fit-placement.md`) after the
+maintainer approved the gate: *"verify that on top of the keyboard shortcut,
+there is also a clickable icon next to the current zoom in/out that does the
+zoom-to-fit"*. This **overrides Decision 5 item 1 where the two conflict** —
+Decision 5 relabelled only the app's own top-right toolbar button, which sits
+at the top of the canvas pane, not beside the zoom widget the maintainer
+meant. The zoom in/out control a user actually looks at is Excalidraw's own
+`−  100%  +` widget in the bottom-left of the canvas, so the fit affordance
+must also be there.
+
+Mechanism: `@excalidraw/excalidraw@0.18.1` exports **`Footer`** as a public
+named export (confirmed against the shipped bundle, which exports
+`Excalidraw, Footer, MainMenu, Sidebar, WelcomeScreen, useHandleLibrary`).
+Excalidraw renders `<Footer>`'s children into its footer region — see
+*Placement* below for exactly where in that region. The repo already uses this
+pattern for `WelcomeScreen`: `excalidraw-canvas.tsx` dynamically `import()`s
+the module
+and pulls the component into state, rendering it as a child of
+`<ExcalidrawComponent>`. `Footer` is pulled in the same effect and rendered as
+a sibling child.
+
+Decision 5 items 2-4 stand unchanged: the toolbar button is kept and
+relabelled (removing a control people already use would be a regression), the
+shortcut stays `Shift+1`, and all three routes call one `zoomToFit()` plumbed
+by prop while `window.excalidrawAPI` keeps its existing consumers and gains no
+new callers.
+
+- **Rationale**: the affordance belongs where the user already looks for zoom.
+  Using Excalidraw's own extension point means its layout owns the placement,
+  so the control reflows with the footer instead of fighting it.
+- **Rejected**: a floating, absolutely-positioned button over the canvas near
+  the widget — fragile against Excalidraw's own layout, and it breaks when the
+  footer reflows on a narrow pane (the widget moves; a hard-coded offset does
+  not).
+- **Rejected**: replacing the toolbar button with the footer one — the
+  amendment is explicit that both stay, and one implementation behind two
+  affordances is the point.
+
+### Placement within the footer: centre, not adjacent to the zoom widget
+
+Decided by the maintainer after review. **The button stays in Excalidraw's
+footer centre, reached through the public `Footer` export. No code change.**
+
+The public export named `Footer` is `FooterCenter`: it tunnels its children
+into `.footer-center`. The `−  100%  +` zoom widget is not there — it lives in
+`.layer-ui__wrapper__footer-left`, and Excalidraw ships **no public API for
+that region**. Both class names are confirmed in the shipped bundle
+(`node_modules/@excalidraw/excalidraw/dist/prod/index.js`).
+
+So, plainly: the fit button sits in the same footer strip as the zoom controls,
+but it is **not adjacent to them**. Decision 7's rationale above — "the
+affordance belongs where the user already looks for zoom" — is satisfied at the
+level of the strip, not of the neighbouring control.
+
+- **Rejected**: portalling into `.layer-ui__wrapper__footer-left` to sit beside
+  the zoom widget. That class is Excalidraw's internal markup, not a supported
+  extension point. An upgrade could rename it or move the region, the portal
+  target would resolve to nothing, and the button would **silently vanish** —
+  no error, no failing build, just a missing control that only a human looking
+  at the footer would notice.
+
+This is a **deliberate trade: exact placement for upgrade safety.** We accept a
+button one region away from the zoom widget in exchange for a placement that
+survives an Excalidraw upgrade, because a fit control in a slightly less
+obvious spot is strictly better than one that disappears without warning. The
+keyboard shortcut and the top-right toolbar button remain as the other two
+routes to the same `zoomToFit()`.
+
+### Note on Decision 4 and pointer events
+
+Decision 4 specifies "pointer events with capture" for the diagnostics resize
+drag. jsdom 24 — this repo's test environment — ships **no `PointerEvent`
+constructor and no `Element.prototype.setPointerCapture`**; a synthetic
+`pointerdown` arrives with `clientY` null, so a pointer-capture drag cannot be
+unit-tested here at all. Since the same change requires 100% diff coverage and
+red-before-green on every behaviour, the implementation delivers the
+requirement's stated intent — "the drag SHALL work via pointer events (mouse
+and touch)" — with parallel `mousedown`/`mousemove`/`mouseup` and
+`touchstart`/`touchmove`/`touchend` listeners, which is also the mechanism the
+existing pane splitter in `workspace-layout.tsx` uses. Both paths are covered
+by tests.
