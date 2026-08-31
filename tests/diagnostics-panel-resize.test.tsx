@@ -39,7 +39,11 @@ function dragMouse(handle: HTMLElement, from: number, to: number) {
 }
 
 describe('diagnostics panel resize', () => {
-  test('the spec under test really does produce 5+ diagnostics with clipped action rows', () => {
+  // Named for what jsdom can actually check. Clipping is geometry — every rect
+  // here is zero — so the "previously clipped button is now reachable" claim is
+  // made in scripts/e2e-editor-ergonomics.py, which records the clipped set
+  // before the resize and clicks a button out of it afterwards.
+  test('the spec under test really does produce 5+ diagnostics, each with an action row', () => {
     renderPanel()
     expect(screen.getByText(/\d+ issues/)).toBeInTheDocument()
     const count = Number(/(\d+) issues/.exec(screen.getByText(/\d+ issues/).textContent || '')![1])
@@ -99,6 +103,20 @@ describe('diagnostics panel resize', () => {
     fireEvent.touchStart(handle(), { touches: [{ clientY: 600 }] })
     fireEvent.touchMove(window, { touches: [{ clientY: 520 }] })
     fireEvent.touchEnd(window, { touches: [] })
+    expect(body().style.height).toBe('208px')
+  })
+
+  test('a cancelled touch gesture ends the resize, like a touchend', () => {
+    // The browser cancels a touch on its own (a system gesture takes over, the
+    // finger leaves the surface). Without a touchcancel handler the resize
+    // stays armed and the next, unrelated touch drags the panel.
+    const { handle, body } = renderPanel()
+    fireEvent.touchStart(handle(), { touches: [{ clientY: 600 }] })
+    fireEvent.touchMove(window, { touches: [{ clientY: 520 }] })
+    fireEvent.touchCancel(window, { touches: [] })
+    expect(body().style.height).toBe('208px')
+
+    fireEvent.touchMove(window, { touches: [{ clientY: 200 }] })
     expect(body().style.height).toBe('208px')
   })
 
@@ -162,6 +180,37 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, -5000)
     expect(body().style.height).toBe('72px')
+  })
+
+  test('a short pane clamps the INITIAL height, before any drag happens', () => {
+    // The 128px default is an ask, not a measurement. On a ~200px pane it plus
+    // the fixed chrome exceeds the pane and the YAML editor collapses to
+    // nothing on first paint — the exact failure the clamp exists to prevent.
+    stubPaneHeight(200)
+    const { body } = renderPanel()
+    expect(body().style.height).toBe('72px')
+  })
+
+  test('a mid-height pane clamps the initial height to what the pane leaves', () => {
+    // 340 − 261 reserved = 79, which is below the 128px default and above the
+    // 72px minimum: neither boundary can produce this number by accident.
+    stubPaneHeight(340)
+    const { body } = renderPanel()
+    expect(body().style.height).toBe('79px')
+  })
+
+  test('a pane taller than the default leaves the initial height alone', () => {
+    stubPaneHeight(1200)
+    const { body } = renderPanel()
+    expect(body().style.height).toBe('128px')
+  })
+
+  test('a zero measurement leaves the initial height at the constant default', () => {
+    // jsdom, or a first render before layout: the fallback keeps 128px rather
+    // than clamping against a meaningless 0.
+    const { body } = renderPanel()
+    expect(screen.getByTestId('editor-panel').getBoundingClientRect().height).toBe(0)
+    expect(body().style.height).toBe('128px')
   })
 
   test('a zero measurement — jsdom, or a pre-layout render — falls back to the constant', () => {

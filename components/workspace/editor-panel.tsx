@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -1799,6 +1799,11 @@ function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIG
   return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), maxHeight)
 }
 
+// The pane measurement has to happen before paint, but this page is
+// server-rendered and useLayoutEffect warns there — so fall back to useEffect
+// on the server, where there is no layout to measure anyway.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
+
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -1876,16 +1881,22 @@ export function EditorPanel({
     setIsResizingDiagnostics(true)
   }
 
-  // A window that shrinks after a drag would otherwise leave the panel taller
-  // than the pane now allows.
-  useEffect(() => {
-    const onWindowResize = () => {
+  // The default height is an ask, not a measurement, so it needs the same
+  // ceiling as a drag does — on first layout, before the user sees anything.
+  // A short pane plus the unclamped 128px default collapsed the YAML editor on
+  // first paint. And a window that shrinks after a drag would otherwise leave
+  // the panel taller than the pane now allows, so the same clamp runs on
+  // resize. Layout phase, so no over-tall frame is ever painted; jsdom and any
+  // pre-layout render measure 0 and keep the constant default.
+  useIsomorphicLayoutEffect(() => {
+    const applyPaneCeiling = () => {
       const max = measureDiagnosticsMax()
       diagnosticsMaxRef.current = max
       setDiagnosticsHeight((h) => clampDiagnosticsHeight(h, max))
     }
-    window.addEventListener("resize", onWindowResize)
-    return () => window.removeEventListener("resize", onWindowResize)
+    applyPaneCeiling()
+    window.addEventListener("resize", applyPaneCeiling)
+    return () => window.removeEventListener("resize", applyPaneCeiling)
   }, [])
 
   useEffect(() => {
@@ -1908,11 +1919,15 @@ export function EditorPanel({
     window.addEventListener("mouseup", onRelease)
     window.addEventListener("touchmove", onTouchMove)
     window.addEventListener("touchend", onRelease)
+    // A gesture the browser cancels never sends touchend; without this the
+    // resize stays armed and the next unrelated touch drags the panel.
+    window.addEventListener("touchcancel", onRelease)
     return () => {
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onRelease)
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("touchend", onRelease)
+      window.removeEventListener("touchcancel", onRelease)
     }
   }, [isResizingDiagnostics])
   const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
