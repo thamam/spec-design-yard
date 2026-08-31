@@ -159,3 +159,18 @@ implementation session cannot miss them:
   nothing.
 - **Rejected**: relying on the existing normalizer call sites and code
   review — that is how it broke last time.
+
+### What "100% diff coverage" means precisely
+
+The gate (`scripts/check-diff-coverage.mjs`) uses v8/istanbul **line** coverage:
+it checks every added or modified line on which a statement *starts*. Lines that
+carry no statement start — continuation lines of a multi-line expression, a bare
+`} else {`, a closing brace — are not executable points in the coverage map and
+are therefore not checked.
+
+So the requirement is enforceable and enforced, but it means "every added
+executable line is exercised", not "every added character is exercised". A
+change confined to the middle of a multi-line ternary can pass the gate without
+a test touching that branch. Reviewers should read the requirement that way, and
+lanes must not treat a green gate as proof that a branch is tested — that is
+what the red-before-green rule is for.
