@@ -37,7 +37,7 @@ modifies.
   - E2E: press Enter inside a component block, assert the new line starts
     at the block's indent.
 
-- [ ] **Task 3: Syntax colour overlay**
+- [x] **Task 3: Syntax colour overlay**
   - Add the scroll-synced highlight backdrop behind the now
     transparent-text textarea (`editor-panel.tsx:144-155`); line-based
     tokeniser colouring component ids, connection targets, and metadata

@@ -20,6 +20,7 @@ import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../l
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
 import { applyIndent } from "../../lib/editor-indent"
+import { YamlHighlightOverlay } from "./yaml-highlight-overlay"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
@@ -57,6 +58,15 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+
+  const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const overlay = overlayRef.current
+    if (overlay) {
+      overlay.scrollTop = e.currentTarget.scrollTop
+      overlay.scrollLeft = e.currentTarget.scrollLeft
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -205,6 +215,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
 
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
+      <YamlHighlightOverlay ref={overlayRef} value={value} />
       <textarea
         ref={textareaRef}
         data-testid="spec-textarea"
@@ -214,8 +225,9 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
         onKeyDown={handleKeyDown}
+        onScroll={handleTextareaScroll}
         disabled={disabled}
-        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 

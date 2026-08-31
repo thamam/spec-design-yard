@@ -14,6 +14,18 @@ export function extractComponentIds(specText: string): string[] {
   return ids
 }
 
+/**
+ * Shared vocabularies, reused by both autocomplete suggestions and the
+ * syntax-highlight overlay (lib/yaml-highlight.ts). Keep these as the one
+ * source of truth — two copies would drift.
+ */
+export const VALID_TYPES = ["Store", "Stage", "Brick", "Gateway"]
+export const VALID_STATUSES = ["draft", "active", "deprecated"]
+export const VALID_COLORS = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
+export const METADATA_KEYS = ["owner:", "description:", "status:", "version:", "color:"]
+export const CONNECTION_KEYS = ["- target:", "target:", "label:"]
+export const COMPONENT_FIELDS = ["id:", "type:", "name:", "connections:", "metadata:"]
+
 export interface AutocompleteResult {
   suggestions: string[]
   type: "id" | "type" | "field" | "metadata-key" | "metadata-status" | "metadata-color" | "connection-key" | null
@@ -129,10 +141,9 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (typeMatch) {
     const query = typeMatch[1] || ""
-    const validTypes = ["Store", "Stage", "Brick", "Gateway"]
-    
+
     // Filter suggestions: start with query, limit to 10 max, and filter out exact matches
-    const suggestions = validTypes
+    const suggestions = VALID_TYPES
       .filter((t) => t.toLowerCase().startsWith(query.toLowerCase()) && t !== query)
       .slice(0, 10)
 
@@ -147,8 +158,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (statusMatch) {
     const query = statusMatch[1] || ""
-    const validStatuses = ["draft", "active", "deprecated"]
-    const suggestions = validStatuses
+    const suggestions = VALID_STATUSES
       .filter((s) => s.toLowerCase().startsWith(query.toLowerCase()) && s !== query)
       .slice(0, 10)
 
@@ -163,8 +173,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (colorMatch) {
     const query = colorMatch[1] || ""
-    const validColors = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
-    const suggestions = validColors
+    const suggestions = VALID_COLORS
       .filter((c) => c.toLowerCase().startsWith(query.toLowerCase()) && c !== query)
       .slice(0, 10)
 
@@ -186,8 +195,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
     const queryStart = cursorPosition - query.length
 
     if (parentBlock === "metadata") {
-      const keys = ["owner:", "description:", "status:", "version:", "color:"]
-      const suggestions = keys
+      const suggestions = METADATA_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,
@@ -196,8 +204,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         replaceRange: [queryStart, replaceEnd],
       }
     } else if (parentBlock === "connections") {
-      const keys = ["- target:", "target:", "label:"]
-      const suggestions = keys
+      const suggestions = CONNECTION_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,
@@ -207,8 +214,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
       }
     } else if (indentLevel >= 4) {
       // Default component property suggestions (requires at least component indentation level)
-      const keys = ["id:", "type:", "name:", "connections:", "metadata:"]
-      const suggestions = keys
+      const suggestions = COMPONENT_FIELDS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,
