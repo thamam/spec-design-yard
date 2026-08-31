@@ -137,7 +137,7 @@ export function uncoveredLines(coverageJson, fileLinesMap, repoRoot = process.cw
   return report
 }
 
-/* v8 ignore start -- CLI wiring; exercised via the run-e2e-style manual gate demonstration, not unit tests */
+/* v8 ignore start -- CLI wiring (argv handling, the git diff invocation, reading coverage/coverage-final.json, process exit codes); exercised by the CI job, not by unit tests */
 function main() {
   const base = process.argv[2] || 'origin/main'
   const repoRoot = process.cwd()
