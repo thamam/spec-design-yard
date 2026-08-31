@@ -55,8 +55,12 @@ export function detectIndentContext(specText: string, cursorPosition: number): I
   const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
   const currentLine = specText.substring(lineStart, lineEnd)
 
+  // A whitespace-only line (mid-edit blank inside a block) has no non-space
+  // char for /\S/ to find. Fall back to the line's own length rather than 0
+  // — the user is sitting inside that indent and Enter should continue it,
+  // not drop them to column 0.
   let indentLevel = currentLine.search(/\S/)
-  if (indentLevel === -1) indentLevel = 0
+  if (indentLevel === -1) indentLevel = currentLine.length
 
   const linesBefore = specText.substring(0, lineStart).split("\n")
   let parentBlock: IndentContext["parentBlock"] = ""

@@ -42,6 +42,13 @@ describe('detectIndentContext', () => {
     expect(ctx.opensBlock).toBe(false)
   })
 
+  test('a whitespace-only line inside a block keeps its own indent instead of collapsing to 0', () => {
+    const spec = 'system:\n  metadata:\n    '
+    const ctx = detectIndentContext(spec, spec.length)
+    expect(ctx.indentLevel).toBe(4)
+    expect(ctx.opensBlock).toBe(false)
+  })
+
   test('a block-opening key with a trailing comment still opens a block', () => {
     const line = '  metadata: # keep this comment'
     const ctx = detectIndentContext(line, line.length)
@@ -92,6 +99,23 @@ describe('CodeTab Enter auto-indent', () => {
 
     expect(textarea.value).toBe('system:\n  metadata:\n    ')
     expect(textarea.selectionStart).toBe(value.length + 1 + 4)
+  })
+
+  test('Enter on an indented blank line continues at that line\'s indent instead of dropping to column 0', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'system:\n  metadata:\n    '
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    const caret = value.length
+    textarea.setSelectionRange(caret, caret)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(textarea.value).toBe(value + '\n    ')
   })
 
   test('Enter inside a connections list item aligns under the key, so a sibling "label:" can follow', async () => {
