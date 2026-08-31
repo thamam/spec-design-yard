@@ -55,6 +55,24 @@ describe('detectIndentContext', () => {
     expect(ctx.opensBlock).toBe(true)
     expect(ctx.indentLevel).toBe(4)
   })
+
+  test('a "#" inside a single-quoted key is not treated as a comment', () => {
+    const line = "  'a#b':"
+    const ctx = detectIndentContext(line, line.length)
+    expect(ctx.opensBlock).toBe(true)
+  })
+
+  test('a "#" inside a double-quoted key is not treated as a comment', () => {
+    const line = '  "a#b":'
+    const ctx = detectIndentContext(line, line.length)
+    expect(ctx.opensBlock).toBe(true)
+  })
+
+  test('a backslash-escaped quote inside a double-quoted key does not end the quote early, so a following "#" stays quoted', () => {
+    const line = '  "a\\"#b":'
+    const ctx = detectIndentContext(line, line.length)
+    expect(ctx.opensBlock).toBe(true)
+  })
 })
 
 describe('CodeTab Enter auto-indent', () => {
