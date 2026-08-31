@@ -62,6 +62,31 @@ via `isSpecTextarea`. All elements fed to Excalidraw pass a normalizer
 
 ## ADDED Requirements
 
+### Requirement: Fit control in Excalidraw's own footer
+
+The canvas SHALL render a zoom-to-fit control inside Excalidraw's own footer
+region, beside its `−  100%  +` zoom widget, via the `Footer` named export of
+`@excalidraw/excalidraw` (public in 0.18.1, pulled from the same dynamic
+`import()` that already supplies `WelcomeScreen`). The control SHALL carry an
+accessible name ("Zoom to fit") and a stable `data-testid`, and SHALL invoke
+the same `zoomToFit()` callback as the toolbar control and the keyboard
+shortcut — not `window.excalidrawAPI`.
+
+#### Scenario: The footer control fits the diagram
+
+- GIVEN a diagram panned and zoomed away from its content
+- WHEN the user clicks the fit control beside the zoom widget in the canvas
+  footer
+- THEN the viewport scrolls and zooms so all diagram elements are visible
+- AND the resulting scroll and zoom values are finite
+
+#### Scenario: All three routes run one implementation
+
+- GIVEN the footer control, the toolbar control, and Shift+1
+- WHEN each is used in turn
+- THEN each calls the same `zoomToFit()` callback with
+  `{fitToViewport: true, viewportZoomFactor: 0.85}`
+
 ### Requirement: Zoom-to-fit keyboard shortcut
 
 The system SHALL bind Shift+1 to the zoom-to-fit action, registered in the
