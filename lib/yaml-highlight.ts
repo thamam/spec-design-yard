@@ -44,14 +44,16 @@ const VALUE_WORDS = new Set<string>(
 // The identifier body is captured without its surrounding quotes (if any) —
 // quoted scalars ("api", 'db') are ordinary valid YAML this app's own
 // writer may emit, and should highlight the same as an unquoted identifier.
-const ID_LINE_RE = /^\s*(?:-\s*)?id:\s*['"]?([a-zA-Z0-9_\-]+)/
-const TARGET_LINE_RE = /^\s*(?:-\s*)?target:\s*['"]?([a-zA-Z0-9_\-]+)/
+// A quote that opens but never closes (mid-edit) is not a valid scalar, so
+// each quote style requires its own matching closer; an unquoted value still
+// needs no quotes at all.
+const ID_LINE_RE = /^\s*(?:-\s*)?id:\s*(?:"([a-zA-Z0-9_\-]+)"|'([a-zA-Z0-9_\-]+)'|([a-zA-Z0-9_\-]+))/
+const TARGET_LINE_RE = /^\s*(?:-\s*)?target:\s*(?:"([a-zA-Z0-9_\-]+)"|'([a-zA-Z0-9_\-]+)'|([a-zA-Z0-9_\-]+))/
 const METADATA_KEY_RE = new RegExp(`^\\s*(${escapeAlt(METADATA_KEY_NAMES)})(?=:)`)
 const FIELD_KEY_RE = new RegExp(`^\\s*(?:-\\s*)?(${escapeAlt(FIELD_KEY_NAMES)})(?=:)`)
 const TRAILING_VALUE_RE = /:\s*([a-zA-Z0-9_\-]+)\s*$/
 
-function captureSpan(line: string, match: RegExpMatchArray, className: TokenClass): Span | null {
-  const group = match[1]
+function captureSpan(line: string, match: RegExpMatchArray, group: string | undefined, className: TokenClass): Span | null {
   if (group === undefined || match.index === undefined) return null
   const start = match.index + match[0].lastIndexOf(group)
   return { start, end: start + group.length, className }
@@ -68,31 +70,31 @@ function spansForLine(line: string): Span[] {
 
   const idMatch = line.match(ID_LINE_RE)
   if (idMatch) {
-    const span = captureSpan(line, idMatch, "component-id")
+    const span = captureSpan(line, idMatch, idMatch[1] ?? idMatch[2] ?? idMatch[3], "component-id")
     if (span) spans.push(span)
   }
 
   const targetMatch = line.match(TARGET_LINE_RE)
   if (targetMatch) {
-    const span = captureSpan(line, targetMatch, "connection-target")
+    const span = captureSpan(line, targetMatch, targetMatch[1] ?? targetMatch[2] ?? targetMatch[3], "connection-target")
     if (span) spans.push(span)
   }
 
   const metaMatch = line.match(METADATA_KEY_RE)
   if (metaMatch) {
-    const span = captureSpan(line, metaMatch, "metadata-key")
+    const span = captureSpan(line, metaMatch, metaMatch[1], "metadata-key")
     if (span) spans.push(span)
   }
 
   const fieldMatch = line.match(FIELD_KEY_RE)
   if (fieldMatch) {
-    const span = captureSpan(line, fieldMatch, "field-key")
+    const span = captureSpan(line, fieldMatch, fieldMatch[1], "field-key")
     if (span) spans.push(span)
   }
 
   const valueMatch = line.match(TRAILING_VALUE_RE)
   if (valueMatch && VALUE_WORDS.has(valueMatch[1].toLowerCase())) {
-    const span = captureSpan(line, valueMatch, "value")
+    const span = captureSpan(line, valueMatch, valueMatch[1], "value")
     if (span && !spans.some((s) => span.start >= s.start && span.start < s.end)) {
       spans.push(span)
     }

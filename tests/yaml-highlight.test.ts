@@ -82,6 +82,18 @@ describe('yaml-highlight tokenizer', () => {
     expect(tokens.map((t) => t.text).join('')).toBe(line)
   })
 
+  test('an unterminated double-quoted id is not classified as a valid component-id', () => {
+    const tokens = tokenizeLine('- id: "api')
+    const apiToken = tokens.find((t) => t.text.includes('api'))
+    expect(apiToken?.className).toBe('plain')
+  })
+
+  test('an unterminated single-quoted target is not classified as a valid connection-target', () => {
+    const tokens = tokenizeLine("- target: 'db")
+    const dbToken = tokens.find((t) => t.text.includes('db'))
+    expect(dbToken?.className).toBe('plain')
+  })
+
   test('a recognized value is classified case-insensitively, matching the linter', () => {
     const tokens = tokenizeLine('  type: store')
     const valueToken = tokens.find((t) => t.text === 'store')
