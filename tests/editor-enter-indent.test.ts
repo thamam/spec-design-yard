@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import { detectIndentContext } from '../lib/autocomplete'
 import Workspace from '../components/Workspace'
@@ -112,5 +112,46 @@ describe('CodeTab Enter auto-indent', () => {
 
     expect(textarea.value).toContain('type: Stage')
     expect(textarea.value).not.toContain('\n      type: S\n')
+  })
+})
+
+describe('CodeTab Enter caret restore (setTimeout flush)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('Enter restores the caret to right after the inserted indent', async () => {
+    render(React.createElement(Workspace))
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = 'system:\n  metadata:'
+    act(() => {
+      fireEvent.change(textarea, { target: { value } })
+    })
+    textarea.focus()
+    const caret = value.length
+    textarea.setSelectionRange(caret, caret)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Enter' })
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(0)
+    })
+
+    const expectedCaret = 'system:\n  metadata:\n    '.length
+    expect(textarea.selectionStart).toBe(expectedCaret)
+    expect(textarea.selectionEnd).toBe(expectedCaret)
   })
 })

@@ -1,5 +1,5 @@
-import { describe, test, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import { reconcileSpec } from '../lib/reconciler'
 import { lintSpec } from '../lib/linter'
@@ -153,5 +153,45 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     // node_a is deleted, so only node_b remains. Its metadata shouldn't be affected.
     expect(parsed.system.components.length).toBe(1)
     expect(parsed.system.components[0].id).toBe('node_b')
+  })
+})
+
+describe('CodeTab autocomplete-accept caret restore (setTimeout flush)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('Tab-accepting a suggestion restores focus and caret via the textarea ref', async () => {
+    render(<Workspace />)
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = 'system:\n  components:\n    - id: node_x\n      type: S'
+    act(() => {
+      fireEvent.change(textarea, { target: { value } })
+    })
+    textarea.focus()
+    textarea.setSelectionRange(value.length, value.length)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Tab' }) // accepts "Store" (first suggestion)
+    })
+    act(() => {
+      vi.advanceTimersByTime(0)
+    })
+
+    expect(textarea.value).toContain('type: Store')
+    const expectedCaret = value.length - 1 + 'Store'.length
+    expect(textarea.selectionStart).toBe(expectedCaret)
+    expect(textarea.selectionEnd).toBe(expectedCaret)
   })
 })

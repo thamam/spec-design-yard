@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import { applyIndent } from '../lib/editor-indent'
 import Workspace from '../components/Workspace'
@@ -127,5 +127,74 @@ describe('CodeTab Tab/Shift+Tab wiring', () => {
 
     fireEvent.keyDown(textarea, { key: 'Tab' })
     expect(textarea.value).toBe('system:\n  name: hello  ')
+  })
+})
+
+describe('CodeTab Tab/Shift+Tab caret restore (setTimeout flush)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('Tab restores the caret after the value round-trips through the parent store', async () => {
+    render(React.createElement(Workspace))
+    // waitFor polls on real timers; switch to fake only after hydration
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = 'system:\n  name: hello'
+    act(() => {
+      fireEvent.change(textarea, { target: { value } })
+    })
+    textarea.focus()
+    const caret = value.length
+    textarea.setSelectionRange(caret, caret)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Tab' })
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(0)
+    })
+    expect(textarea.selectionStart).toBe(caret + 2)
+    expect(textarea.selectionEnd).toBe(caret + 2)
+  })
+
+  test('Shift+Tab restores the caret to the outdented position', async () => {
+    render(React.createElement(Workspace))
+    vi.useRealTimers()
+    await waitForWorkspaceHydration()
+    vi.useFakeTimers()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = '    id: inbox'
+    act(() => {
+      fireEvent.change(textarea, { target: { value } })
+    })
+    textarea.focus()
+    textarea.setSelectionRange(8, 8)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+    })
+    act(() => {
+      vi.advanceTimersByTime(0)
+    })
+
+    expect(textarea.value).toBe('  id: inbox')
+    expect(textarea.selectionStart).toBe(6)
+    expect(textarea.selectionEnd).toBe(6)
   })
 })
