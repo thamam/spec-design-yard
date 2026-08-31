@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { EditorPanel } from '../components/workspace/editor-panel'
@@ -125,5 +125,61 @@ describe('diagnostics panel resize', () => {
     const { handle } = renderPanel()
     dragMouse(handle(), 600, 500)
     expect(screen.getByRole('button', { name: /Auto-Fix All/i })).toBeInTheDocument()
+  })
+})
+
+/** Make every measured rect report `height`, standing in for a real layout. */
+function stubPaneHeight(height: number) {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0, y: 0, top: 0, left: 0, right: 0, bottom: height, width: 800, height,
+    toJSON: () => ({}),
+  } as DOMRect)
+}
+
+describe('diagnostics maximum height respects the pane it lives in', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('a short editor pane clamps the panel below the 480px constant', () => {
+    // 700px of pane − 261px reserved (101 of fixed chrome + a 160px floor for
+    // the textarea). Taking the flat 480 here collapses the YAML pane.
+    stubPaneHeight(700)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('439px')
+  })
+
+  test('a tall editor pane still stops at the 480px constant', () => {
+    stubPaneHeight(1200)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('480px')
+  })
+
+  test('a pane so short the reserve exceeds it never clamps below the minimum', () => {
+    stubPaneHeight(200)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('72px')
+  })
+
+  test('a zero measurement — jsdom, or a pre-layout render — falls back to the constant', () => {
+    // No stub: jsdom reports every rect as zeros, which is also what a first
+    // render before layout sees. The behaviour has to stay deterministic.
+    const { handle, body } = renderPanel()
+    expect(screen.getByTestId('editor-panel').getBoundingClientRect().height).toBe(0)
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('480px')
+  })
+
+  test('shrinking the window pulls an over-tall panel back under the new cap', () => {
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('480px')
+
+    stubPaneHeight(700)
+    fireEvent(window, new Event('resize'))
+    expect(body().style.height).toBe('439px')
   })
 })

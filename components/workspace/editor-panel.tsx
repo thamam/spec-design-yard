@@ -1772,17 +1772,31 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
-// Diagnostics panel sizing. The clamps are constants rather than a measured
-// rect: the panel is the last flex child of a `flex flex-col h-full` section
-// whose active tab panel above it is `flex-1 min-h-0`, so it simply takes the
-// height it asks for — and jsdom's getBoundingClientRect() returns all zeros,
-// which would make a measured clamp impossible to unit-test.
+// Diagnostics panel sizing. The panel is the last flex child of a
+// `flex flex-col h-full` section whose active tab panel above it is
+// `flex-1 min-h-0`, so it simply takes the height it asks for — which is why
+// an unclamped ask can eat the YAML textarea whole on a short pane.
 const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
 const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
-const DIAGNOSTICS_MAX_HEIGHT = 480 // leaves the spec textarea a usable pane
+const DIAGNOSTICS_MAX_HEIGHT = 480 // the ceiling on a tall viewport
+// Everything in the pane that is not diagnostics body: the fixed chrome (tab
+// bar 36 + breadcrumb 28 + resize handle 5 + panel header 32 = 101) plus a
+// ~160px floor for the spec textarea, so the editor stays usable.
+const DIAGNOSTICS_RESERVED_HEIGHT = 261
 
-function clampDiagnosticsHeight(height: number) {
-  return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), DIAGNOSTICS_MAX_HEIGHT)
+/**
+ * The panel's ceiling for a pane of `paneHeight`. A measurement of 0 — jsdom,
+ * or a first render before layout — falls back to the flat constant so the
+ * behaviour stays deterministic.
+ */
+function diagnosticsMaxHeight(paneHeight: number) {
+  if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
+  const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
+  return Math.max(DIAGNOSTICS_MIN_HEIGHT, Math.min(DIAGNOSTICS_MAX_HEIGHT, available))
+}
+
+function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIGHT) {
+  return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), maxHeight)
 }
 
 export function EditorPanel({
@@ -1845,6 +1859,12 @@ export function EditorPanel({
   const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
   const diagnosticsDragStartY = useRef(0)
   const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
+  // The pane the panel lives in — measured, so the ceiling tracks a 900px
+  // laptop or a short split instead of assuming a tall viewport.
+  const editorPaneRef = useRef<HTMLElement>(null)
+  const measureDiagnosticsMax = () =>
+    diagnosticsMaxHeight(editorPaneRef.current?.getBoundingClientRect().height ?? 0)
 
   // Drag-to-resize, adapted from the pane splitter in workspace-layout.tsx:
   // clientX becomes clientY, and the delta sign is inverted because the handle
@@ -1852,15 +1872,30 @@ export function EditorPanel({
   const startDiagnosticsResize = (clientY: number) => {
     diagnosticsDragStartY.current = clientY
     diagnosticsDragStartHeight.current = diagnosticsHeight
+    diagnosticsMaxRef.current = measureDiagnosticsMax()
     setIsResizingDiagnostics(true)
   }
+
+  // A window that shrinks after a drag would otherwise leave the panel taller
+  // than the pane now allows.
+  useEffect(() => {
+    const onWindowResize = () => {
+      const max = measureDiagnosticsMax()
+      diagnosticsMaxRef.current = max
+      setDiagnosticsHeight((h) => clampDiagnosticsHeight(h, max))
+    }
+    window.addEventListener("resize", onWindowResize)
+    return () => window.removeEventListener("resize", onWindowResize)
+  }, [])
 
   useEffect(() => {
     if (!isResizingDiagnostics) return
 
     const resizeTo = (clientY: number) => {
       const delta = clientY - diagnosticsDragStartY.current
-      setDiagnosticsHeight(clampDiagnosticsHeight(diagnosticsDragStartHeight.current - delta))
+      setDiagnosticsHeight(
+        clampDiagnosticsHeight(diagnosticsDragStartHeight.current - delta, diagnosticsMaxRef.current)
+      )
     }
     const onMouseMove = (e: MouseEvent) => resizeTo(e.clientY)
     const onTouchMove = (e: TouchEvent) => {
@@ -1982,6 +2017,7 @@ export function EditorPanel({
 
   return (
     <section
+      ref={editorPaneRef}
       data-testid="editor-panel"
       className="flex flex-col h-full"
       style={{ background: "var(--surface)" }}
