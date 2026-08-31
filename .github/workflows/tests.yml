@@ -1,0 +1,63 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests With Coverage
+        run: npx vitest run --coverage
+
+      - name: Diff-Scoped Coverage Gate
+        run: npm run test:coverage-gate -- origin/main
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: pip install playwright==1.60.0
+
+      - name: Install Playwright Browsers
+        run: playwright install chromium --with-deps
+
+      - name: Run E2E Scenarios
+        run: npm run test:e2e

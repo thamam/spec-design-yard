@@ -1,0 +1,78 @@
+{
+  "change": "editor-and-canvas-ergonomics",
+  "links": [
+    {
+      "requirement": "spec-editor/Tab key behaviour",
+      "design": "Decision 1: Tab/Shift+Tab handled inside `handleKeyDown`, before the autocomplete branch",
+      "tasks": ["Task 1: Tab / Shift+Tab indentation"]
+    },
+    {
+      "requirement": "spec-editor/Enter key behaviour",
+      "design": "Decision 2: Enter auto-indent reuses the detector extracted from `lib/autocomplete.ts`",
+      "tasks": ["Task 2: Enter auto-indent (detector extraction first)"]
+    },
+    {
+      "requirement": "spec-editor/Syntax colouring",
+      "design": "Decision 3: Syntax colour via a highlight overlay, not an editor swap",
+      "tasks": ["Task 3: Syntax colour overlay"]
+    },
+    {
+      "requirement": "spec-editor/YAML write discipline",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": ["Task 6: Quality gate"]
+    },
+    {
+      "requirement": "spec-editor/Test coverage for editor behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 1: Tab / Shift+Tab indentation",
+        "Task 2: Enter auto-indent (detector extraction first)",
+        "Task 3: Syntax colour overlay",
+        "Task 6: Quality gate"
+      ]
+    },
+    {
+      "requirement": "diagnostics-panel/Resizable panel height",
+      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct",
+      "tasks": ["Task 4: Resizable diagnostics panel"]
+    },
+    {
+      "requirement": "diagnostics-panel/Collapse toggle",
+      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct",
+      "tasks": ["Task 4: Resizable diagnostics panel"]
+    },
+    {
+      "requirement": "diagnostics-panel/Test coverage for panel behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": ["Task 4: Resizable diagnostics panel", "Task 6: Quality gate"]
+    },
+    {
+      "requirement": "diagram-canvas/Zoom-to-fit affordance",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+    },
+    {
+      "requirement": "diagram-canvas/Fit on content load",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+    },
+    {
+      "requirement": "diagram-canvas/Zoom-to-fit keyboard shortcut",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+    },
+    {
+      "requirement": "diagram-canvas/Element normalization invariant",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+    },
+    {
+      "requirement": "diagram-canvas/Test coverage for canvas behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+        "Task 6: Quality gate"
+      ]
+    }
+  ]
+}
