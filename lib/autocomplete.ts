@@ -21,6 +21,63 @@ export interface AutocompleteResult {
   replaceRange: [number, number]
 }
 
+export interface IndentContext {
+  /** Leading whitespace count of the line at cursorPosition (0 for a blank line). */
+  indentLevel: number
+  /** Nearest enclosing block, found by scanning backward for a less-indented line. */
+  parentBlock: "metadata" | "connections" | "component" | ""
+  /** True when the current line's trimmed text ends with ":" — a block-opening key. */
+  opensBlock: boolean
+}
+
+/**
+ * Detects the indentation level and enclosing YAML block for the line at
+ * cursorPosition. Shared by autocomplete (which block's keys to suggest)
+ * and Enter auto-indent (how deep the next line should start) — see
+ * design.md Decision 2. The backward-scan classification has non-obvious
+ * cases (list items at indent >= 6 are connections); do not reimplement it.
+ */
+export function detectIndentContext(specText: string, cursorPosition: number): IndentContext {
+  const lineStart = specText.lastIndexOf("\n", cursorPosition - 1) + 1
+  const lineEndIdx = specText.indexOf("\n", cursorPosition)
+  const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
+  const currentLine = specText.substring(lineStart, lineEnd)
+
+  let indentLevel = currentLine.search(/\S/)
+  if (indentLevel === -1) indentLevel = 0
+
+  const linesBefore = specText.substring(0, lineStart).split("\n")
+  let parentBlock: IndentContext["parentBlock"] = ""
+  for (let i = linesBefore.length - 1; i >= 0; i--) {
+    const line = linesBefore[i]
+    const trimmed = line.trim()
+    if (trimmed === "") continue
+    const lineIndent = line.search(/\S/)
+    if (lineIndent < indentLevel) {
+      if (trimmed.startsWith("metadata:")) {
+        parentBlock = "metadata"
+        break
+      }
+      if (trimmed.startsWith("connections:")) {
+        parentBlock = "connections"
+        break
+      }
+      if (trimmed.startsWith("-") || trimmed.includes("id:")) {
+        if (trimmed.startsWith("-") && !trimmed.includes("id:") && lineIndent >= 6) {
+          parentBlock = "connections"
+        } else {
+          parentBlock = "component"
+        }
+        break
+      }
+    }
+  }
+
+  const opensBlock = currentLine.trim().endsWith(":")
+
+  return { indentLevel, parentBlock, opensBlock }
+}
+
 export function getAutocompleteSuggestions(specText: string, cursorPosition: number): AutocompleteResult {
   const defaultResult: AutocompleteResult = {
     suggestions: [],
@@ -121,35 +178,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   }
 
   // Detect indentation and parent block context
-  let indentLevel = currentLine.search(/\S/)
-  if (indentLevel === -1) indentLevel = 0
-
-  const linesBefore = specText.substring(0, lineStart).split("\n")
-  let parentBlock = ""
-  for (let i = linesBefore.length - 1; i >= 0; i--) {
-    const line = linesBefore[i]
-    const trimmed = line.trim()
-    if (trimmed === "") continue
-    const lineIndent = line.search(/\S/)
-    if (lineIndent < indentLevel) {
-      if (trimmed.startsWith("metadata:")) {
-        parentBlock = "metadata"
-        break
-      }
-      if (trimmed.startsWith("connections:")) {
-        parentBlock = "connections"
-        break
-      }
-      if (trimmed.startsWith("-") || trimmed.includes("id:")) {
-        if (trimmed.startsWith("-") && !trimmed.includes("id:") && lineIndent >= 6) {
-          parentBlock = "connections"
-        } else {
-          parentBlock = "component"
-        }
-        break
-      }
-    }
-  }
+  const { indentLevel, parentBlock } = detectIndentContext(specText, cursorPosition)
 
   const currentWordMatch = textBeforeCursor.match(/^\s*([a-zA-Z0-9_\-]*)$/)
   if (currentWordMatch) {

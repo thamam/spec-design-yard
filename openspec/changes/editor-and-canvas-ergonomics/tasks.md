@@ -19,7 +19,7 @@ modifies.
   - E2E: type nested YAML, press Tab mid-line, assert 2 spaces inserted
     and focus retained; Esc then Tab, assert focus left the textarea.
 
-- [ ] **Task 2: Enter auto-indent (detector extraction first)**
+- [x] **Task 2: Enter auto-indent (detector extraction first)**
   - Extract the indent + parent-block detector from
     `lib/autocomplete.ts:123-152` into an exported pure function; switch
     autocomplete to consume it. Behaviour-neutral: existing autocomplete

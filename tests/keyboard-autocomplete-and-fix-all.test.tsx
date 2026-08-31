@@ -98,17 +98,29 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
-    // Case A: No navigation, press Enter. It should NOT apply autocomplete.
-    fireEvent.change(textarea, { target: { value: 'system:\n  components:\n    - id: node_x\n      type: S' } })
+    // No navigation, press Enter. It should NOT apply autocomplete; it falls
+    // through to auto-indent instead (per editor-and-canvas-ergonomics spec).
+    const initialValue = 'system:\n  components:\n    - id: node_x\n      type: S'
+    fireEvent.change(textarea, { target: { value: initialValue } })
     textarea.focus()
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     fireEvent.select(textarea)
 
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    // Value remains unchanged (Enter was not hijacked to replace "S" with "Store" or "Stage")
     expect(textarea.value).toContain('type: S')
+    expect(textarea.value).toBe(initialValue + '\n      ')
+  })
 
-    // Case B: Navigated, press Enter. It SHOULD apply autocomplete.
+  test('textarea in CodeTab applies the highlighted suggestion on Enter once navigated', async () => {
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    fireEvent.change(textarea, { target: { value: 'system:\n  components:\n    - id: node_x\n      type: S' } })
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    fireEvent.select(textarea)
+
     fireEvent.keyDown(textarea, { key: 'ArrowDown' }) // selects Stage
     fireEvent.keyDown(textarea, { key: 'Enter' }) // applies Stage
     expect(textarea.value).toContain('type: Stage')

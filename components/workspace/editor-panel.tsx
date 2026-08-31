@@ -18,7 +18,7 @@ import {
 import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
-import { getAutocompleteSuggestions } from "../../lib/autocomplete"
+import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
 import { applyIndent } from "../../lib/editor-indent"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
@@ -131,6 +131,27 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     }, 0)
   }
 
+  const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart)
+    const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
+    const insertion = "\n" + newIndent
+    const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
+    const newCursorPos = target.selectionStart + insertion.length
+    onChange(newValue)
+
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      const textarea = textareaRef.current
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+        setCursorPos(newCursorPos)
+      }
+    }, 0)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // WCAG 2.1.2 keyboard-trap escape hatch: Esc arms a one-shot release so
     // the very next Tab moves focus out via the browser default, regardless
@@ -171,10 +192,14 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
           if (selectedSug) {
             handleApplySuggestion(selectedSug)
           }
+        } else {
+          handleEnterIndent(e)
         }
       }
     } else if (e.key === "Tab") {
       handleIndent(e)
+    } else if (e.key === "Enter") {
+      handleEnterIndent(e)
     }
   }
 
