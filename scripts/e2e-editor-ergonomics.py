@@ -155,6 +155,81 @@ with sync_playwright() as p:
     )
     shot(page, "08-editor-ergonomics-overlay-scroll-sync")
 
+    # ---------- Lane A: the overlay actually colours tokens, and stays pixel-aligned ----------
+    # Scroll-sync (above) would still pass if every token rendered the same
+    # colour, or if the overlay's padding drifted a few pixels off the
+    # textarea's. These beats assert the things a human eye would catch first.
+    color_spec = """system:
+  components:
+    - id: alpha
+      connections:
+        - target: beta
+      metadata:
+        status: active
+"""
+    ta.fill(color_spec)
+    time.sleep(0.2)
+
+    def span_color(text):
+        return page.evaluate(
+            """(text) => {
+              const overlay = document.querySelector('[data-testid="yaml-highlight-overlay"]');
+              const spans = Array.from(overlay.querySelectorAll('span'));
+              const span = spans.find((s) => s.textContent === text);
+              return span ? getComputedStyle(span).color : null;
+            }""",
+            text,
+        )
+
+    id_color = span_color("alpha")
+    target_color = span_color("beta")
+    key_color = span_color("status")
+    body_color = page.evaluate(
+        "getComputedStyle(document.querySelector('[data-testid=\"yaml-highlight-overlay\"]')).color"
+    )
+    colors = [id_color, target_color, key_color]
+    check(
+        "component-id, connection-target, and metadata-key spans each render a distinct colour, none matching plain body text",
+        None not in colors and len(set(colors)) == 3 and body_color not in colors,
+        f"id={id_color} target={target_color} key={key_color} body={body_color}",
+    )
+
+    alignment = page.evaluate(
+        """() => {
+          const textarea = document.querySelector('[data-testid="spec-textarea"]');
+          const overlay = document.querySelector('[data-testid="yaml-highlight-overlay"]');
+          const tRect = textarea.getBoundingClientRect();
+          const oRect = overlay.getBoundingClientRect();
+          const tStyle = getComputedStyle(textarea);
+          const oStyle = getComputedStyle(overlay);
+          return {
+            left: [tRect.left, oRect.left],
+            top: [tRect.top, oRect.top],
+            width: [tRect.width, oRect.width],
+            font: [tStyle.font, oStyle.font],
+            lineHeight: [tStyle.lineHeight, oStyle.lineHeight],
+            paddingLeft: [tStyle.paddingLeft, oStyle.paddingLeft],
+            paddingTop: [tStyle.paddingTop, oStyle.paddingTop],
+          };
+        }"""
+    )
+    check(
+        "the overlay's box geometry (left/top/width) matches the textarea's",
+        alignment["left"][0] == alignment["left"][1]
+        and alignment["top"][0] == alignment["top"][1]
+        and alignment["width"][0] == alignment["width"][1],
+        str(alignment),
+    )
+    check(
+        "the overlay's font, line-height, and padding match the textarea's exactly",
+        alignment["font"][0] == alignment["font"][1]
+        and alignment["lineHeight"][0] == alignment["lineHeight"][1]
+        and alignment["paddingLeft"][0] == alignment["paddingLeft"][1]
+        and alignment["paddingTop"][0] == alignment["paddingTop"][1],
+        str(alignment),
+    )
+    shot(page, "08b-editor-ergonomics-overlay-color-alignment")
+
     # ---------- Lane A: the edited YAML lands in main.spec.yaml on disk ----------
     final_spec = """system:
   name: Ergonomics Final

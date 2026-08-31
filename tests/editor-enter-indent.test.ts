@@ -27,12 +27,12 @@ describe('detectIndentContext', () => {
     expect(ctx.opensBlock).toBe(true)
   })
 
-  test('classifies a connections list-item line: indent 8, parent "connections", does not open a block', () => {
+  test('classifies a connections list-item line: indent 8, parent "connections", opens a mapping (a sibling "label:" can follow, aligned under "target")', () => {
     const cursor = mockSpec.indexOf('        - target: digest_stage') + '        - target: digest_stage'.length
     const ctx = detectIndentContext(mockSpec, cursor)
     expect(ctx.indentLevel).toBe(8)
     expect(ctx.parentBlock).toBe('connections')
-    expect(ctx.opensBlock).toBe(false)
+    expect(ctx.opensBlock).toBe(true)
   })
 
   test('a blank line falls back to indentLevel 0 with no parent block', () => {
@@ -40,6 +40,20 @@ describe('detectIndentContext', () => {
     expect(ctx.indentLevel).toBe(0)
     expect(ctx.parentBlock).toBe('')
     expect(ctx.opensBlock).toBe(false)
+  })
+
+  test('a block-opening key with a trailing comment still opens a block', () => {
+    const line = '  metadata: # keep this comment'
+    const ctx = detectIndentContext(line, line.length)
+    expect(ctx.opensBlock).toBe(true)
+    expect(ctx.indentLevel).toBe(2)
+  })
+
+  test('a list-item mapping entry ("- id: inbox") opens a mapping keyed under the id', () => {
+    const line = '    - id: inbox'
+    const ctx = detectIndentContext(line, line.length)
+    expect(ctx.opensBlock).toBe(true)
+    expect(ctx.indentLevel).toBe(4)
   })
 })
 
@@ -62,7 +76,7 @@ describe('CodeTab Enter auto-indent', () => {
     expect(textarea.selectionStart).toBe(value.length + 1 + 4)
   })
 
-  test('Enter inside a connections list item matches the sibling indent', async () => {
+  test('Enter inside a connections list item aligns under the key, so a sibling "label:" can follow', async () => {
     render(React.createElement(Workspace))
     await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
@@ -76,7 +90,7 @@ describe('CodeTab Enter auto-indent', () => {
 
     fireEvent.keyDown(textarea, { key: 'Enter' })
 
-    expect(textarea.value).toBe('connections:\n      - target: digest_stage\n      ')
+    expect(textarea.value).toBe('connections:\n      - target: digest_stage\n        ')
   })
 
   test('Enter on a top-level line with no trailing colon stays at column 0', async () => {

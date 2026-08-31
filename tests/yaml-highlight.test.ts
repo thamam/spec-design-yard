@@ -62,4 +62,29 @@ describe('yaml-highlight tokenizer', () => {
   test('a blank line tokenizes to a single empty plain token', () => {
     expect(tokenizeLine('')).toEqual([{ text: '', className: 'plain' }])
   })
+
+  test('a double-quoted component id is still classified as component-id', () => {
+    const tokens = tokenizeLine('- id: "api"')
+    const idToken = tokens.find((t) => t.text === 'api')
+    expect(idToken?.className).toBe('component-id')
+  })
+
+  test('a single-quoted connection target is still classified as connection-target', () => {
+    const tokens = tokenizeLine("- target: 'db'")
+    const targetToken = tokens.find((t) => t.text === 'db')
+    expect(targetToken?.className).toBe('connection-target')
+  })
+
+  test('an unterminated quote mid-edit degrades to plain instead of throwing', () => {
+    const line = '- id: "api'
+    expect(() => tokenizeLine(line)).not.toThrow()
+    const tokens = tokenizeLine(line)
+    expect(tokens.map((t) => t.text).join('')).toBe(line)
+  })
+
+  test('a recognized value is classified case-insensitively, matching the linter', () => {
+    const tokens = tokenizeLine('  type: store')
+    const valueToken = tokens.find((t) => t.text === 'store')
+    expect(valueToken?.className).toBe('value')
+  })
 })

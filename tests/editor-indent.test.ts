@@ -71,6 +71,16 @@ describe('applyIndent', () => {
     const result = applyIndent(text, 0, 4)
     expect(result.text).toBe('  a\n  b\nc')
   })
+
+  test('multi-line outdent maps selEnd using only its own line\'s removed indentation, not every touched line\'s', () => {
+    const text = '  a\n  b'
+    // selEnd (5) sits on the second space of line two's indent; after that
+    // line's 2 spaces are removed it should land at index 2, the start of "b" —
+    // not have line one's removal subtracted again.
+    const result = applyIndent(text, 0, 5, { outdent: true })
+    expect(result.text).toBe('a\nb')
+    expect(result.selEnd).toBe(2)
+  })
 })
 
 describe('CodeTab Tab/Shift+Tab wiring', () => {

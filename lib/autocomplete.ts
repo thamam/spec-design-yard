@@ -85,9 +85,35 @@ export function detectIndentContext(specText: string, cursorPosition: number): I
     }
   }
 
-  const opensBlock = currentLine.trim().endsWith(":")
+  const trimmed = stripComment(currentLine).trim()
+  // A list-item mapping entry ("- id: inbox") opens a mapping too: its
+  // sibling keys (type:, name:, ...) align two spaces under the dash, i.e.
+  // under "id", not under "-".
+  const opensBlock = trimmed.endsWith(":") || /^-\s+\S+:(\s|$)/.test(trimmed)
 
   return { indentLevel, parentBlock, opensBlock }
+}
+
+/** Strips a trailing "# ..." comment, ignoring a "#" inside a quoted scalar. */
+function stripComment(line: string): string {
+  let inSingle = false
+  let inDouble = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inSingle) {
+      if (ch === "'") inSingle = false
+      continue
+    }
+    if (inDouble) {
+      if (ch === "\\") i++
+      else if (ch === '"') inDouble = false
+      continue
+    }
+    if (ch === "'") inSingle = true
+    else if (ch === '"') inDouble = true
+    else if (ch === "#") return line.slice(0, i)
+  }
+  return line
 }
 
 export function getAutocompleteSuggestions(specText: string, cursorPosition: number): AutocompleteResult {

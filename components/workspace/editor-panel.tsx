@@ -227,7 +227,9 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
         onKeyDown={handleKeyDown}
         onScroll={handleTextareaScroll}
         disabled={disabled}
-        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
+        // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
+        // so both layers agree on content width when a scrollbar appears.
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 

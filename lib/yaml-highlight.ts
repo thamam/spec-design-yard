@@ -33,12 +33,19 @@ const escapeAlt = (words: string[]) =>
 
 const METADATA_KEY_NAMES = METADATA_KEYS.map(stripKey)
 const FIELD_KEY_NAMES = Array.from(new Set([...COMPONENT_FIELDS, ...CONNECTION_KEYS].map(stripKey)))
-const VALUE_WORDS = new Set<string>([...VALID_TYPES, ...VALID_STATUSES, ...VALID_COLORS])
+// Lower-cased so matching is case-insensitive, consistent with the linter
+// (lib/linter.ts resolves comp.type via .toLowerCase() before comparing).
+const VALUE_WORDS = new Set<string>(
+  [...VALID_TYPES, ...VALID_STATUSES, ...VALID_COLORS].map((w) => w.toLowerCase())
+)
 
 // Same shape as extractComponentIds' pattern (lib/autocomplete.ts) — an
 // "id:" or "target:" line, list-item dash optional, capturing the value.
-const ID_LINE_RE = /^\s*(?:-\s*)?id:\s*([a-zA-Z0-9_\-]+)/
-const TARGET_LINE_RE = /^\s*(?:-\s*)?target:\s*([a-zA-Z0-9_\-]+)/
+// The identifier body is captured without its surrounding quotes (if any) —
+// quoted scalars ("api", 'db') are ordinary valid YAML this app's own
+// writer may emit, and should highlight the same as an unquoted identifier.
+const ID_LINE_RE = /^\s*(?:-\s*)?id:\s*['"]?([a-zA-Z0-9_\-]+)/
+const TARGET_LINE_RE = /^\s*(?:-\s*)?target:\s*['"]?([a-zA-Z0-9_\-]+)/
 const METADATA_KEY_RE = new RegExp(`^\\s*(${escapeAlt(METADATA_KEY_NAMES)})(?=:)`)
 const FIELD_KEY_RE = new RegExp(`^\\s*(?:-\\s*)?(${escapeAlt(FIELD_KEY_NAMES)})(?=:)`)
 const TRAILING_VALUE_RE = /:\s*([a-zA-Z0-9_\-]+)\s*$/
@@ -84,7 +91,7 @@ function spansForLine(line: string): Span[] {
   }
 
   const valueMatch = line.match(TRAILING_VALUE_RE)
-  if (valueMatch && VALUE_WORDS.has(valueMatch[1])) {
+  if (valueMatch && VALUE_WORDS.has(valueMatch[1].toLowerCase())) {
     const span = captureSpan(line, valueMatch, "value")
     if (span && !spans.some((s) => span.start >= s.start && span.start < s.end)) {
       spans.push(span)

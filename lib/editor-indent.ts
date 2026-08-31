@@ -43,27 +43,50 @@ export function applyIndent(
   const block = text.slice(lineStart, lineEnd)
   const lines = block.split("\n")
 
-  let startDelta = 0
-  let runningDelta = 0
+  const lineOffsets: number[] = []
+  const lineDeltas: number[] = []
+  const removeCounts: number[] = []
+  let cursor = lineStart
 
-  const newLines = lines.map((line, idx) => {
+  const newLines = lines.map((line) => {
+    lineOffsets.push(cursor)
+    cursor += line.length + 1
     if (outdent) {
       const removeCount = line.startsWith(INDENT) ? 2 : line.startsWith(" ") ? 1 : 0
-      if (idx === 0) startDelta = -removeCount
-      runningDelta += -removeCount
+      removeCounts.push(removeCount)
+      lineDeltas.push(-removeCount)
       return line.slice(removeCount)
     }
-    if (idx === 0) startDelta = INDENT.length
-    runningDelta += INDENT.length
+    removeCounts.push(0)
+    lineDeltas.push(INDENT.length)
     return INDENT + line
   })
 
   const newBlock = newLines.join("\n")
   const newText = text.slice(0, lineStart) + newBlock + text.slice(lineEnd)
 
+  // Maps a caret position by the delta of every line strictly before its
+  // own line, plus only the portion of its own line's delta that lands
+  // before the position — not the total delta summed across every touched
+  // line (which double-counts earlier lines' removals for a later line).
+  const mapPosition = (pos: number): number => {
+    let ownIdx = 0
+    for (let i = 0; i < lineOffsets.length; i++) {
+      if (lineOffsets[i] <= pos) ownIdx = i
+      else break
+    }
+    const offsetWithinLine = pos - lineOffsets[ownIdx]
+    let cumBefore = 0
+    for (let i = 0; i < ownIdx; i++) cumBefore += lineDeltas[i]
+    const ownContribution = outdent
+      ? -Math.min(removeCounts[ownIdx], offsetWithinLine)
+      : INDENT.length
+    return Math.max(lineStart, pos + cumBefore + ownContribution)
+  }
+
   return {
     text: newText,
-    selStart: Math.max(lineStart, selStart + startDelta),
-    selEnd: Math.max(lineStart, selEnd + runningDelta),
+    selStart: mapPosition(selStart),
+    selEnd: mapPosition(selEnd),
   }
 }

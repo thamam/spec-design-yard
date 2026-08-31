@@ -30,7 +30,11 @@ export const YamlHighlightOverlay = forwardRef<HTMLDivElement, YamlHighlightOver
         ref={ref}
         data-testid="yaml-highlight-overlay"
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none overflow-hidden p-5 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words w-full h-full"
+        // scrollbar-gutter:stable must match the textarea's (editor-panel.tsx)
+        // so both layers reserve the same width whether or not a scrollbar is
+        // actually showing — otherwise a line near the wrap boundary can wrap
+        // in one layer and not the other, displacing every highlight below it.
+        className="absolute inset-0 pointer-events-none overflow-hidden p-5 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words w-full h-full [scrollbar-gutter:stable]"
       >
         {lines.map((tokens, i) => {
           const blank = tokens.every((t) => t.text.length === 0)
