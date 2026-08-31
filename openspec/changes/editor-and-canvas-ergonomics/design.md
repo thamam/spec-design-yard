@@ -191,9 +191,10 @@ must also be there.
 Mechanism: `@excalidraw/excalidraw@0.18.1` exports **`Footer`** as a public
 named export (confirmed against the shipped bundle, which exports
 `Excalidraw, Footer, MainMenu, Sidebar, WelcomeScreen, useHandleLibrary`).
-Excalidraw renders `<Footer>`'s children into its footer region alongside the
-zoom/undo/redo controls. The repo already uses exactly this pattern for
-`WelcomeScreen`: `excalidraw-canvas.tsx` dynamically `import()`s the module
+Excalidraw renders `<Footer>`'s children into its footer region — see
+*Placement* below for exactly where in that region. The repo already uses this
+pattern for `WelcomeScreen`: `excalidraw-canvas.tsx` dynamically `import()`s
+the module
 and pulls the component into state, rendering it as a child of
 `<ExcalidrawComponent>`. `Footer` is pulled in the same effect and rendered as
 a sibling child.
@@ -214,6 +215,36 @@ new callers.
 - **Rejected**: replacing the toolbar button with the footer one — the
   amendment is explicit that both stay, and one implementation behind two
   affordances is the point.
+
+### Placement within the footer: centre, not adjacent to the zoom widget
+
+Decided by the maintainer after review. **The button stays in Excalidraw's
+footer centre, reached through the public `Footer` export. No code change.**
+
+The public export named `Footer` is `FooterCenter`: it tunnels its children
+into `.footer-center`. The `−  100%  +` zoom widget is not there — it lives in
+`.layer-ui__wrapper__footer-left`, and Excalidraw ships **no public API for
+that region**. Both class names are confirmed in the shipped bundle
+(`node_modules/@excalidraw/excalidraw/dist/prod/index.js`).
+
+So, plainly: the fit button sits in the same footer strip as the zoom controls,
+but it is **not adjacent to them**. Decision 7's rationale above — "the
+affordance belongs where the user already looks for zoom" — is satisfied at the
+level of the strip, not of the neighbouring control.
+
+- **Rejected**: portalling into `.layer-ui__wrapper__footer-left` to sit beside
+  the zoom widget. That class is Excalidraw's internal markup, not a supported
+  extension point. An upgrade could rename it or move the region, the portal
+  target would resolve to nothing, and the button would **silently vanish** —
+  no error, no failing build, just a missing control that only a human looking
+  at the footer would notice.
+
+This is a **deliberate trade: exact placement for upgrade safety.** We accept a
+button one region away from the zoom widget in exchange for a placement that
+survives an Excalidraw upgrade, because a fit control in a slightly less
+obvious spot is strictly better than one that disappears without warning. The
+keyboard shortcut and the top-right toolbar button remain as the other two
+routes to the same `zoomToFit()`.
 
 ### Note on Decision 4 and pointer events
 

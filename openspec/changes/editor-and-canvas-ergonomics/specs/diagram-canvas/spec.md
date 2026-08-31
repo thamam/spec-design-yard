@@ -65,9 +65,13 @@ via `isSpecTextarea`. All elements fed to Excalidraw pass a normalizer
 ### Requirement: Fit control in Excalidraw's own footer
 
 The canvas SHALL render a zoom-to-fit control inside Excalidraw's own footer
-region, beside its `−  100%  +` zoom widget, via the `Footer` named export of
-`@excalidraw/excalidraw` (public in 0.18.1, pulled from the same dynamic
-`import()` that already supplies `WelcomeScreen`). The control SHALL carry an
+strip, via the `Footer` named export of `@excalidraw/excalidraw` (public in
+0.18.1, pulled from the same dynamic `import()` that already supplies
+`WelcomeScreen`). That export is `FooterCenter` and tunnels into
+`.footer-center`, so the control sits in the same footer strip as the
+`−  100%  +` zoom widget but NOT adjacent to it; the widget's own region,
+`.layer-ui__wrapper__footer-left`, has no public API and SHALL NOT be
+portalled into. See Decision 7 in `design.md`. The control SHALL carry an
 accessible name ("Zoom to fit") and a stable `data-testid`, and SHALL invoke
 the same `zoomToFit()` callback as the toolbar control and the keyboard
 shortcut — not `window.excalidrawAPI`.
@@ -75,8 +79,7 @@ shortcut — not `window.excalidrawAPI`.
 #### Scenario: The footer control fits the diagram
 
 - GIVEN a diagram panned and zoomed away from its content
-- WHEN the user clicks the fit control beside the zoom widget in the canvas
-  footer
+- WHEN the user clicks the fit control in the canvas footer strip
 - THEN the viewport scrolls and zooms so all diagram elements are visible
 - AND the resulting scroll and zoom values are finite
 

@@ -58,7 +58,7 @@
     },
     {
       "requirement": "diagram-canvas/Fit control in Excalidraw's own footer",
-      "design": "Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas",
+      "design": "Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas (incl. 'Placement within the footer: centre, not adjacent to the zoom widget')",
       "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
     },
     {

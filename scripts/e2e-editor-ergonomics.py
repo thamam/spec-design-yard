@@ -81,7 +81,7 @@ with sync_playwright() as p:
     #   to the YAML block's level, and a syntax-highlight overlay.
     # Lane B (canvas ergonomics): the diagnostics panel resize handle, and
     #   zoom-to-fit reachable three ways — a button in Excalidraw's own
-    #   footer beside its zoom widget, the top-right toolbar button, and
+    #   footer strip, the top-right toolbar button, and
     #   Shift+1.
 
     # ================= Lane B — canvas ergonomics =================
@@ -239,7 +239,8 @@ with sync_playwright() as p:
 
     check("the canvas API is reachable for the fit assertions", read_view() is not None)
 
-    # Route 1 — the fit icon in Excalidraw's own footer, beside its zoom widget.
+    # Route 1 — the fit icon in Excalidraw's own footer strip (.footer-center,
+    # the public Footer export's region — see design Decision 7).
     footer_button = page.locator('[data-testid="canvas-footer-zoom-to-fit"]')
     check("a fit control sits in Excalidraw's own footer", footer_button.count() == 1)
     check("the footer fit control is reachable by its accessible name",

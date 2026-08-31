@@ -623,8 +623,10 @@ export function ExcalidrawCanvas({
         const Comp = mod.Excalidraw ?? mod.default
         setExcalidrawComponent(() => Comp)
         setWelcomeScreenComponent(() => mod.WelcomeScreen)
-        // Footer renders its children into Excalidraw's own footer region,
-        // beside the − 100% + zoom widget — where a user looks for zoom.
+        // Footer is Excalidraw's public footer extension point. It tunnels
+        // into .footer-center, so the button lands in the same footer strip as
+        // the − 100% + zoom widget, not next to it: that widget's region has
+        // no public API. Design Decision 7 records the trade.
         setFooterComponent(() => mod.Footer)
       })
       .catch(() => setLoadError(true))

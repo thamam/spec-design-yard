@@ -29,9 +29,10 @@ vi.mock('@excalidraw/excalidraw', () => {
     }, [])
     return React.createElement('div', { 'data-testid': 'excalidraw-stub' }, props.children)
   }
-  // The real Footer renders its children into Excalidraw's own footer region,
-  // beside the − 100% + zoom widget. A passthrough is enough to prove the fit
-  // button is mounted as a Footer child.
+  // The real Footer tunnels its children into Excalidraw's .footer-center —
+  // the same footer strip as the zoom widget, not adjacent to it. A
+  // passthrough is enough to prove the fit button is mounted as a Footer
+  // child, which is the part this suite can check.
   const Footer = (props: any) =>
     React.createElement('div', { 'data-testid': 'excalidraw-footer' }, props.children)
   return { Excalidraw, Footer, WelcomeScreen: undefined, default: Excalidraw }
@@ -80,7 +81,7 @@ describe('zoom to fit — three routes, one implementation', () => {
     vi.clearAllMocks()
   })
 
-  test('a fit button rides in Excalidraw own footer, beside its zoom widget', async () => {
+  test('a fit button rides in Excalidraw own footer strip', async () => {
     await mountWorkspace()
 
     const footer = screen.getByTestId('excalidraw-footer')
