@@ -78,15 +78,17 @@ with sync_playwright() as p:
     check("no console/page errors in the editor-ergonomics session",
           len(console_errors) == 0, "; ".join(console_errors[:5]))
 
+    # --- Lanes A and B append their beats below this line ---
+    # Lane A (editor ergonomics): Tab / Shift+Tab indent and outdent in the
+    #   spec textarea (including multi-line selections), Enter auto-indenting
+    #   to the YAML block's level, and a syntax-highlight overlay.
+    # Lane B (canvas ergonomics): the diagnostics panel resize handle, and
+    #   zoom-to-fit reachable three ways — a button in Excalidraw's own
+    #   footer beside its zoom widget, the top-right toolbar button, and
+    #   Shift+1.
+
     ctx.close()
     browser.close()
 
 print("\n=== %d check(s) failed ===" % len(failures) if failures else "\n=== ALL CHECKS PASSED ===")
 sys.exit(1 if failures else 0)
-
-# --- Lanes A and B append their beats below this line ---
-# Lane A (editor ergonomics): Tab / Shift+Tab indent-dedent in the spec
-#   textarea, Enter auto-continuing list markers, and the ergonomics overlay
-#   (e.g. a shortcuts hint) toggling into view.
-# Lane B (canvas ergonomics): the diagnostics panel resize handle, and the
-#   canvas zoom-to-fit action recentering the Excalidraw viewport.
