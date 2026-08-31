@@ -14,11 +14,110 @@ export function extractComponentIds(specText: string): string[] {
   return ids
 }
 
+/**
+ * Shared vocabularies, reused by both autocomplete suggestions and the
+ * syntax-highlight overlay (lib/yaml-highlight.ts). Keep these as the one
+ * source of truth — two copies would drift.
+ */
+export const VALID_TYPES = ["Store", "Stage", "Brick", "Gateway"]
+export const VALID_STATUSES = ["draft", "active", "deprecated"]
+export const VALID_COLORS = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
+export const METADATA_KEYS = ["owner:", "description:", "status:", "version:", "color:"]
+export const CONNECTION_KEYS = ["- target:", "target:", "label:"]
+export const COMPONENT_FIELDS = ["id:", "type:", "name:", "connections:", "metadata:"]
+
 export interface AutocompleteResult {
   suggestions: string[]
   type: "id" | "type" | "field" | "metadata-key" | "metadata-status" | "metadata-color" | "connection-key" | null
   query: string
   replaceRange: [number, number]
+}
+
+export interface IndentContext {
+  /** Leading whitespace count of the line at cursorPosition (0 for a blank line). */
+  indentLevel: number
+  /** Nearest enclosing block, found by scanning backward for a less-indented line. */
+  parentBlock: "metadata" | "connections" | "component" | ""
+  /** True when the current line's trimmed text ends with ":" — a block-opening key. */
+  opensBlock: boolean
+}
+
+/**
+ * Detects the indentation level and enclosing YAML block for the line at
+ * cursorPosition. Shared by autocomplete (which block's keys to suggest)
+ * and Enter auto-indent (how deep the next line should start) — see
+ * design.md Decision 2. The backward-scan classification has non-obvious
+ * cases (list items at indent >= 6 are connections); do not reimplement it.
+ */
+export function detectIndentContext(specText: string, cursorPosition: number): IndentContext {
+  const lineStart = specText.lastIndexOf("\n", cursorPosition - 1) + 1
+  const lineEndIdx = specText.indexOf("\n", cursorPosition)
+  const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
+  const currentLine = specText.substring(lineStart, lineEnd)
+
+  // A whitespace-only line (mid-edit blank inside a block) has no non-space
+  // char for /\S/ to find. Fall back to the line's own length rather than 0
+  // — the user is sitting inside that indent and Enter should continue it,
+  // not drop them to column 0.
+  let indentLevel = currentLine.search(/\S/)
+  if (indentLevel === -1) indentLevel = currentLine.length
+
+  const linesBefore = specText.substring(0, lineStart).split("\n")
+  let parentBlock: IndentContext["parentBlock"] = ""
+  for (let i = linesBefore.length - 1; i >= 0; i--) {
+    const line = linesBefore[i]
+    const trimmed = line.trim()
+    if (trimmed === "") continue
+    const lineIndent = line.search(/\S/)
+    if (lineIndent < indentLevel) {
+      if (trimmed.startsWith("metadata:")) {
+        parentBlock = "metadata"
+        break
+      }
+      if (trimmed.startsWith("connections:")) {
+        parentBlock = "connections"
+        break
+      }
+      if (trimmed.startsWith("-") || trimmed.includes("id:")) {
+        if (trimmed.startsWith("-") && !trimmed.includes("id:") && lineIndent >= 6) {
+          parentBlock = "connections"
+        } else {
+          parentBlock = "component"
+        }
+        break
+      }
+    }
+  }
+
+  const trimmed = stripComment(currentLine).trim()
+  // A list-item mapping entry ("- id: inbox") opens a mapping too: its
+  // sibling keys (type:, name:, ...) align two spaces under the dash, i.e.
+  // under "id", not under "-".
+  const opensBlock = trimmed.endsWith(":") || /^-\s+\S+:(\s|$)/.test(trimmed)
+
+  return { indentLevel, parentBlock, opensBlock }
+}
+
+/** Strips a trailing "# ..." comment, ignoring a "#" inside a quoted scalar. */
+function stripComment(line: string): string {
+  let inSingle = false
+  let inDouble = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inSingle) {
+      if (ch === "'") inSingle = false
+      continue
+    }
+    if (inDouble) {
+      if (ch === "\\") i++
+      else if (ch === '"') inDouble = false
+      continue
+    }
+    if (ch === "'") inSingle = true
+    else if (ch === '"') inDouble = true
+    else if (ch === "#") return line.slice(0, i)
+  }
+  return line
 }
 
 export function getAutocompleteSuggestions(specText: string, cursorPosition: number): AutocompleteResult {
@@ -72,10 +171,9 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (typeMatch) {
     const query = typeMatch[1] || ""
-    const validTypes = ["Store", "Stage", "Brick", "Gateway"]
-    
+
     // Filter suggestions: start with query, limit to 10 max, and filter out exact matches
-    const suggestions = validTypes
+    const suggestions = VALID_TYPES
       .filter((t) => t.toLowerCase().startsWith(query.toLowerCase()) && t !== query)
       .slice(0, 10)
 
@@ -90,8 +188,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (statusMatch) {
     const query = statusMatch[1] || ""
-    const validStatuses = ["draft", "active", "deprecated"]
-    const suggestions = validStatuses
+    const suggestions = VALID_STATUSES
       .filter((s) => s.toLowerCase().startsWith(query.toLowerCase()) && s !== query)
       .slice(0, 10)
 
@@ -106,8 +203,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
 
   if (colorMatch) {
     const query = colorMatch[1] || ""
-    const validColors = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
-    const suggestions = validColors
+    const suggestions = VALID_COLORS
       .filter((c) => c.toLowerCase().startsWith(query.toLowerCase()) && c !== query)
       .slice(0, 10)
 
@@ -121,35 +217,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   }
 
   // Detect indentation and parent block context
-  let indentLevel = currentLine.search(/\S/)
-  if (indentLevel === -1) indentLevel = 0
-
-  const linesBefore = specText.substring(0, lineStart).split("\n")
-  let parentBlock = ""
-  for (let i = linesBefore.length - 1; i >= 0; i--) {
-    const line = linesBefore[i]
-    const trimmed = line.trim()
-    if (trimmed === "") continue
-    const lineIndent = line.search(/\S/)
-    if (lineIndent < indentLevel) {
-      if (trimmed.startsWith("metadata:")) {
-        parentBlock = "metadata"
-        break
-      }
-      if (trimmed.startsWith("connections:")) {
-        parentBlock = "connections"
-        break
-      }
-      if (trimmed.startsWith("-") || trimmed.includes("id:")) {
-        if (trimmed.startsWith("-") && !trimmed.includes("id:") && lineIndent >= 6) {
-          parentBlock = "connections"
-        } else {
-          parentBlock = "component"
-        }
-        break
-      }
-    }
-  }
+  const { indentLevel, parentBlock } = detectIndentContext(specText, cursorPosition)
 
   const currentWordMatch = textBeforeCursor.match(/^\s*([a-zA-Z0-9_\-]*)$/)
   if (currentWordMatch) {
@@ -157,8 +225,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
     const queryStart = cursorPosition - query.length
 
     if (parentBlock === "metadata") {
-      const keys = ["owner:", "description:", "status:", "version:", "color:"]
-      const suggestions = keys
+      const suggestions = METADATA_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,
@@ -167,8 +234,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         replaceRange: [queryStart, replaceEnd],
       }
     } else if (parentBlock === "connections") {
-      const keys = ["- target:", "target:", "label:"]
-      const suggestions = keys
+      const suggestions = CONNECTION_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,
@@ -178,8 +244,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
       }
     } else if (indentLevel >= 4) {
       // Default component property suggestions (requires at least component indentation level)
-      const keys = ["id:", "type:", "name:", "connections:", "metadata:"]
-      const suggestions = keys
+      const suggestions = COMPONENT_FIELDS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
         suggestions,

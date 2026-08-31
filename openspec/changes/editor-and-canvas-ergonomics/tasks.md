@@ -5,7 +5,7 @@ an e2e scenario, independently verifiable with the full suite green before
 it is checked off. Diff coverage must be 100% on lines each task adds or
 modifies.
 
-- [ ] **Task 1: Tab / Shift+Tab indentation**
+- [x] **Task 1: Tab / Shift+Tab indentation**
   - Restructure `CodeTab.handleKeyDown` (`editor-panel.tsx:111-140`):
     popup-open branch unchanged (Tab still accepts the highlighted
     suggestion); popup-closed branch inserts a 2-space indent at the caret
@@ -19,7 +19,7 @@ modifies.
   - E2E: type nested YAML, press Tab mid-line, assert 2 spaces inserted
     and focus retained; Esc then Tab, assert focus left the textarea.
 
-- [ ] **Task 2: Enter auto-indent (detector extraction first)**
+- [x] **Task 2: Enter auto-indent (detector extraction first)**
   - Extract the indent + parent-block detector from
     `lib/autocomplete.ts:123-152` into an exported pure function; switch
     autocomplete to consume it. Behaviour-neutral: existing autocomplete
@@ -37,7 +37,7 @@ modifies.
   - E2E: press Enter inside a component block, assert the new line starts
     at the block's indent.
 
-- [ ] **Task 3: Syntax colour overlay**
+- [x] **Task 3: Syntax colour overlay**
   - Add the scroll-synced highlight backdrop behind the now
     transparent-text textarea (`editor-panel.tsx:144-155`); line-based
     tokeniser colouring component ids, connection targets, and metadata

@@ -18,7 +18,9 @@ import {
 import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
-import { getAutocompleteSuggestions } from "../../lib/autocomplete"
+import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
+import { applyIndent } from "../../lib/editor-indent"
+import { YamlHighlightOverlay } from "./yaml-highlight-overlay"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
@@ -53,7 +55,18 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(false)
+  const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+
+  const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const overlay = overlayRef.current
+    if (overlay) {
+      overlay.scrollTop = e.currentTarget.scrollTop
+      overlay.scrollLeft = e.currentTarget.scrollLeft
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -66,6 +79,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
     setSuppressAutocomplete(false)
+    setReleaseFocusOnTab(false)
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -98,7 +112,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     // Return focus to textarea and adjust cursor position
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
-      const textarea = document.getElementById("spec-textarea") as HTMLTextAreaElement
+      const textarea = textareaRef.current
       if (textarea) {
         textarea.focus()
         const newCursorPos = start + sug.length
@@ -108,7 +122,64 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     }, 0)
   }
 
+  const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
+      outdent: e.shiftKey,
+    })
+    onChange(text)
+
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      const textarea = textareaRef.current
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(selStart, selEnd)
+        setCursorPos(selStart)
+      }
+    }, 0)
+  }
+
+  const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart)
+    const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
+    const insertion = "\n" + newIndent
+    const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
+    const newCursorPos = target.selectionStart + insertion.length
+    onChange(newValue)
+
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      const textarea = textareaRef.current
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+        setCursorPos(newCursorPos)
+      }
+    }, 0)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // WCAG 2.1.2 keyboard-trap escape hatch: Esc arms a one-shot release so
+    // the very next Tab moves focus out via the browser default, regardless
+    // of whether the suggestion popup was open.
+    if (e.key === "Escape") {
+      e.preventDefault()
+      setSuppressAutocomplete(true)
+      setReleaseFocusOnTab(true)
+      return
+    }
+
+    if (releaseFocusOnTab) {
+      setReleaseFocusOnTab(false)
+      if (e.key === "Tab") {
+        return
+      }
+    }
+
     if (autocomplete && autocomplete.suggestions.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault()
@@ -131,17 +202,22 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
           if (selectedSug) {
             handleApplySuggestion(selectedSug)
           }
+        } else {
+          handleEnterIndent(e)
         }
-      } else if (e.key === "Escape") {
-        e.preventDefault()
-        setSuppressAutocomplete(true)
       }
+    } else if (e.key === "Tab") {
+      handleIndent(e)
+    } else if (e.key === "Enter") {
+      handleEnterIndent(e)
     }
   }
 
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
+      <YamlHighlightOverlay ref={overlayRef} value={value} />
       <textarea
+        ref={textareaRef}
         data-testid="spec-textarea"
         data-focus-field="spec-textarea"
         id="spec-textarea"
@@ -149,8 +225,11 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
         onKeyDown={handleKeyDown}
+        onScroll={handleTextareaScroll}
         disabled={disabled}
-        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
+        // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
+        // so both layers agree on content width when a scrollbar appears.
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 
