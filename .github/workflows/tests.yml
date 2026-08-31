@@ -54,7 +54,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Playwright
-        run: pip install playwright
+        run: pip install playwright==1.60.0
 
       - name: Install Playwright Browsers
         run: playwright install chromium --with-deps
