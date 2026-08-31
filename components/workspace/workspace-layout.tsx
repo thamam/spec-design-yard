@@ -122,6 +122,14 @@ export function WorkspaceLayout() {
     resetHistory,
   } = useUndoRedo(INITIAL_SPEC)
 
+  // The canvas hands its zoomToFit() up here by prop (not through
+  // window.excalidrawAPI) so the global shortcut and the canvas controls all
+  // call one implementation. It is null whenever no canvas is mounted.
+  const zoomToFitRef = useRef<(() => void) | null>(null)
+  const registerZoomToFit = useCallback((fit: (() => void) | null) => {
+    zoomToFitRef.current = fit
+  }, [])
+
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -130,6 +138,16 @@ export function WorkspaceLayout() {
       const isSpecTextarea = target && target.getAttribute("data-focus-field") === "spec-textarea"
 
       if (isInputOrTextarea && !isSpecTextarea) {
+        return
+      }
+
+      // Zoom to fit — Excalidraw's own binding. Unlike undo/redo this one must
+      // NOT inherit the spec-textarea pass-through above: Shift+1 types "!",
+      // a legal YAML character, and typing it must never yank the canvas.
+      if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === "Digit1") {
+        if (isInputOrTextarea) return
+        e.preventDefault()
+        zoomToFitRef.current?.()
         return
       }
 
@@ -168,6 +186,12 @@ export function WorkspaceLayout() {
 
   const lastLoadedSpecRef = useRef<string | null>(null)
 
+  // Bumped once per spec/project LOAD, never per edit. The canvas uses it to
+  // decide when a fresh zoom-to-fit is owed: hydration replaces the spec after
+  // the canvas has already mounted and fitted the pre-hydration template, so
+  // without this the user is left looking at the wrong framing.
+  const [loadedSpecId, setLoadedSpecId] = useState(0)
+
   // Hydrate the saved spec on mount. When the app runs against a project dir
   // (SPEC_YARD_PROJECT_DIR), the repo file is canonical: pull server state
   // into the store first so a stale localStorage cache never wins, and only
@@ -195,6 +219,7 @@ export function WorkspaceLayout() {
           : INITIAL_SPEC
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
+      setLoadedSpecId((n) => n + 1)
       setIsHydrated(true)
     }
     hydrate()
@@ -381,6 +406,8 @@ export function WorkspaceLayout() {
           className="flex flex-col min-w-0 overflow-hidden"
         >
           <CanvasPanel
+            onZoomToFitReady={registerZoomToFit}
+            specIdentity={`spec-${loadedSpecId}`}
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}

@@ -16,12 +16,19 @@ vi.mock('@excalidraw/excalidraw', () => {
       props.excalidrawAPI?.({
         updateScene: vi.fn(),
         scrollToContent: vi.fn(),
+        // The zoom-to-fit path calls this; the real API has it and the stub
+        // must too, or the adapter throws on mount.
+        getSceneElements: vi.fn(() => []),
       })
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
     return null
   }
-  return { Excalidraw, WelcomeScreen: undefined, default: Excalidraw }
+  // Excalidraw renders <Footer>'s children into its own footer region; a
+  // passthrough keeps the stub's shape honest even though this Excalidraw
+  // stub renders nothing.
+  const Footer = (props: any) => props.children
+  return { Excalidraw, Footer, WelcomeScreen: undefined, default: Excalidraw }
 })
 
 import Workspace from '../components/Workspace'

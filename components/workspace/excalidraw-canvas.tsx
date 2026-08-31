@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react"
+import { ScanSearch } from "lucide-react"
 import { CanvasChange } from "../../lib/reconciler"
 import { lintSpec } from "../../lib/linter"
 import {
@@ -548,6 +549,11 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
   }))
 }
 
+// The fit is proven; only its naming, reachability and lifetime were broken.
+// Every route to it — footer button, toolbar button, Shift+1, and the
+// once-per-loaded-spec automatic fit — passes exactly these options.
+const FIT_TO_VIEWPORT = { fitToViewport: true, viewportZoomFactor: 0.85 }
+
 export function ExcalidrawCanvas({
   parsedSpec,
   selectedUnit,
@@ -557,6 +563,8 @@ export function ExcalidrawCanvas({
   pathTarget,
   hiddenTypes = [],
   showSecurityOverlay,
+  specIdentity,
+  onZoomToFitReady,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -566,10 +574,15 @@ export function ExcalidrawCanvas({
   pathTarget?: string
   hiddenTypes?: string[]
   showSecurityOverlay?: boolean
+  /** Identity of the spec/project currently loaded — the automatic fit's latch key. */
+  specIdentity?: string
+  /** Hands the parent this canvas's zoomToFit(), and null when it unmounts. */
+  onZoomToFitReady?: (fit: (() => void) | null) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
   const [WelcomeScreenComponent, setWelcomeScreenComponent] = useState<React.ComponentType<any> | null>(null)
+  const [FooterComponent, setFooterComponent] = useState<React.ComponentType<any> | null>(null)
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null)
   const [loadError, setLoadError] = useState(false)
 
@@ -580,6 +593,24 @@ export function ExcalidrawCanvas({
     }
   }, [])
 
+  // The single fit implementation every route calls.
+  const zoomToFit = useCallback(() => {
+    if (!excalidrawAPI) return
+    try {
+      excalidrawAPI.scrollToContent(excalidrawAPI.getSceneElements(), FIT_TO_VIEWPORT)
+    } catch (e) {
+      console.error("Failed to zoom to fit: ", e)
+    }
+  }, [excalidrawAPI])
+
+  // Hand the callback to the parent by prop. window.excalidrawAPI stays for
+  // its existing consumers but gains no new callers, and the null on unmount
+  // stops a stale canvas being fitted from a view it no longer renders in.
+  useEffect(() => {
+    onZoomToFitReady?.(zoomToFit)
+    return () => onZoomToFitReady?.(null)
+  }, [onZoomToFitReady, zoomToFit])
+
   useEffect(() => {
     // Dynamically import Excalidraw only on the client
     import("@excalidraw/excalidraw")
@@ -587,6 +618,9 @@ export function ExcalidrawCanvas({
         const Comp = mod.Excalidraw ?? mod.default
         setExcalidrawComponent(() => Comp)
         setWelcomeScreenComponent(() => mod.WelcomeScreen)
+        // Footer renders its children into Excalidraw's own footer region,
+        // beside the − 100% + zoom widget — where a user looks for zoom.
+        setFooterComponent(() => mod.Footer)
       })
       .catch(() => setLoadError(true))
   }, [])
@@ -651,21 +685,24 @@ export function ExcalidrawCanvas({
     return () => clearTimeout(timer)
   }, [pendingElements, onCanvasChange])
 
-  // Automatically scroll and fit canvas components to viewport on initial load
-  const hasInitialScrolled = useRef(false)
+  // One automatic fit per loaded spec. The old latch was a per-mount boolean
+  // keyed on nothing, so a different spec or project loading into an already
+  // mounted canvas never re-fitted; keying it on the loaded spec's identity
+  // gives exactly one fresh fit per new spec and none for ordinary edits.
+  const fittedSpecIdentityRef = useRef<string | null | undefined>(null)
   useEffect(() => {
-    if (excalidrawAPI && elements.length > 0 && !hasInitialScrolled.current) {
-      hasInitialScrolled.current = true
-      const timer = setTimeout(() => {
-        try {
-          excalidrawAPI.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.85 })
-        } catch (e) {
-          console.error("Failed to scroll to content: ", e)
-        }
-      }, 300)
-      return () => clearTimeout(timer)
-    }
-  }, [excalidrawAPI, elements])
+    if (!excalidrawAPI || elements.length === 0) return
+    if (fittedSpecIdentityRef.current === specIdentity) return
+    fittedSpecIdentityRef.current = specIdentity
+    const timer = setTimeout(() => {
+      try {
+        excalidrawAPI.scrollToContent(elements, FIT_TO_VIEWPORT)
+      } catch (e) {
+        console.error("Failed to scroll to content: ", e)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [excalidrawAPI, elements, specIdentity])
 
   // Sync elements dynamically on the fly without remounting Excalidraw
   useEffect(() => {
@@ -742,6 +779,32 @@ export function ExcalidrawCanvas({
         }}
       >
         {WelcomeScreenComponent && <WelcomeScreenComponent />}
+        {FooterComponent && (
+          <FooterComponent>
+            <button
+              type="button"
+              onClick={zoomToFit}
+              aria-label="Zoom to fit"
+              title="Zoom to fit (Shift+1)"
+              data-testid="canvas-footer-zoom-to-fit"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                marginLeft: 8,
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                background: "var(--island-bg-color, #232329)",
+                color: "var(--color-on-surface, #ced4da)",
+              }}
+            >
+              <ScanSearch size={16} />
+            </button>
+          </FooterComponent>
+        )}
       </ExcalidrawComponent>
     </div>
   )
