@@ -180,6 +180,49 @@ describe('zoom to fit — three routes, one implementation', () => {
   })
 })
 
+describe('zoom to fit — a failing fit is reported, never thrown', () => {
+  const spec = { system: { name: 'Boom', components: [{ id: 'b1', type: 'Stage', x: 0, y: 0 }] } }
+
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('a control-driven fit that throws is logged, and the click still returns', async () => {
+    await mountWorkspace()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    captured.api.scrollToContent.mockImplementation(() => {
+      throw new Error('scene bounds unavailable')
+    })
+
+    expect(() => fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))).not.toThrow()
+    expect(errors).toHaveBeenCalledWith('Failed to zoom to fit: ', expect.any(Error))
+    errors.mockRestore()
+  })
+
+  test('an automatic fit that throws is logged, and the canvas survives', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ExcalidrawCanvas parsedSpec={spec} />)
+    await flushUntilCanvasMounted()
+    // The automatic fit sits behind a 300ms timer, so the throwing
+    // implementation is installed after mount but before the fit runs.
+    captured.api.scrollToContent.mockImplementation(() => {
+      throw new Error('scene bounds unavailable')
+    })
+    await flushInitialFit()
+
+    expect(errors).toHaveBeenCalledWith('Failed to scroll to content: ', expect.any(Error))
+    expect(screen.getByTestId('excalidraw-stub')).toBeInTheDocument()
+    errors.mockRestore()
+  })
+})
+
 describe('zoom to fit — one fit per loaded spec', () => {
   const specA = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 0, y: 0 }] } }
   const specAEdited = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 40, y: 0 }] } }
