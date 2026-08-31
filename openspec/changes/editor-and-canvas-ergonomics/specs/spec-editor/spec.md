@@ -65,10 +65,12 @@ no-op and every key falls through to the browser default.
   apply the highlighted suggestion, exactly as today. In every other case
   Enter SHALL insert a newline whose leading indent matches the correct
   YAML depth for the new line: one level (2 spaces) deeper than the current
-  line when it opens a block, otherwise the current line's own indent. The
-  indent SHALL be computed by the indent/parent-block detector extracted
-  from `lib/autocomplete.ts:123-152`, shared with autocomplete — not by a
-  second implementation.
+  line when it opens a block — including a `- key: value` list-item line,
+  whose new line aligns one level under the key (not under the dash), so a
+  sibling mapping key can follow — otherwise, for a line with no trailing
+  colon, the current line's own indent. The indent SHALL be computed by the
+  indent/parent-block detector extracted from `lib/autocomplete.ts:123-152`,
+  shared with autocomplete — not by a second implementation.
 
 #### Scenario: Enter after a block-opening line indents one level deeper
 
@@ -76,12 +78,20 @@ no-op and every key falls through to the browser default.
 - WHEN the user presses Enter
 - THEN the new line begins with 4 spaces and the caret sits after them
 
-#### Scenario: Enter inside a block matches the sibling indent
+#### Scenario: Enter after a connections list-item line aligns under the key
 
-- GIVEN the caret is at the end of a 6-space-indented list-item line inside
-  `connections:`
+- GIVEN the caret is at the end of a line reading `      - target: digest_stage`
+  (6-space indent)
 - WHEN the user presses Enter
-- THEN the new line begins with 6 spaces
+- THEN the new line begins with 8 spaces, aligned under `target` so a
+  sibling `label:` key can follow
+
+#### Scenario: Enter after a component list-item line aligns under the key
+
+- GIVEN the caret is at the end of a line reading `    - id: inbox` (4-space indent)
+- WHEN the user presses Enter
+- THEN the new line begins with 6 spaces, aligned under `id` so a sibling
+  `type:` key can follow
 
 #### Scenario: Navigated suggestion still applies on Enter
 

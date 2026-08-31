@@ -48,6 +48,27 @@ current line's indent.
   find the node path — correct but heavyweight per keystroke, and the text
   is frequently mid-edit invalid YAML exactly when auto-indent matters.
 
+**On a `- key: value` list-item line specifically** (e.g. `- id: inbox`,
+`- target: digest_stage`), Enter aligns the new line one level **under the
+key**, not under the dash — `'    - id: inbox'` + Enter → 6 spaces
+(`type:`'s column); `'      - target: digest'` + Enter → 8 spaces
+(`label:`'s column). The maintainer ruled on this deliberately (round 4):
+the line immediately after `- id: inbox` is almost always `type:`, and
+after `- target: db` almost always `label:` — both belong to the same
+mapping as the key, so the common case is a sibling key, not a new list
+item.
+
+- **Rejected**: a sibling-indent rule, where Enter after a list-item line
+  matches the dash's own indent (so `- target: digest` + Enter → 6 spaces,
+  ready for another `- target:` entry). Simpler, and never adds
+  indentation the user did not ask for — but it makes the overwhelmingly
+  common next line (a sibling mapping key) cost an extra Tab every time,
+  while the less common case (another list item) is only a Shift+Tab away
+  under the align-under-the-key rule. The maintainer chose
+  align-under-the-key and had the spec amended to match the already-shipped
+  behaviour, rather than changing the code to match the sibling-indent
+  reading an earlier spec draft implied.
+
 ## Decision 3: Syntax colour via a highlight overlay, not an editor swap
 
 Keep the `<textarea>` (`editor-panel.tsx:144-155`) as the single source of
