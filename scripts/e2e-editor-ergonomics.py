@@ -293,6 +293,10 @@ with sync_playwright() as p:
 
     # Shift+1 must NOT inherit the spec-textarea pass-through that undo/redo
     # uses: `!` is a legal YAML character and typing it must not yank the view.
+    # Park the view first: without this the beat runs straight after a fit, so
+    # a leaked shortcut would re-fit to identical numbers and read as "did not
+    # move" — a vacuous pass.
+    push_view_away()
     before_typing = read_view()
     yaml_before = ta.input_value()
     ta.click()
