@@ -75,9 +75,6 @@ with sync_playwright() as p:
         check("main.spec.yaml holds the typed spec", "Editor Ergonomics System" in content and "gate" in content)
     shot(page, "02-editor-ergonomics-typed")
 
-    check("no console/page errors in the editor-ergonomics session",
-          len(console_errors) == 0, "; ".join(console_errors[:5]))
-
     # --- Lanes A and B append their beats below this line ---
     # Lane A (editor ergonomics): Tab / Shift+Tab indent and outdent in the
     #   spec textarea (including multi-line selections), Enter auto-indenting
@@ -86,6 +83,11 @@ with sync_playwright() as p:
     #   zoom-to-fit reachable three ways — a button in Excalidraw's own
     #   footer beside its zoom widget, the top-right toolbar button, and
     #   Shift+1.
+
+    # --- end of appended beats: this assertion must stay last, so that a
+    # console error raised by any beat above still fails the scenario ---
+    check("no console/page errors in the editor-ergonomics session",
+          len(console_errors) == 0, "; ".join(console_errors[:5]))
 
     ctx.close()
     browser.close()
