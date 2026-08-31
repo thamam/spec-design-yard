@@ -123,6 +123,30 @@ describe('zoom to fit — three routes, one implementation', () => {
     expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
   })
 
+  test('Shift+1 is claimed in the capture phase, ahead of Excalidraw own binding', async () => {
+    await mountWorkspace()
+
+    // Excalidraw binds Shift+1 to its own zoomToFit action, on a listener that
+    // runs after the target. Standing in for it: if this ever fires, the real
+    // one fires too and re-frames with its own options instead of the shared
+    // fit — exactly when focus is on the canvas, the normal case.
+    const excalidrawBinding = vi.fn()
+    document.addEventListener('keydown', excalidrawBinding)
+    const event = new KeyboardEvent('keydown', {
+      key: '!',
+      code: 'Digit1',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    screen.getByTestId('excalidraw-stub').dispatchEvent(event)
+    document.removeEventListener('keydown', excalidrawBinding)
+
+    expect(captured.api.scrollToContent).toHaveBeenCalledWith(captured.scene, FIT_OPTIONS)
+    expect(excalidrawBinding).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
   test('typing ! in the YAML textarea never yanks the canvas', async () => {
     await mountWorkspace()
 
@@ -252,6 +276,26 @@ describe('zoom to fit — one fit per loaded spec', () => {
     rerender(<ExcalidrawCanvas parsedSpec={specB} specIdentity="spec-2" />)
     await flushInitialFit()
     expect(captured.api.scrollToContent).toHaveBeenCalledTimes(2)
+  })
+
+  test('elements changing inside the 300ms window still yields exactly one fit', async () => {
+    // Workspace hydration replaces the compiled elements shortly after a spec
+    // identity first appears. The latch must not read as "already fitted"
+    // until a fit has actually run, or that spec never gets framed at all.
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-1" />)
+    await flushUntilCanvasMounted()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={specAEdited} specIdentity="spec-1" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+
+    // ...and the churn must not queue a second fit for the same spec either.
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
   })
 })
 

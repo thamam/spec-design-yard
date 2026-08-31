@@ -130,6 +130,32 @@ export function WorkspaceLayout() {
     zoomToFitRef.current = fit
   }, [])
 
+  // Zoom to fit — Shift+1 — on its own listener, in the CAPTURE phase.
+  // Excalidraw binds Shift+1 to its own zoomToFit action and handles it after
+  // the target, so a bubble-phase listener loses the race whenever focus is
+  // inside the canvas: Excalidraw fits with its own options instead of the
+  // shared implementation, exactly when the shortcut matters most. Claiming
+  // the key on the way down, then stopping it, keeps all three routes on one
+  // fit and stops Excalidraw's action double-applying.
+  //
+  // Split out of the undo/redo handler below rather than folded into it: that
+  // one deliberately runs in the bubble phase and passes Shift+1 through to
+  // the spec textarea, where "!" is a legal YAML character.
+  useEffect(() => {
+    const handleZoomShortcut = (e: KeyboardEvent) => {
+      if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || e.code !== "Digit1") return
+      const target = e.target as HTMLElement
+      // Typing "!" into any field — the spec textarea included — must never
+      // yank the canvas, so the shortcut yields rather than preventing.
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return
+      e.preventDefault()
+      e.stopPropagation()
+      zoomToFitRef.current?.()
+    }
+    window.addEventListener("keydown", handleZoomShortcut, true)
+    return () => window.removeEventListener("keydown", handleZoomShortcut, true)
+  }, [])
+
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -138,16 +164,6 @@ export function WorkspaceLayout() {
       const isSpecTextarea = target && target.getAttribute("data-focus-field") === "spec-textarea"
 
       if (isInputOrTextarea && !isSpecTextarea) {
-        return
-      }
-
-      // Zoom to fit — Excalidraw's own binding. Unlike undo/redo this one must
-      // NOT inherit the spec-textarea pass-through above: Shift+1 types "!",
-      // a legal YAML character, and typing it must never yank the canvas.
-      if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && e.code === "Digit1") {
-        if (isInputOrTextarea) return
-        e.preventDefault()
-        zoomToFitRef.current?.()
         return
       }
 

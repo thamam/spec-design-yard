@@ -554,6 +554,11 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
 // once-per-loaded-spec automatic fit — passes exactly these options.
 const FIT_TO_VIEWPORT = { fitToViewport: true, viewportZoomFactor: 0.85 }
 
+// `specIdentity` is legitimately undefined on a canvas rendered without the
+// prop, so "no fit has run yet" needs a value no identity can collide with.
+const NO_FIT_YET = Symbol("no-fit-yet")
+type FitIdentity = string | undefined | typeof NO_FIT_YET
+
 export function ExcalidrawCanvas({
   parsedSpec,
   selectedUnit,
@@ -685,24 +690,47 @@ export function ExcalidrawCanvas({
     return () => clearTimeout(timer)
   }, [pendingElements, onCanvasChange])
 
-  // One automatic fit per loaded spec. The old latch was a per-mount boolean
-  // keyed on nothing, so a different spec or project loading into an already
-  // mounted canvas never re-fitted; keying it on the loaded spec's identity
-  // gives exactly one fresh fit per new spec and none for ordinary edits.
-  const fittedSpecIdentityRef = useRef<string | null | undefined>(null)
+  // One automatic fit per loaded spec. The latch is keyed on the loaded spec's
+  // identity, so a different spec or project loading into an already-mounted
+  // canvas re-fits, and ordinary edits do not.
+  //
+  // The latch advances only once scrollToContent has actually run. Advancing
+  // it at scheduling time lost the fit outright: `elements` changing inside
+  // the 300ms window re-ran the effect, the cleanup cancelled the timer, and
+  // the guard already read as fitted — which is exactly what workspace
+  // hydration does on first load, the case the fit exists for.
+  const latestElementsRef = useRef(elements)
+  latestElementsRef.current = elements
+  const fittedSpecIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
+  const scheduledFitIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
+  const fitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!excalidrawAPI || elements.length === 0) return
     if (fittedSpecIdentityRef.current === specIdentity) return
-    fittedSpecIdentityRef.current = specIdentity
-    const timer = setTimeout(() => {
+    // A fit for this same spec is already in flight — let it land rather than
+    // cancelling and re-queueing it on every elements churn.
+    if (fitTimerRef.current !== null && scheduledFitIdentityRef.current === specIdentity) return
+    if (fitTimerRef.current !== null) clearTimeout(fitTimerRef.current)
+    scheduledFitIdentityRef.current = specIdentity
+    fitTimerRef.current = setTimeout(() => {
+      fitTimerRef.current = null
       try {
-        excalidrawAPI.scrollToContent(elements, FIT_TO_VIEWPORT)
+        excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
+        fittedSpecIdentityRef.current = specIdentity
       } catch (e) {
         console.error("Failed to scroll to content: ", e)
       }
     }, 300)
-    return () => clearTimeout(timer)
   }, [excalidrawAPI, elements, specIdentity])
+
+  // The pending fit is cancelled on unmount only — never on a re-render, which
+  // is what used to swallow it.
+  useEffect(
+    () => () => {
+      if (fitTimerRef.current !== null) clearTimeout(fitTimerRef.current)
+    },
+    []
+  )
 
   // Sync elements dynamically on the fly without remounting Excalidraw
   useEffect(() => {

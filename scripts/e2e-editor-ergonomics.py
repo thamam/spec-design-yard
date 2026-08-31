@@ -272,24 +272,44 @@ with sync_playwright() as p:
     check_finite_view("the toolbar fit control", after_toolbar)
     shot(page, "15-zoom-to-fit-toolbar")
 
-    # Route 3 — Shift+1, Excalidraw's own binding, from outside any field.
+    # Route 3 — Shift+1, WITH FOCUS ON THE CANVAS. Excalidraw binds Shift+1 to
+    # its own zoomToFit and handles it after the target, so this is the one
+    # arrangement that can catch it winning the race and fitting with its own
+    # options. Blurring first — which this beat used to do — is precisely the
+    # condition under which the bug cannot appear.
     push_view_away()
+    # Left edge, vertically centred: clear of the top toolbar and the footer
+    # widgets, and — with the view parked far off the content — clear of every
+    # element too, so the click only moves focus.
+    canvas_box = page.locator("canvas").first.bounding_box()
+    page.mouse.click(canvas_box["x"] + 40, canvas_box["y"] + canvas_box["height"] / 2)
+    time.sleep(0.3)
+    # Excalidraw's own Shift+1 binding only fires for events targeted inside
+    # its container, so this precondition IS the test.
+    check("the click put focus inside the Excalidraw container",
+          page.evaluate("() => !!(document.activeElement && document.activeElement.closest('.excalidraw'))"),
+          page.evaluate("() => document.activeElement && document.activeElement.className"))
     parked = read_view()
-    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     page.keyboard.press("Shift+Digit1")
     time.sleep(1.0)
     after_shortcut = read_view()
-    check("Shift+1 changes the zoom",
+    check("Shift+1 changes the zoom with focus on the canvas",
           after_shortcut["zoom"] != parked["zoom"],
           "parked=%s after=%s" % (parked, after_shortcut))
     check_finite_view("the Shift+1 shortcut", after_shortcut)
     shot(page, "16-zoom-to-fit-shortcut")
 
     # All three routes must land on the same framing — one implementation.
+    # Zoom alone is not enough: Excalidraw's own zoomToFit lands on a similar
+    # scale but a different scroll, so the scroll has to match too.
     check("all three routes produce the same zoom",
           after_footer["zoom"] == after_toolbar["zoom"] == after_shortcut["zoom"],
           "footer=%s toolbar=%s shortcut=%s"
           % (after_footer["zoom"], after_toolbar["zoom"], after_shortcut["zoom"]))
+    check("all three routes produce the same scroll position",
+          after_footer == after_toolbar == after_shortcut,
+          "footer=%s toolbar=%s shortcut=%s"
+          % (after_footer, after_toolbar, after_shortcut))
 
     # Shift+1 must NOT inherit the spec-textarea pass-through that undo/redo
     # uses: `!` is a legal YAML character and typing it must not yank the view.
