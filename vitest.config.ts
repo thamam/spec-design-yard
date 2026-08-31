@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { join } from 'path'
+import { COVERAGE_INCLUDE } from './scripts/tracked-files.mjs'
 
 export default defineConfig({
   plugins: [react() as any],
@@ -11,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'lcov'],
-      include: ['lib/**', 'components/**', 'pages/**', 'scripts/check-diff-coverage.mjs'],
+      include: COVERAGE_INCLUDE,
       reportsDirectory: './coverage',
     },
   },

@@ -7,10 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-
-const TRACKED_EXTENSIONS = /\.(ts|tsx|mjs)$/
-const TRACKED_ROOTS = ['lib/', 'components/', 'pages/']
-const TRACKED_SINGLE_FILE = 'scripts/check-diff-coverage.mjs'
+import { TRACKED_EXTENSIONS, TRACKED_ROOTS, TRACKED_SINGLE_FILE } from './tracked-files.mjs'
 
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/
 
