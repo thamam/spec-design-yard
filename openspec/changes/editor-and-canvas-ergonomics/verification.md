@@ -1,9 +1,10 @@
 # Verification — editor-and-canvas-ergonomics
 
 Verified on branch `feat/backlog-sweep` against base `origin/main` @
-`3bd0211`. The gated commit is recorded below, copied from the gate's own
-`status` file rather than inferred — three rounds running, this line named a
-commit the gate had not run against.
+`3bd0211`, at **`09ce584`** — copied from the `HEAD=` line of the gate's own
+`status` file, not inferred. Three rounds running this line named a commit the
+gate had not run against, each time by reasoning about which it must have
+been; the gate is now re-run on the documentation commit so the two agree.
 
 Six hardening rounds followed the first green gate at `f8f8ee7`: nine defects
 (round 1), seven (round 2), seven (round 3), nine (round 4), eleven (round 5)
