@@ -345,6 +345,36 @@ describe('zoom to fit — one fit per loaded spec', () => {
     expect(captured.api.scrollToContent).not.toHaveBeenCalled()
   })
 
+  test('a spec emptied under the SAME identity never fits an empty scene', async () => {
+    // The cancel block only clears a timer scheduled for a DIFFERENT identity.
+    // Load a non-empty spec (timer armed for A), empty it within the 300ms
+    // window under the same identity: the empty branch marked A handled and
+    // returned with the timer alive, which then called scrollToContent([]).
+    // getCommonBounds([]) is non-finite — the blank canvas this change names
+    // as its top regression risk.
+    const emptyA = { system: { name: 'A', components: [] } }
+    const backWithOne = {
+      system: { name: 'A', components: [{ id: 'a2', type: 'Store', x: 0, y: 0 }] },
+    }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-a" />)
+    await flushUntilCanvasMounted()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={emptyA} specIdentity="spec-a" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    // ...and the identity is handled, so adding a component back is an
+    // ordinary edit, not a fresh load.
+    rerender(<ExcalidrawCanvas parsedSpec={backWithOne} specIdentity="spec-a" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
   test('an emptied spec clears the canvas instead of leaving the old diagram drawn', async () => {
     const emptyB = { system: { name: 'B', components: [] } }
 

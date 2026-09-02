@@ -156,23 +156,17 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
   })
 })
 
-describe('CodeTab autocomplete-accept caret restore (setTimeout flush)', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  // Red/green record: this test was already GREEN against origin/main — the
-  // base document.getElementById path restored the same caret. It is kept as a
-  // regression guard on the ref-based path, not claimed as evidence for a fix.
+describe('CodeTab autocomplete-accept caret restore (layout effect)', () => {
+  // Named for the mechanism that exists. This suite used to say "setTimeout
+  // flush" and drove fake timers to flush a timer that 7e92d1d deleted when
+  // the restore moved into a layout effect — it passed for the wrong reason.
+  //
+  // Red/green record: the assertion itself was already GREEN against
+  // origin/main, where a document.getElementById path restored the same
+  // caret. It is a regression guard on the ref-based path, not evidence.
   test('Tab-accepting a suggestion restores focus and caret via the textarea ref', async () => {
     render(<Workspace />)
-    vi.useRealTimers()
     await waitForWorkspaceHydration()
-    vi.useFakeTimers()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const value = 'system:\n  components:\n    - id: node_x\n      type: S'
@@ -187,9 +181,6 @@ describe('CodeTab autocomplete-accept caret restore (setTimeout flush)', () => {
 
     act(() => {
       fireEvent.keyDown(textarea, { key: 'Tab' }) // accepts "Store" (first suggestion)
-    })
-    act(() => {
-      vi.advanceTimersByTime(0)
     })
 
     expect(textarea.value).toContain('type: Store')

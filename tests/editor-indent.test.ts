@@ -349,3 +349,63 @@ describe('Tab routing when the suggestion popup is open', () => {
     })
   })
 })
+
+describe('a no-op indent must not arm the pending selection', () => {
+  // Regression introduced by round-3 FIX M and caught in round 4. The layout
+  // effect that restores the selection consumes a ref armed by the handler.
+  // When applyIndent returns the text UNCHANGED (Shift+Tab on a line already
+  // at indent 0) there is nothing for React to commit, so the effect never
+  // runs and the ref stays armed — until some later, unrelated commit fires
+  // it, at which point it steals focus back into the textarea and re-selects
+  // a block the user has moved on from.
+  // Green on base: in jsdom the intervening `select` event commits state and
+  // the layout effect consumes the ref before this assertion can see it. Kept
+  // as a guard on the user-visible property, not claimed as evidence.
+  test('a stale range does not reclaim the caret the user has moved', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'aaa\nbbb\nccc'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(0, value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+    expect(textarea.value).toBe(value) // nothing to outdent at indent 0
+
+    // The user collapses the selection somewhere else and carries on typing.
+    textarea.setSelectionRange(5, 5)
+    fireEvent.select(textarea)
+    fireEvent.change(textarea, { target: { value: 'aaa\nbXbb\nccc' } })
+
+    // The armed range (0..11) must not be reapplied over that caret.
+    expect(textarea.selectionStart).not.toBe(0)
+    expect(textarea.selectionEnd).not.toBe(11)
+  })
+
+  test('a no-op Shift+Tab does not steal focus on a later unrelated commit', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'aaa\nbbb\nccc'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(0, value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+    expect(textarea.value).toBe(value)
+
+    // The user leaves the editor; something else commits (a diagnostics
+    // recompute, an autosave tick) — here, an edit driven from outside.
+    textarea.blur()
+    expect(document.activeElement).not.toBe(textarea)
+
+    fireEvent.change(textarea, { target: { value: value + '\nddd' } })
+
+    expect(document.activeElement).not.toBe(textarea)
+  })
+})

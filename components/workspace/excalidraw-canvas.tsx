@@ -737,6 +737,17 @@ export function ExcalidrawCanvas({
     if (elements.length === 0) {
       // Nothing to fit to — but this identity is now handled, so the first
       // element added to it is an edit, not a load.
+      //
+      // Cancel ANY pending fit first, this identity's included: the cancel
+      // block above only clears a timer for a different identity, so a spec
+      // emptied inside its own 300ms window left its timer armed and it then
+      // called scrollToContent([]) — getCommonBounds([]) is non-finite, which
+      // is the blank canvas.
+      if (fitTimerRef.current !== null) {
+        clearTimeout(fitTimerRef.current)
+        fitTimerRef.current = null
+        scheduledFitIdentityRef.current = NO_FIT_YET
+      }
       handledSpecIdentityRef.current = specIdentity
       return
     }
@@ -755,6 +766,9 @@ export function ExcalidrawCanvas({
          ordering; jsdom cannot reproduce it, which is why it is unhittable
          here rather than unreachable in production. */
       if (latestSpecIdentityRef.current !== specIdentity) return
+      // Belt and braces on the cancel above: fitting an empty scene sets a
+      // non-finite scroll and zoom, so never call it with nothing to frame.
+      if (latestElementsRef.current.length === 0) return
       try {
         excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
         handledSpecIdentityRef.current = specIdentity

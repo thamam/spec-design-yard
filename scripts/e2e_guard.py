@@ -59,6 +59,64 @@ def require_project_dir(base, expected_dir, scenario=""):
     return info
 
 
+SEED_MARKER = "# spec-yard e2e throwaway fixture — safe to overwrite"
+
+
+def require_config_writes_allowed(scenario=""):
+    """Refuse unless the harness has declared this server's config throwaway.
+
+    `first-run` and `standalone` mutate server-side config: they write
+    config.json, recentProjects, and (first-run) autosave into folders they
+    create. /api/project cannot tell a throwaway SPEC_YARD_CONFIG_DIR from a
+    real install — an unconfigured real install answers "unconfigured" too —
+    so the only honest signal is an explicit opt-in from the harness.
+    run-e2e.sh sets SPEC_YARD_E2E_CONFIG_WRITES_OK=1 for exactly the scenarios
+    it starts on a throwaway config dir.
+    """
+    if os.environ.get("SPEC_YARD_E2E_CONFIG_WRITES_OK") != "1":
+        print(
+            f"e2e preflight FAILED{' for ' + scenario if scenario else ''}: "
+            "this scenario writes server-side configuration (config.json, "
+            "recent projects, and project folders it creates), and "
+            "SPEC_YARD_E2E_CONFIG_WRITES_OK is not set to 1.\n"
+            "Refusing to run: /api/project cannot distinguish a throwaway "
+            "config dir from a real install that has simply never been "
+            "configured. Run via `npm run test:e2e`, which starts these "
+            "scenarios on a throwaway SPEC_YARD_CONFIG_DIR and sets the "
+            "variable.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+def require_safe_to_seed(folder, scenario=""):
+    """Refuse to overwrite a main.spec.yaml this scenario did not write.
+
+    The project-B beat seeds a spec into a folder named by an env var. Pointed
+    at a real project, that write lands on real work — and it happens before
+    any server-side guard can see it, because the folder is not yet the one
+    the server is serving.
+    """
+    spec = os.path.join(folder, "main.spec.yaml")
+    if not os.path.exists(spec):
+        return
+    try:
+        with open(spec, encoding="utf-8") as fh:
+            existing = fh.read()
+    except OSError as exc:
+        existing = ""
+        print(f"e2e preflight: could not read {spec} ({exc})", file=sys.stderr)
+    if SEED_MARKER not in existing:
+        print(
+            f"e2e preflight FAILED{' for ' + scenario if scenario else ''}: "
+            f"{spec} exists and was not written by this scenario "
+            f"(no {SEED_MARKER!r} marker).\n"
+            "Refusing to overwrite it.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def require_mode(base, expected_mode, scenario=""):
     """Require that BASE reports `expected_mode`. Else exit 2.
 

@@ -12,11 +12,16 @@ run overwrites your real ~/.specyard registry):
     SPEC_YARD_CONFIG_DIR=/tmp/specyard-firstrun-config npx next dev -p 3110
 
 Screenshots land in /tmp/specyard-firstrun-shots/.
+
+Safety: this scenario mutates server-side configuration, so it refuses to run
+(exit 2) unless SPEC_YARD_E2E_CONFIG_WRITES_OK=1 is set. `npm run test:e2e`
+sets it, having started the server on a throwaway SPEC_YARD_CONFIG_DIR;
+nothing else should.
 """
 import os
 import sys
 import time
-from e2e_guard import require_mode
+from e2e_guard import require_config_writes_allowed, require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -62,9 +67,11 @@ def spec_text(page):
     return page.locator('[data-testid="spec-textarea"]').input_value()
 
 
-# No project folder of its own to compare against — this scenario CREATES
-# one through the picker — so the guard is on mode: a server already bound to
-# somebody's project is not the server this scenario may drive.
+# Two guards. Mode alone is not enough: this scenario writes config.json,
+# recentProjects and autosaves into folders it creates, and a real install that
+# has simply never been configured also answers "unconfigured". The harness
+# opt-in is the only honest signal that the config dir is throwaway.
+require_config_writes_allowed(scenario="first-run")
 require_mode(BASE, "unconfigured", scenario="first-run")
 
 with sync_playwright() as p:

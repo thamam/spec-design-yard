@@ -14,7 +14,7 @@ started with a throwaway SPEC_YARD_CONFIG_DIR / SPEC_YARD_PROJECT_DIR.
 import os
 import sys
 import time
-from e2e_guard import require_project_dir
+from e2e_guard import SEED_MARKER, require_project_dir, require_safe_to_seed
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3112")
@@ -83,8 +83,10 @@ with sync_playwright() as p:
     # correct behaviour and not what this beat is testing).
     os.makedirs(CLIENT_REPO, exist_ok=True)
     crlf_spec_file = os.path.join(CLIENT_REPO, "main.spec.yaml")
+    require_safe_to_seed(CLIENT_REPO, scenario="editor-ergonomics")
     with open(crlf_spec_file, "w", newline="") as fh:
         fh.write(
+            SEED_MARKER + "\r\n"
             "system:\r\n"
             "  name: CRLF Project\r\n"
             "  components:\r\n"
@@ -546,6 +548,44 @@ with sync_playwright() as p:
           "reopened=%s dragged=%s" % (reopened, height_after))
     shot(page, "13-diagnostics-collapse-roundtrip")
 
+    # ---------- B1b: at the minimum, the first issue row is still usable ----------
+    # The Auto-Fix-All banner used to render INSIDE the body, above the rows,
+    # so at the floor it was visible and the first issue row was clipped — the
+    # floor's whole promise. It is now chrome above the body. jsdom reports
+    # every box as zero, so this is the only place the claim is real.
+    fix_all = page.get_by_role("button", name="Auto-Fix All")
+    check("the seeded spec offers Auto-Fix All, so a banner is rendered",
+          fix_all.count() > 0)
+    banner = page.locator('[data-testid="diagnostics-fix-banner"]')
+    check("the Auto-Fix-All banner is a sibling of the body, not inside it",
+          banner.count() == 1
+          and page.evaluate(
+              """() => {
+                const b = document.querySelector('[data-testid="diagnostics-body"]');
+                const n = document.querySelector('[data-testid="diagnostics-fix-banner"]');
+                return !!b && !!n && !b.contains(n);
+              }"""
+          ))
+
+    hb = handle.bounding_box()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + 2000, steps=12)  # to the floor
+    page.mouse.up()
+    time.sleep(0.4)
+
+    floor_box = body.bounding_box()
+    banner_box = banner.bounding_box()
+    first_row_box = body.locator("> div").first.bounding_box()
+    check("at the floor the banner is still on screen, above the body",
+          banner_box is not None and banner_box["y"] + banner_box["height"] <= floor_box["y"] + 1,
+          "banner=%s body=%s" % (banner_box, floor_box))
+    check("at the floor the first issue row is fully inside the body",
+          fully_inside(first_row_box, floor_box),
+          "row=%s body=%s" % (first_row_box, floor_box))
+    shot(page, "11b-diagnostics-minimum-height")
+
+
     # ---------- B2: three routes to one zoom-to-fit ----------
     def read_view():
         return page.evaluate("""() => {
@@ -704,9 +744,13 @@ with sync_playwright() as p:
       x: 4600
       y: 3400
 """
+    # Guard BEFORE the seed write. CLIENT_REPO_B is named by an env var and is
+    # not yet the folder the server serves, so no server-side check can see
+    # this write — it has to be refused here, on the file's own evidence.
+    require_safe_to_seed(CLIENT_REPO_B, scenario="editor-ergonomics/project-B")
     os.makedirs(CLIENT_REPO_B, exist_ok=True)
     with open(os.path.join(CLIENT_REPO_B, "main.spec.yaml"), "w") as fh:
-        fh.write(SPEC_B)
+        fh.write(SEED_MARKER + "\n" + SPEC_B)
 
     # Pan project A's canvas somewhere a fit must visibly correct, and remember
     # where — the switch must not leave the user looking at this.

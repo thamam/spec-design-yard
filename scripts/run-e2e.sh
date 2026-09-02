@@ -108,6 +108,14 @@ run_scenario() {
   stop_server "$port"
 }
 
+# The preflight guards are the only thing between a hand-run scenario and
+# somebody's real project, so they are unit-tested before any server starts.
+if ! python3 "$REPO/scripts/test_e2e_guard.py" >/dev/null 2>&1; then
+  echo "e2e preflight guard tests FAILED — refusing to run any scenario" >&2
+  python3 "$REPO/scripts/test_e2e_guard.py" >&2
+  exit 2
+fi
+
 ONLY="${1:-}"
 
 # --- 1. file mode: launched straight into a project via the env var ---
@@ -118,11 +126,16 @@ run_scenario "file-mode" "$BASE_PORT" "scripts/e2e-file-mode.py" \
   "SPEC_YARD_PROJECT_DIR=$CLIENT"
 
 # --- 2. first run: nothing configured; the whole GUI story ---
-SCENARIO_ENV=("SPEC_YARD_E2E_A=$TMP/project-a" "SPEC_YARD_E2E_B=$TMP/project-b")
+# SPEC_YARD_E2E_CONFIG_WRITES_OK is the opt-in these two scenarios demand
+# before they will touch server-side config. Only this harness may set it: it
+# is what says "the config dir this server is using is throwaway", which
+# /api/project cannot tell you (an unconfigured real install looks the same).
+SCENARIO_ENV=("SPEC_YARD_E2E_A=$TMP/project-a" "SPEC_YARD_E2E_B=$TMP/project-b"
+              "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "first-run" "$((BASE_PORT + 1))" "scripts/e2e-first-run.py"
 
 # --- 3. standalone: the browser-storage opt-out ---
-SCENARIO_ENV=()
+SCENARIO_ENV=("SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "standalone" "$((BASE_PORT + 2))" "scripts/e2e-standalone-mode.py"
 
 # --- 4. editor ergonomics: extension point for Lanes A and B ---

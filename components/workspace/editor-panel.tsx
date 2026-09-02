@@ -72,6 +72,32 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   // scripts/e2e-editor-ergonomics.py asserts the real selection bounds.
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
 
+  /**
+   * Hand the edited text to the parent and say where the selection must end
+   * up once that edit commits.
+   *
+   * When the text is UNCHANGED there is nothing for React to commit, so the
+   * layout effect never runs and an armed ref would stay armed until some
+   * later, unrelated commit fired it — stealing focus back into the textarea
+   * and re-selecting a block the user had moved on from. So a no-op applies
+   * the range synchronously and arms nothing.
+   */
+  const commitWithSelection = (
+    nextValue: string,
+    selection: { start: number; end: number },
+    target: HTMLTextAreaElement
+  ) => {
+    if (nextValue === value) {
+      target.setSelectionRange(selection.start, selection.end)
+      setCursorPos(selection.start)
+      return
+    }
+    // Arm BEFORE onChange: the commit onChange triggers is the one the layout
+    // effect must see the ref on.
+    pendingSelectionRef.current = selection
+    onChange(nextValue)
+  }
+
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const overlay = overlayRef.current
     if (overlay) {
@@ -126,11 +152,10 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     if (!autocomplete) return
     const [start, end] = autocomplete.replaceRange
     const newValue = value.substring(0, start) + sug + value.substring(end)
-    onChange(newValue)
-
-    // Return focus to textarea and adjust cursor position
     const newCursorPos = start + sug.length
-    pendingSelectionRef.current = { start: newCursorPos, end: newCursorPos }
+    const textarea = textareaRef.current
+    if (!textarea) return
+    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, textarea)
   }
 
   const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -139,8 +164,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
       outdent: e.shiftKey,
     })
-    pendingSelectionRef.current = { start: selStart, end: selEnd }
-    onChange(text)
+    commitWithSelection(text, { start: selStart, end: selEnd }, target)
   }
 
   const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -154,8 +178,7 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     const insertion = "\n" + newIndent
     const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
     const newCursorPos = target.selectionStart + insertion.length
-    pendingSelectionRef.current = { start: newCursorPos, end: newCursorPos }
-    onChange(newValue)
+    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, target)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1868,6 +1891,22 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 // an unclamped ask can eat the YAML textarea whole on a short pane.
 const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
 const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
+// The Auto-Fix-All banner (p-2.5 + mb-3 + border) renders INSIDE the body,
+// above the rows, so at the bare 72px floor it was visible and the first
+// issue row was clipped — the floor's whole promise. The minimum grows by the
+// banner when there is one.
+// Measured in real Chromium (scripts/e2e-editor-ergonomics.py prints the
+// boxes): from the body's top to the bottom of the first row's action button
+// is ~166px when the banner is present, against the 72px that one row alone
+// needs. 96 is that difference, rounded up.
+// Measured in real Chromium: the Auto-Fix-All strip is ~48px with its border
+// and padding. It is chrome above the scrollable body rather than a row inside
+// it, but it is paid for out of the PANEL's height, not added on top — see the
+// JSX comment. Two things depend on that: the first issue row is never clipped
+// by the banner, and the panel's total height does not change when the banner
+// appears or disappears mid-edit, which would otherwise resize the editor and
+// desynchronise the highlight overlay from the textarea's scroll.
+const DIAGNOSTICS_BANNER_HEIGHT = 48
 const DIAGNOSTICS_MAX_HEIGHT = 480 // the ceiling on a tall viewport
 // Everything in the pane that is not diagnostics body: the fixed chrome (tab
 // bar 36 + breadcrumb 28 + resize handle 5 + panel header 32 = 101) plus a
@@ -1888,15 +1927,19 @@ const DIAGNOSTICS_RESERVED_HEIGHT = 261
  * first row, which is neither usable nor an honest collapse. 72px remains the
  * floor of a drag on any pane that can afford it.
  */
-function diagnosticsMaxHeight(paneHeight: number) {
+function diagnosticsMaxHeight(paneHeight: number, minHeight = DIAGNOSTICS_MIN_HEIGHT) {
   if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
   const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
-  if (available < DIAGNOSTICS_MIN_HEIGHT) return 0
+  if (available < minHeight) return 0
   return Math.min(DIAGNOSTICS_MAX_HEIGHT, available)
 }
 
-function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIGHT) {
-  return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), maxHeight)
+function clampDiagnosticsHeight(
+  height: number,
+  maxHeight = DIAGNOSTICS_MAX_HEIGHT,
+  minHeight = DIAGNOSTICS_MIN_HEIGHT
+) {
+  return Math.min(Math.max(height, minHeight), maxHeight)
 }
 
 export function EditorPanel({
@@ -1959,48 +2002,43 @@ export function EditorPanel({
   // body must then be UNMOUNTED, not merely zero-height: under border-box a
   // height-0 body still paints its border-t and p-3 as an empty strip, under a
   // header offering to "Collapse" what is already invisible.
-  const [diagnosticsCeiling, setDiagnosticsCeiling] = useState(DIAGNOSTICS_MAX_HEIGHT)
-  const [diagnosticsHeight, setDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
+  // The height the USER asked for, never overwritten by a window resize: the
+  // rendered height is derived from it against the current ceiling. Storing
+  // only the clamped value meant shrinking the window until the panel hit its
+  // floor and then enlarging again gave back the floor, not the dragged height.
+  const diagnosticsHeightRef = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [wantedDiagnosticsHeight, setWantedDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [measuredPaneHeight, setMeasuredPaneHeight] = useState(0)
   const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
-  /** The pane can afford the panel AND the user has not collapsed it. */
-  const diagnosticsFits = diagnosticsCeiling > 0
-  const bodyVisible = showDiagnostics && diagnosticsFits
   const diagnosticsDragStartY = useRef(0)
   const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  // Written during render (below, once the diagnostics are known) so the drag
+  // and resize handlers, which run after it, see the current bounds.
   const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
+  const diagnosticsMinRef = useRef(DIAGNOSTICS_MIN_HEIGHT)
   // The pane the panel lives in — measured, so the ceiling tracks a 900px
   // laptop or a short split instead of assuming a tall viewport.
   const editorPaneRef = useRef<HTMLElement>(null)
-  const measureDiagnosticsMax = () =>
-    diagnosticsMaxHeight(editorPaneRef.current?.getBoundingClientRect().height ?? 0)
 
   // Drag-to-resize, adapted from the pane splitter in workspace-layout.tsx:
   // clientX becomes clientY, and the delta sign is inverted because the handle
   // sits on the panel's TOP edge — dragging up has to make the panel taller.
   const startDiagnosticsResize = (clientY: number) => {
     diagnosticsDragStartY.current = clientY
-    diagnosticsDragStartHeight.current = diagnosticsHeight
-    diagnosticsMaxRef.current = measureDiagnosticsMax()
+    diagnosticsDragStartHeight.current = diagnosticsHeightRef.current
     setIsResizingDiagnostics(true)
   }
 
-  // The default height is an ask, not a measurement, so it needs the same
-  // ceiling as a drag does — on first layout, before the user sees anything.
-  // A short pane plus the unclamped 128px default collapsed the YAML editor on
-  // first paint. And a window that shrinks after a drag would otherwise leave
-  // the panel taller than the pane now allows, so the same clamp runs on
-  // resize. Layout phase, so no over-tall frame is ever painted; jsdom and any
+  // Measure only. The ceiling and the rendered height are derived from this
+  // during render, so a resize can never destroy the user's wanted height.
+  // Layout phase, so no over-tall frame is ever painted; jsdom and any
   // pre-layout render measure 0 and keep the constant default.
   useIsomorphicLayoutEffect(() => {
-    const applyPaneCeiling = () => {
-      const max = measureDiagnosticsMax()
-      diagnosticsMaxRef.current = max
-      setDiagnosticsCeiling(max)
-      setDiagnosticsHeight((h) => clampDiagnosticsHeight(h, max))
-    }
-    applyPaneCeiling()
-    window.addEventListener("resize", applyPaneCeiling)
-    return () => window.removeEventListener("resize", applyPaneCeiling)
+    const measure = () =>
+      setMeasuredPaneHeight(editorPaneRef.current?.getBoundingClientRect().height ?? 0)
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
   }, [])
 
   useEffect(() => {
@@ -2008,8 +2046,12 @@ export function EditorPanel({
 
     const resizeTo = (clientY: number) => {
       const delta = clientY - diagnosticsDragStartY.current
-      setDiagnosticsHeight(
-        clampDiagnosticsHeight(diagnosticsDragStartHeight.current - delta, diagnosticsMaxRef.current)
+      setWantedDiagnosticsHeight(
+        clampDiagnosticsHeight(
+          diagnosticsDragStartHeight.current - delta,
+          diagnosticsMaxRef.current,
+          diagnosticsMinRef.current
+        )
       )
     }
     const onMouseMove = (e: MouseEvent) => resizeTo(e.clientY)
@@ -2087,6 +2129,31 @@ export function EditorPanel({
       return d.code && d.path && isFixable(d)
     })
   }, [diagnostics])
+
+  // ── Diagnostics panel sizing, derived ──
+  // Computed here rather than with the state above because the floor depends
+  // on whether the Auto-Fix-All banner is rendered, which is only known once
+  // the diagnostics are. The refs carry the result to the drag and resize
+  // handlers, which run after this render.
+  const showsFixBanner = !yamlSyntaxError && fixableDiagnostics.length > 0
+  const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
+  // The floor is one issue row PLUS the banner strip above it, so the row is
+  // never the thing that gets clipped. The panel's own height is unchanged by
+  // the banner — the strip comes out of the body's share of it.
+  const diagnosticsMin = DIAGNOSTICS_MIN_HEIGHT + bannerHeight
+  const diagnosticsCeiling = diagnosticsMaxHeight(measuredPaneHeight, diagnosticsMin)
+  const diagnosticsHeight = clampDiagnosticsHeight(
+    wantedDiagnosticsHeight,
+    diagnosticsCeiling,
+    diagnosticsMin
+  )
+  const diagnosticsBodyHeight = Math.max(0, diagnosticsHeight - bannerHeight)
+  diagnosticsMinRef.current = diagnosticsMin
+  diagnosticsMaxRef.current = diagnosticsCeiling
+  diagnosticsHeightRef.current = diagnosticsHeight
+  /** The pane can afford the panel AND the user has not collapsed it. */
+  const diagnosticsFits = diagnosticsCeiling > 0
+  const bodyVisible = showDiagnostics && diagnosticsFits
 
   const handleFixAll = () => {
     const fixes = fixableDiagnostics.map((d) => {
@@ -2413,12 +2480,35 @@ export function EditorPanel({
           </span>
         </div>
 
+        {/* Auto-Fix-All banner. Deliberately OUTSIDE the body's height budget:
+            rendered inside it, above the rows, it ate the whole one-row floor
+            and the first issue row was clipped — the floor's whole promise.
+            `shrink-0` so it is never squeezed; DIAGNOSTICS_RESERVED_HEIGHT
+            accounts for it so the editor keeps its own floor too. */}
+        {bodyVisible && showsFixBanner && (
+          <div
+            data-testid="diagnostics-fix-banner"
+            className="shrink-0 flex items-center justify-between bg-indigo-500/10 border-t border-indigo-500/25 p-2.5 font-sans select-none"
+          >
+            <div className="text-indigo-300 text-xs">
+              Found <span className="font-bold">{fixableDiagnostics.length}</span> auto-fixable issue{fixableDiagnostics.length > 1 ? 's' : ''}!
+            </div>
+            <button
+              type="button"
+              onClick={handleFixAll}
+              className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow transition-colors active:scale-95 shrink-0"
+            >
+              Auto-Fix All
+            </button>
+          </div>
+        )}
+
         {/* Panel body */}
         {bodyVisible && (
           <div
             data-testid="diagnostics-body"
             className="border-t overflow-y-auto p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
-            style={{ borderColor: "var(--border)", height: diagnosticsHeight }}
+            style={{ borderColor: "var(--border)", height: diagnosticsBodyHeight }}
           >
             {yamlSyntaxError && (
               <div className="text-red-400 flex items-start gap-1.5">
@@ -2434,21 +2524,6 @@ export function EditorPanel({
               <div className="text-emerald-400 flex items-center gap-1.5 py-0.5">
                 <span className="text-emerald-500">✓</span>
                 <span>No issues found. Your specification is syntactically sound and logically consistent!</span>
-              </div>
-            )}
-
-            {!yamlSyntaxError && fixableDiagnostics.length > 0 && (
-              <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/25 rounded-lg p-2.5 mb-3 font-sans select-none">
-                <div className="text-indigo-300 text-xs">
-                  Found <span className="font-bold">{fixableDiagnostics.length}</span> auto-fixable issue{fixableDiagnostics.length > 1 ? 's' : ''}!
-                </div>
-                <button
-                  type="button"
-                  onClick={handleFixAll}
-                  className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow transition-colors active:scale-95 shrink-0"
-                >
-                  Auto-Fix All
-                </button>
               </div>
             )}
 
