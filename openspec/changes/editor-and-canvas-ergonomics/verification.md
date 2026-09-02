@@ -9,7 +9,7 @@ once by inventing a second run the file cannot hold (`lane-verify.sh`
 truncates `status` on every run, so it records exactly one).
 
 <!-- GATED COMMIT: copy the HEAD= line from status verbatim, nothing more. -->
-**Gate: `HEAD=GATE_HEAD_PLACEHOLDER`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
+**Gate: `HEAD=e57fed1a9c4827dc58531364a7c2f5a6763abf8a`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
 STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0.
 
 Seven hardening rounds followed the first green gate at `f8f8ee7`: nine
