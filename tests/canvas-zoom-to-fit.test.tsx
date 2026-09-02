@@ -361,6 +361,26 @@ describe('zoom to fit — one fit per loaded spec', () => {
     expect(captured.scene).toEqual([])
   })
 
+  test('an updateScene failure is logged instead of tearing the canvas down', async () => {
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-a" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    captured.api.updateScene.mockImplementationOnce(() => {
+      throw new Error('scene rejected')
+    })
+    rerender(<ExcalidrawCanvas parsedSpec={specB} specIdentity="spec-b" />)
+    await flushInitialFit()
+
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to update Excalidraw scene: ',
+      expect.any(Error)
+    )
+    expect(screen.getByTestId('excalidraw-stub')).toBeInTheDocument()
+    consoleError.mockRestore()
+  })
+
   test('a spec loaded after an empty one still gets its own fit', async () => {
     // The guard above must not become a blanket "never fit again": a real
     // project loading in after an empty one is a fresh load and is owed a fit.
