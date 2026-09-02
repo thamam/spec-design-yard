@@ -1,21 +1,25 @@
 # Verification — editor-and-canvas-ergonomics
 
-Verified on branch `feat/backlog-sweep` at `84d87f6`, against base
-`origin/main` @ `3bd0211`. Four hardening rounds followed the first green gate
-at `f8f8ee7`: nine defects (round 1), seven (round 2), seven (round 3) and
-nine (round 4), each round a BLOCK from an independent cross-model review of
-the merged diff. This table is the re-run after all thirty-two landed.
+Verified on branch `feat/backlog-sweep` at `257ea54` — the commit the gate
+below actually ran against — with base `origin/main` @ `3bd0211`. Five
+hardening rounds followed the first green gate at `f8f8ee7`: nine defects
+(round 1), seven (round 2), seven (round 3), nine (round 4) and eleven
+(round 5), each a BLOCK from an independent cross-model review of the merged
+diff. This table is the re-run after all forty-three landed.
 
-Round 4 includes a defect **this work introduced**: round-3 FIX M's caret
-restore left its pending-selection ref armed when an indent was a no-op, and
-the stale range then stole focus on the next unrelated commit. It is recorded
-as a regression, not as a find.
+Two of those are defects **this work introduced** and are recorded as
+regressions, not finds: round-3 FIX M's caret restore left its
+pending-selection ref armed after a no-op indent, so the stale range stole
+focus on the next unrelated commit (fixed in round 4); and round-4 FIX U tied
+the diagnostics panel's floor to the Auto-Fix-All strip, which made the
+panel's *existence* depend on the spec's content in a narrow band of pane
+heights (fixed in round 5).
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 658 tests, 0 failures** (round 3 at `3c6e45a`: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 674 tests, 0 failures** (round 4 at `6d40bc0`: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -73,6 +77,16 @@ exits 2 with the decoy byte-identical.
   still accepts. Covered by "Tab routing when the suggestion popup is open" in
   `tests/editor-indent.test.ts`, whose fixture sits at a 4-space indent so
   component-field autocomplete is genuinely live.
+- *IME composition* — Enter and Tab belong to an in-flight IME composition:
+  they commit or cycle a candidate. `handleKeyDown` returns immediately on
+  `isComposing` (and the legacy `keyCode === 229`), so a Japanese or Chinese
+  user's Enter no longer throws the composition away and inserts an indented
+  newline instead.
+- *Enter mid-line* — the text after the caret moves to the new line, so it
+  cannot decide whether the line being split opens a block.
+  `detectIndentContext` takes `upToCursor`, which Enter passes and autocomplete
+  does not: `  metadata:|owner: Tomer` now nests `owner:` instead of making it
+  a sibling.
 - *Blank-line indent* — `detectIndentContext` reports a whitespace-only line's
   literal indent, which Enter needs so a blank line inside a block keeps its
   indentation. `origin/main`'s inline autocomplete detector reported 0, so
@@ -124,27 +138,27 @@ exits 2 with the decoy byte-identical.
   ADD DESCRIPTION rows are clipped **before** the drag and then click one from
   that recorded set. The collapse toggle is unchanged and covered by "the header
   click still collapses and re-expands at the dragged height".
-- *Floor conflict* — on a pane too short to pay both the diagnostics floor and
-  the editor's, the editor wins: `diagnosticsMaxHeight` returns 0 rather than a
-  height below the one-row minimum — where "one row" now includes the
-  Auto-Fix-All banner strip, which used to render *inside* the body above the
-  rows and ate the whole floor, leaving the first issue row clipped. The banner
-  is chrome above the scrollable body, paid for out of the panel's own height
-  rather than added to it: outside the body it cannot clip a row, and inside
-  the panel's budget it does not change the panel's total height when it
-  appears or disappears mid-edit. That second half matters — the first attempt
-  added it on top, which resized the editor as the user typed and
-  desynchronised the highlight overlay from the textarea's scroll, caught by an
-  existing e2e beat and by no unit test. The body is **unmounted**, not
-  merely zero-height. A height-0 body still paints its `border-t` and `p-3`
-  under border-box: a 25px empty strip beneath a header offering to "Collapse"
-  what is already invisible. The resize handle goes with it, the label reads
-  "Expand", and the header click is a no-op carrying a `title` saying the pane
-  is too short. 72px remains the drag floor on any pane that can afford it.
-  Covered by presence/absence assertions at 200px and 300px, by "a pane one
-  pixel above the floor keeps a real one-row panel" (the 333px boundary the
-  collapse rule must not eat), and by "at a 340px pane the body mounts at the
-  one-row floor and can collapse".
+- *Floor conflict* — the panel is one whole issue row or nothing. On a pane
+  that cannot pay that floor it is unmounted, not merely zero-height: a
+  height-0 body still paints its border and padding as an empty strip beneath
+  a header offering to "Collapse" what is already invisible. The resize handle
+  goes with it, the label reads "Expand", and the header click is a no-op
+  carrying a `title` saying the pane is too short.
+- *The Auto-Fix-All strip* — chrome above the scrollable body, not a row
+  inside it (inside, it ate the whole floor and clipped the first issue row),
+  and paid for out of the panel's own height rather than added to it (added,
+  the panel's height moved with the spec's content, which resized the editor
+  mid-edit and desynchronised the highlight overlay from the textarea's
+  scroll). Whether the strip shows depends on the pane; whether the PANEL
+  shows does not. In the band that affords a row but not the strip, the strip
+  yields and every issue row keeps its own action button, so the fix stays one
+  click away. Covered by "the panel appears at the same pane height whatever
+  the spec contains", "a pane that fits the row but not the strip drops the
+  STRIP, not the panel", "the strip comes back once the pane can pay for it",
+  and the real-browser beats "the Auto-Fix-All banner is a sibling of the
+  body, not inside it" and "at the floor the first issue row is fully inside
+  the body". Every jsdom height in that suite is derived in a comment from the
+  two constants rather than from a remembered number.
 - *Drag mechanism* — window-level `mousedown`/`mousemove`/`mouseup` and
   `touchstart`/`touchmove`/`touchend`/`touchcancel`. No `PointerEvent` and no
   `setPointerCapture` anywhere: jsdom 24 provides neither, and the requirement's
@@ -188,7 +202,11 @@ exits 2 with the decoy byte-identical.
   NaN and the infinities as `.nan` / `.inf`, both of which pass a
   `typeof === 'number'` check, so a component's `x`/`y` must be
   `Number.isFinite` or it falls back to the computed layout exactly as a
-  missing coordinate does. Fixture `POISONED_YAML` in
+  missing coordinate does — and so does one beyond `MAX_COORD` (1e7). Finite
+  is not sufficient: `1e308` and `-1e308` both pass `Number.isFinite`, but the
+  arrow between two such components has a `dx` of `-Infinity`, and its width
+  and points poison `getCommonBounds` exactly as a NaN would. Fixture
+  `POISONED_YAML` in
   `tests/canvas-zoom-to-fit.test.tsx` is parsed through `parseSpec`, and a
   companion test asserts the fixture really does yield non-finite numbers.
   The invariant is stated precisely: the normalizer guarantees `angle: 0`,
@@ -360,6 +378,35 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   P, a HEAD attributed to the wrong commit, and the FIX J e2e claim that every
   scenario "exits 2 having written nothing" — untrue for three of them until
   round 4 fixed it. That claim has been rewritten above rather than deleted.
+- **Merged diff, round 5** — a fifth review returned BLOCK with eight
+  findings, and an independent proof of the round-4 tests added three more.
+  Three are user-facing: Enter was intercepted during IME composition, Enter
+  mid-line decided the block from the whole line rather than the half being
+  left behind, and a pair of absurd-but-finite coordinates produced infinite
+  arrow geometry. One is a regression from round-4 FIX U (see the header). The
+  rest close harness and gate holes: the ergonomics scenario switched projects
+  — a config write — without the opt-in the other two scenarios demand; the
+  path decoder was missing four of git's C escapes, so a BEL in a filename was
+  attributed to a different file's coverage; a window blur mid-drag could
+  leave the panel resizing; and the Esc escape hatch survived edits the user
+  did not type.
+- **Record correction (round 5)** — the round-4 record had eight errors, each
+  re-verified before correction: a test filed as green-on-base that is red on
+  base, one green-on-base test in neither group, two jsdom reds omitted from
+  FIX U (which recorded only its real-browser red), a FIX W red quotation that
+  does not reproduce (the test fails first on a FIX U number, so the quoted
+  assertion was never the one that failed), two renamed and re-anchored tests
+  with no supersession recorded, a *Floor conflict* bullet citing both
+  superseded test names and both old numbers, a HEAD attributed to a commit
+  the gate never ran against, and FIX X filed as mutation-only when it is
+  behaviour-red on base. The header and the floor bullet above are the
+  rewrites; the rest are in `.orchestrator/integration/status`.
+
+Two classes of never-red assertion the review flagged are deliberate and
+recorded as such: the Group-2 regression guards, each labelled in its own
+source with why it is kept and that it is not evidence; and the fourteen cases
+in `scripts/test_e2e_guard.py`, which are new-surface tests of a module this
+work introduced, not evidence of a behaviour change.
 - **Merged diff, round 3** — a third Codex review returned BLOCK with seven
   findings: the e2e scenarios could autosave over a real project; a short pane
   still rendered a padded sliver labelled "Collapse"; the gate's base default
