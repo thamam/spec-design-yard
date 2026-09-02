@@ -1,10 +1,14 @@
 # Verification — editor-and-canvas-ergonomics
 
 Verified on branch `feat/backlog-sweep` against base `origin/main` @
-`3bd0211`, at **`09ce584`** — copied from the `HEAD=` line of the gate's own
-`status` file, not inferred. Three rounds running this line named a commit the
-gate had not run against, each time by reasoning about which it must have
-been; the gate is now re-run on the documentation commit so the two agree.
+`3bd0211`. The gate was run twice and both are recorded in
+`.orchestrator/integration/status`: at **`09ce584`**, the last code-bearing
+commit, and again at **`cd113a8`**, this file's own commit, so that no
+documentation change sits on an ungated tree. Both hashes are copied from the
+gate's `HEAD=` line, not inferred — three rounds running this line named a
+commit the gate had not run against, each time by reasoning about which it
+must have been. (A documentation edit necessarily lands after the run that
+names it; stating both hashes is what makes that terminate honestly.)
 
 Six hardening rounds followed the first green gate at `f8f8ee7`: nine defects
 (round 1), seven (round 2), seven (round 3), nine (round 4), eleven (round 5)
