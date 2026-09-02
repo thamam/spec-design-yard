@@ -263,3 +263,68 @@ describe('CodeTab Tab indent + undo', () => {
     expect(textarea.value).toBe(baseline)
   })
 })
+
+describe('Tab routing when the suggestion popup is open', () => {
+  // The popup goes live at a 4-space indent inside `components:`, where the
+  // component-field vocabulary applies. Earlier fixtures dodged this by
+  // selecting indent-2 or non-YAML text, so the autocomplete branch never
+  // competed with a real indent gesture.
+  const VALUE = 'system:\n  components:\n    - id: alpha\n      type: Stage\n'
+  const LINE_3 = VALUE.indexOf('    - id: alpha')
+  const INTO_LINE_4 = VALUE.indexOf('      type: Stage') + '      type'.length
+
+  async function setup(selStart: number, selEnd: number) {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: VALUE } })
+    textarea.focus()
+    textarea.setSelectionRange(selStart, selEnd)
+    fireEvent.select(textarea)
+    // The popup really is claiming the keyboard for these fixtures.
+    expect(screen.getByText('connections:')).toBeInTheDocument()
+    return textarea
+  }
+
+  test('Tab over a multi-line selection indents instead of accepting a suggestion', async () => {
+    const textarea = await setup(LINE_3, INTO_LINE_4)
+
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+
+    expect(textarea.value).toBe(
+      'system:\n  components:\n      - id: alpha\n        type: Stage\n'
+    )
+  })
+
+  test('Shift+Tab over a multi-line selection outdents instead of accepting a suggestion', async () => {
+    const textarea = await setup(LINE_3, INTO_LINE_4)
+
+    fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+
+    expect(textarea.value).toBe(
+      'system:\n  components:\n  - id: alpha\n    type: Stage\n'
+    )
+  })
+
+  test('Shift+Tab at a collapsed caret outdents instead of accepting a suggestion', async () => {
+    const textarea = await setup(LINE_3, LINE_3)
+
+    fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+
+    expect(textarea.value).toBe(
+      'system:\n  components:\n  - id: alpha\n      type: Stage\n'
+    )
+  })
+
+  test('Tab at a collapsed caret still accepts the highlighted suggestion', async () => {
+    // The other half of the contract: routing indent first must not take the
+    // popup's Tab away from the ordinary single-caret case.
+    const textarea = await setup(LINE_3, LINE_3)
+
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+
+    expect(textarea.value).toBe(
+      'system:\n  components:\nid:    - id: alpha\n      type: Stage\n'
+    )
+  })
+})

@@ -175,11 +175,24 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     expect(body().style.height).toBe('480px')
   })
 
-  test('a pane so short the reserve exceeds it never clamps below the minimum', () => {
+  test('a pane too short for both floors gives the space to the editor', () => {
+    // 200px of pane, 101px of fixed chrome. Holding the 72px diagnostics floor
+    // left the textarea a 27px box carrying 40px of its own padding — no
+    // visible editing line at all. When the two floors cannot both be paid,
+    // diagnostics collapses rather than the editor.
     stubPaneHeight(200)
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, -5000)
-    expect(body().style.height).toBe('72px')
+    expect(body().style.height).toBe('0px')
+  })
+
+  test('a pane that misses the floors only just still prefers the editor', () => {
+    // 300 − 261 reserved = 39: below the 72px diagnostics floor, so the panel
+    // takes 39 and the textarea keeps its own 160px floor intact.
+    stubPaneHeight(300)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('39px')
   })
 
   test('a short pane clamps the INITIAL height, before any drag happens', () => {
@@ -188,7 +201,7 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     // nothing on first paint — the exact failure the clamp exists to prevent.
     stubPaneHeight(200)
     const { body } = renderPanel()
-    expect(body().style.height).toBe('72px')
+    expect(body().style.height).toBe('0px')
   })
 
   test('a mid-height pane clamps the initial height to what the pane leaves', () => {

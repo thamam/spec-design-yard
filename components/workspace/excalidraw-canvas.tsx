@@ -120,7 +120,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
 
   components.forEach((comp: any) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
-    if (typeof comp.x === 'number' && typeof comp.y === 'number') {
+    // Number.isFinite, not `typeof === 'number'`: YAML spells NaN and the
+    // infinities as `.nan` / `.inf`, and both pass a typeof check. They flow
+    // straight into element geometry, poison getCommonBounds, and leave
+    // scrollToContent writing a non-finite scroll/zoom — a blank canvas with
+    // no error. A non-finite coordinate falls back to the computed layout,
+    // exactly as a missing one already does.
+    if (Number.isFinite(comp.x) && Number.isFinite(comp.y)) {
       positions[comp.id] = {
         x: comp.x,
         y: comp.y,
@@ -710,11 +716,23 @@ export function ExcalidrawCanvas({
   // the case the fit exists for.
   const latestElementsRef = useRef(elements)
   latestElementsRef.current = elements
+  const latestSpecIdentityRef = useRef<FitIdentity>(specIdentity)
+  latestSpecIdentityRef.current = specIdentity
   const handledSpecIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
   const scheduledFitIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
   const fitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!excalidrawAPI) return
+    // A fit still in flight for a *different* identity is stale, and cancelling
+    // it has to happen before every early return below — the empty-spec branch
+    // used to return with the previous identity's timer still armed. It then
+    // fired, framed a spec that was no longer loaded, and rewound the handled
+    // latch to it, so that spec's next ordinary edit read as a fresh load.
+    if (fitTimerRef.current !== null && scheduledFitIdentityRef.current !== specIdentity) {
+      clearTimeout(fitTimerRef.current)
+      fitTimerRef.current = null
+      scheduledFitIdentityRef.current = NO_FIT_YET
+    }
     if (handledSpecIdentityRef.current === specIdentity) return
     if (elements.length === 0) {
       // Nothing to fit to — but this identity is now handled, so the first
@@ -729,6 +747,10 @@ export function ExcalidrawCanvas({
     scheduledFitIdentityRef.current = specIdentity
     fitTimerRef.current = setTimeout(() => {
       fitTimerRef.current = null
+      /* v8 ignore next 3 -- defence in depth: the cancel above already stops a
+         stale callback, and the effect's specIdentity dependency guarantees it
+         runs before any timer can fire, so this branch is unreachable today. */
+      if (latestSpecIdentityRef.current !== specIdentity) return
       try {
         excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
         handledSpecIdentityRef.current = specIdentity
@@ -747,14 +769,18 @@ export function ExcalidrawCanvas({
     []
   )
 
-  // Sync elements dynamically on the fly without remounting Excalidraw
+  // Sync elements dynamically on the fly without remounting Excalidraw —
+  // including the empty case. Skipping it left the previous spec's diagram
+  // drawn under a newly loaded empty one. Nothing was being guarded: the scene
+  // starts empty via initialData, so the pre-compilation first paint is a
+  // no-op, and diffScene ignores an empty `updatedElements` list, so an empty
+  // scene cannot round-trip back into the spec as a deletion.
   useEffect(() => {
-    if (excalidrawAPI && elements.length > 0) {
-      try {
-        excalidrawAPI.updateScene({ elements })
-      } catch (e) {
-        console.error("Failed to update Excalidraw scene: ", e)
-      }
+    if (!excalidrawAPI) return
+    try {
+      excalidrawAPI.updateScene({ elements })
+    } catch (e) {
+      console.error("Failed to update Excalidraw scene: ", e)
     }
   }, [excalidrawAPI, elements])
 

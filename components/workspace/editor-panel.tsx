@@ -19,7 +19,12 @@ import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
-import { applyIndent } from "../../lib/editor-indent"
+import {
+  applyIndent,
+  domOffsetToRawOffset,
+  rawOffsetToDomOffset,
+  dominantEol,
+} from "../../lib/editor-indent"
 import { YamlHighlightOverlay } from "./yaml-highlight-overlay"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
@@ -86,9 +91,12 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     setCursorPos(e.currentTarget.selectionStart)
   }
 
+  // `cursorPos` is a textarea offset (LF-normalized); `value` is the file's raw
+  // text. Every handler below converts before the two meet — see
+  // domOffsetToRawOffset for why we translate instead of reading target.value.
   const autocomplete = useMemo(() => {
     if (cursorPos === null || suppressAutocomplete) return null
-    const res = getAutocompleteSuggestions(value, cursorPos)
+    const res = getAutocompleteSuggestions(value, domOffsetToRawOffset(value, cursorPos))
     if (res.suggestions.length > 0) return res
     return null
   }, [value, cursorPos, suppressAutocomplete])
@@ -105,17 +113,19 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
 
   const handleApplySuggestion = (sug: string) => {
     if (!autocomplete) return
+    // replaceRange is already in raw coordinates: the memo above hands
+    // getAutocompleteSuggestions a converted cursor.
     const [start, end] = autocomplete.replaceRange
     const newValue = value.substring(0, start) + sug + value.substring(end)
     onChange(newValue)
 
     // Return focus to textarea and adjust cursor position
     if (timerRef.current) clearTimeout(timerRef.current)
+    const newCursorPos = rawOffsetToDomOffset(newValue, start + sug.length)
     timerRef.current = setTimeout(() => {
       const textarea = textareaRef.current
       if (textarea) {
         textarea.focus()
-        const newCursorPos = start + sug.length
         textarea.setSelectionRange(newCursorPos, newCursorPos)
         setCursorPos(newCursorPos)
       }
@@ -125,18 +135,23 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const target = e.currentTarget
-    const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
-      outdent: e.shiftKey,
-    })
+    const { text, selStart, selEnd } = applyIndent(
+      value,
+      domOffsetToRawOffset(value, target.selectionStart),
+      domOffsetToRawOffset(value, target.selectionEnd),
+      { outdent: e.shiftKey }
+    )
     onChange(text)
 
     if (timerRef.current) clearTimeout(timerRef.current)
+    const domSelStart = rawOffsetToDomOffset(text, selStart)
+    const domSelEnd = rawOffsetToDomOffset(text, selEnd)
     timerRef.current = setTimeout(() => {
       const textarea = textareaRef.current
       if (textarea) {
         textarea.focus()
-        textarea.setSelectionRange(selStart, selEnd)
-        setCursorPos(selStart)
+        textarea.setSelectionRange(domSelStart, domSelEnd)
+        setCursorPos(domSelStart)
       }
     }, 0)
   }
@@ -144,11 +159,14 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const target = e.currentTarget
-    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart)
+    const rawStart = domOffsetToRawOffset(value, target.selectionStart)
+    const rawEnd = domOffsetToRawOffset(value, target.selectionEnd)
+    const { indentLevel, opensBlock } = detectIndentContext(value, rawStart)
     const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
-    const insertion = "\n" + newIndent
-    const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
-    const newCursorPos = target.selectionStart + insertion.length
+    // Match the file's own line ending, or a CRLF spec ends up with mixed ones.
+    const insertion = dominantEol(value) + newIndent
+    const newValue = value.slice(0, rawStart) + insertion + value.slice(rawEnd)
+    const newCursorPos = rawOffsetToDomOffset(newValue, rawStart + insertion.length)
     onChange(newValue)
 
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -176,6 +194,21 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     if (releaseFocusOnTab) {
       setReleaseFocusOnTab(false)
       if (e.key === "Tab") {
+        return
+      }
+    }
+
+    // Indent gestures outrank the suggestion popup. A Tab over a selection
+    // that spans lines, and every Shift+Tab, can only mean indent/outdent —
+    // the popup used to claim both and splice its suggestion at the selection
+    // start instead. A collapsed caret with the popup open still accepts.
+    if (e.key === "Tab") {
+      const target = e.currentTarget
+      const spansLines =
+        target.selectionStart !== target.selectionEnd &&
+        target.value.slice(target.selectionStart, target.selectionEnd).includes("\n")
+      if (e.shiftKey || spansLines) {
+        handleIndent(e)
         return
       }
     }
@@ -1867,11 +1900,18 @@ const DIAGNOSTICS_RESERVED_HEIGHT = 261
  * The panel's ceiling for a pane of `paneHeight`. A measurement of 0 — jsdom,
  * or a first render before layout — falls back to the flat constant so the
  * behaviour stays deterministic.
+ *
+ * The floor here is 0, not DIAGNOSTICS_MIN_HEIGHT: on a pane too short to pay
+ * both floors they cannot both be honoured, and holding the panel's 72px left
+ * the textarea a 27px box carrying 40px of its own padding — not one visible
+ * editing line. The editor wins that contest, so diagnostics shrinks past its
+ * floor and collapses entirely rather than squeezing the editor out. 72px is
+ * still the floor of a drag on any pane that can afford it.
  */
 function diagnosticsMaxHeight(paneHeight: number) {
   if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
   const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
-  return Math.max(DIAGNOSTICS_MIN_HEIGHT, Math.min(DIAGNOSTICS_MAX_HEIGHT, available))
+  return Math.max(0, Math.min(DIAGNOSTICS_MAX_HEIGHT, available))
 }
 
 function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIGHT) {

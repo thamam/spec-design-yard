@@ -291,12 +291,16 @@ with sync_playwright() as p:
 """
     ta.fill(final_spec)
     time.sleep(2.5)  # autosave debounce
-    if os.path.exists(spec_file):
-        content = open(spec_file).read()
-        check(
-            "Lane A's edited YAML lands in main.spec.yaml on disk",
-            "Ergonomics Final" in content and "alpha" in content and "beta" in content,
-        )
+    # Existence is asserted unconditionally: guarding the whole check on
+    # os.path.exists meant a vanished file failed nothing at all.
+    spec_file_exists = os.path.exists(spec_file)
+    check("main.spec.yaml still exists after the edit", spec_file_exists, spec_file)
+    content = open(spec_file).read() if spec_file_exists else ""
+    check(
+        "Lane A's edited YAML lands in main.spec.yaml on disk",
+        "Ergonomics Final" in content and "alpha" in content and "beta" in content,
+        repr(content[:200]),
+    )
     shot(page, "09-editor-ergonomics-final-save")
     # ================= Lane B — canvas ergonomics =================
     # Beats for the resizable diagnostics panel and the three routes to
@@ -584,11 +588,19 @@ with sync_playwright() as p:
     shot(page, "17-shortcut-suppressed-in-yaml")
 
     # ---------- B3: switching projects re-frames the canvas ----------
-    # The automatic fit is latched on `spec-${loadedSpecId}`, and loadedSpecId
-    # is bumped by workspace hydration — i.e. by a project/spec LOAD. Nothing
-    # in jsdom exercises that derivation: those tests hand ExcalidrawCanvas a
-    # fabricated specIdentity prop, so breaking the production wiring leaves
-    # them all green. This beat drives a real switch through the picker.
+    # SCOPE, stated plainly: this beat covers the RELOADED path only. Switching
+    # projects calls window.location.reload() (project-picker.tsx), so the
+    # canvas remounts and does its ordinary initial fit. That fit does not
+    # depend on the `spec-${loadedSpecId}` wiring — delete the wiring and this
+    # beat still passes. It is kept because the reloaded path is the one real
+    # users take, and because no unit test drives the picker, the reload, and
+    # the re-hydration end to end.
+    #
+    # The same-mount case — an identity changing under an already-mounted
+    # canvas, which IS what the wiring buys — is covered at unit level in
+    # tests/canvas-zoom-to-fit.test.tsx ("a newly loaded spec re-fits; an edit
+    # to the same spec does not", "a fit scheduled for the previous identity
+    # does not resurrect it").
     #
     # Project B's content sits far from project A's, so a viewport left on A's
     # framing cannot accidentally be framing B's.

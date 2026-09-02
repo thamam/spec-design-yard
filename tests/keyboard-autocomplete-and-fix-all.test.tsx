@@ -165,6 +165,9 @@ describe('CodeTab autocomplete-accept caret restore (setTimeout flush)', () => {
     vi.useRealTimers()
   })
 
+  // Red/green record: this test was already GREEN against origin/main — the
+  // base document.getElementById path restored the same caret. It is kept as a
+  // regression guard on the ref-based path, not claimed as evidence for a fix.
   test('Tab-accepting a suggestion restores focus and caret via the textarea ref', async () => {
     render(<Workspace />)
     vi.useRealTimers()

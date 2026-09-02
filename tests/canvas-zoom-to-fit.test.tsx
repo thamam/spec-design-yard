@@ -39,6 +39,7 @@ vi.mock('@excalidraw/excalidraw', () => {
 })
 
 import Workspace from '../components/Workspace'
+import { parseSpec } from '../lib/spec-model'
 import {
   ExcalidrawCanvas,
   compileSpecToExcalidrawElements,
@@ -319,6 +320,47 @@ describe('zoom to fit — one fit per loaded spec', () => {
     expect(captured.api.scrollToContent).not.toHaveBeenCalled()
   })
 
+  test('a fit scheduled for the previous identity does not resurrect it', async () => {
+    // A non-empty spec schedules a fit 300ms out. If an empty spec loads
+    // inside that window, the old timer used to survive: it fired, framed a
+    // spec that was no longer loaded, and rewound the handled latch to it —
+    // so adding the new spec's first component read as a fresh load and threw
+    // away the user's pan.
+    const emptyB = { system: { name: 'B', components: [] } }
+    const bWithOne = { system: { name: 'B', components: [{ id: 'b1', type: 'Store', x: 0, y: 0 }] } }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-a" />)
+    await flushUntilCanvasMounted()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={emptyB} specIdentity="spec-b" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+
+    rerender(<ExcalidrawCanvas parsedSpec={bWithOne} specIdentity="spec-b" />)
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
+  test('an emptied spec clears the canvas instead of leaving the old diagram drawn', async () => {
+    const emptyB = { system: { name: 'B', components: [] } }
+
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-a" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    expect(captured.scene.length).toBeGreaterThan(0)
+
+    captured.api.updateScene.mockClear()
+    rerender(<ExcalidrawCanvas parsedSpec={emptyB} specIdentity="spec-b" />)
+    await flushInitialFit()
+
+    expect(captured.api.updateScene).toHaveBeenCalledWith({ elements: [] })
+    expect(captured.scene).toEqual([])
+  })
+
   test('a spec loaded after an empty one still gets its own fit', async () => {
     // The guard above must not become a blanket "never fit again": a real
     // project loading in after an empty one is a fresh load and is owed a fit.
@@ -335,6 +377,32 @@ describe('zoom to fit — one fit per loaded spec', () => {
   })
 })
 
+// YAML spells NaN and the infinities as `.nan` / `.inf`, so a hand-edited spec
+// reaches the compiler with coordinates that are `typeof number` yet not
+// finite. They poison getCommonBounds and leave scrollToContent writing a
+// non-finite scroll/zoom — the silently blank canvas, with no error anywhere.
+const POISONED_YAML = `system:
+  name: Poisoned Fixture
+  components:
+    - id: gate
+      type: Gateway
+      name: Gate
+      x: .nan
+      y: 40
+      connections:
+        - target: store
+    - id: store
+      type: Store
+      name: Store
+      x: 400
+      y: .inf
+    - id: sink
+      type: Stage
+      name: Sink
+      x: -.inf
+      y: .nan
+`
+
 describe('zoom to fit — the NaN-bounds invariant', () => {
   const SPEC = {
     system: {
@@ -346,6 +414,35 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
     },
   }
 
+  test('the poisoned fixture really does parse to non-finite numbers', () => {
+    const { spec } = parseSpec(POISONED_YAML)
+    const [gate, store, sink] = spec.system.components
+    expect(typeof gate.x).toBe('number')
+    expect(Number.isFinite(gate.x)).toBe(false)
+    expect(Number.isFinite(store.y)).toBe(false)
+    expect(Number.isFinite(sink.x)).toBe(false)
+    expect(Number.isFinite(sink.y)).toBe(false)
+  })
+
+  test('non-finite coordinates fall back to the computed layout, like missing ones', () => {
+    const { spec } = parseSpec(POISONED_YAML)
+    const elements = compileSpecToExcalidrawElements(spec)
+    expect(elements.length).toBeGreaterThan(0)
+    for (const el of elements) {
+      for (const key of ['x', 'y', 'width', 'height']) {
+        expect(Number.isFinite(el[key])).toBe(true)
+      }
+    }
+    // A coordinate is rejected as a pair, exactly as a missing one is: both
+    // axes come from the layout so a component never lands half-authored.
+    const gateRect = elements.find((el) => el.id === 'gate')
+    expect(gateRect.x).toBe(60)
+    expect(gateRect.y).toBe(160)
+  })
+
+  // Red/green record: this test was already GREEN against origin/main — the
+  // base compiler already injected the normalizer fields. It is kept as a
+  // regression guard, not claimed as evidence for a fix.
   test('every compiled element carries the normalizer fields and finite geometry', () => {
     const elements = compileSpecToExcalidrawElements(SPEC)
     expect(elements.length).toBeGreaterThan(0)
@@ -361,6 +458,28 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
       for (const key of ['x', 'y', 'width', 'height']) {
         expect(Number.isFinite(el[key])).toBe(true)
       }
+    }
+  })
+
+  test('a poisoned spec still fits with finite bounds', async () => {
+    vi.useFakeTimers()
+    try {
+      captured.api = null
+      captured.scene = []
+      const { spec } = parseSpec(POISONED_YAML)
+      render(<ExcalidrawCanvas parsedSpec={spec} specIdentity="poisoned" />)
+      await flushUntilCanvasMounted()
+      await flushInitialFit()
+
+      const [elements, options] = captured.api.scrollToContent.mock.calls.at(-1)
+      expect(options).toEqual(FIT_OPTIONS)
+      expect(elements.length).toBeGreaterThan(0)
+      for (const el of elements) {
+        expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
+      }
+    } finally {
+      vi.useRealTimers()
+      vi.clearAllMocks()
     }
   })
 

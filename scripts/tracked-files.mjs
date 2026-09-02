@@ -4,6 +4,9 @@
 // .orchestrator/foundation/FIXES.md).
 export const TRACKED_EXTENSIONS = /\.(ts|tsx|mjs)$/
 export const TRACKED_ROOTS = ['lib/', 'components/', 'pages/']
-export const TRACKED_SINGLE_FILE = 'scripts/check-diff-coverage.mjs'
+// The gate's own policy files. They live outside TRACKED_ROOTS, so without
+// this list a change to either escaped the coverage it defines for everything
+// else — including this file, which decides what the gate checks at all.
+export const TRACKED_SINGLE_FILES = ['scripts/check-diff-coverage.mjs', 'scripts/tracked-files.mjs']
 
-export const COVERAGE_INCLUDE = [...TRACKED_ROOTS.map((root) => `${root}**`), TRACKED_SINGLE_FILE]
+export const COVERAGE_INCLUDE = [...TRACKED_ROOTS.map((root) => `${root}**`), ...TRACKED_SINGLE_FILES]

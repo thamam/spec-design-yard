@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { TRACKED_EXTENSIONS, TRACKED_ROOTS, TRACKED_SINGLE_FILE } from './tracked-files.mjs'
+import { TRACKED_EXTENSIONS, TRACKED_ROOTS, TRACKED_SINGLE_FILES } from './tracked-files.mjs'
 
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/
 
@@ -75,7 +75,7 @@ export function parseDiffLines(diffText) {
 /** True if a diff path is one the coverage config (and this gate) tracks. */
 export function isTrackedFile(filePath) {
   if (!TRACKED_EXTENSIONS.test(filePath)) return false
-  if (filePath === TRACKED_SINGLE_FILE) return true
+  if (TRACKED_SINGLE_FILES.includes(filePath)) return true
   return TRACKED_ROOTS.some((root) => filePath.startsWith(root))
 }
 
