@@ -14,12 +14,13 @@ STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0.
 This file's own commit is one later and changes only the line above; the gate
 was re-run on it too, and `.orchestrator/integration/status` holds that run.
 
-Seven hardening rounds followed the first green gate at `f8f8ee7`: nine
+Eight hardening rounds followed the first green gate at `f8f8ee7`: nine
 defects (round 1), seven (round 2), seven (round 3), nine (round 4), eleven
-(round 5), eight (round 6) and eight (round 7), each a BLOCK from an
-independent cross-model review of the merged diff.
+(round 5), eight (round 6), eleven (round 7) and four (round 8), each a BLOCK
+from an independent cross-model review of the merged diff. Round 8's findings
+were all unreachable in normal use, which is why it was the last.
 
-Five of those are defects **this work introduced**, recorded as regressions
+Six of those are defects **this work introduced**, recorded as regressions
 rather than finds: round-3 FIX M's caret restore left its pending-selection
 ref armed after a no-op indent, so the stale range stole focus on the next
 unrelated commit (fixed in round 4); round-4 FIX U tied the panel's floor to
@@ -31,13 +32,14 @@ until round 6 rewrote the test to drive the case it exists for; and round-6 FIX 
 Auto-Fix-All strip on a short panel, removed the only route to the bulk fix,
 which round 7 restored as a compact header button (the record's claim that
 "the row's own action button remains" was true per issue and false for the
-bulk action).
+bulk action); and round-7 FIX VV, tightening the list-item rule, stopped a
+quoted mapping key (`- "id": inbox`) from opening its block, fixed in round 8.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 691 tests, 0 failures** (round 6: 73 / 681; round 5: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 697 tests, 0 failures** (round 7: 73 / 691; round 6: 73 / 681; round 5: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -347,7 +349,26 @@ stated in design.md.
 
 ## Review
 
-Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
+Cross-model, non-Claude reviewers throughout; Claude implemented every lane and
+every fix. Eight adversarial rounds ran against the merged diff after the lanes
+were green, each returning BLOCK, and the history below is in order.
+
+Three things this section is meant to make impossible to miss:
+
+- **Both of round 1's rejections were wrong**, and both for the same reason —
+  each was argued from the code in front of me without checking the project's
+  own rules or the other file involved. The metadata-registry rejection fell in
+  round 2, the `"use client"` one in round 6. They are set out after the list.
+- **Three of the defects were introduced by this work's own earlier rounds**
+  and caught by later ones: round-3 FIX M's armed selection ref (caught in
+  round 4), round-4 FIX U's coupling of the diagnostics panel to the spec's
+  content (caught in rounds 5 and 6, and its Auto-Fix-All consequence in round
+  7), and round-7 FIX VV's quoted-key regression (caught in round 8). They are
+  labelled as regressions wherever they appear, not filed as finds.
+- **The record itself was wrong repeatedly**, most persistently about which
+  commit the gate had run against — four consecutive rounds, the fourth while
+  claiming to have fixed the problem. The header now carries the `HEAD=` line
+  from the gate's own status file and no reasoning of mine.
 
 - **Lane 0** — GLM 5.3 and Kimi. Both independently found the coverage gate
   failing **open**: `+++ ` header detection could not distinguish a file header
@@ -364,7 +385,6 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   initial panel height escaping the pane clamp, a `touchcancel` leak, and an e2e
   beat that clicked whichever button was visible rather than one that had been
   clipped.
-
 - **Merged diff** — a final cross-model review of the integrated branch, after
   both lanes were green, found nine defects the per-lane reviews had missed.
   The orchestrator reproduced the two most serious by executing the code
@@ -399,6 +419,30 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   then FIX E — which round 1 did not record at all. The corrected
   classification is in `.orchestrator/integration/status`; the commit messages
   stand as written.
+- **Merged diff, round 3** — a third Codex review returned BLOCK with seven
+  findings: the e2e scenarios could autosave over a real project; a short pane
+  still rendered a padded sliver labelled "Collapse"; the gate's base default
+  and real closures were still ignored; the e2e never checked selection bounds
+  after a multi-line Tab and had no multi-line Shift+Tab beat; the spec
+  over-stated the normalizer invariant; a dead guard; and a decoder that
+  truncated literal non-ASCII characters. **The selection finding turned out to
+  be a behaviour defect, not a test gap**: in a real browser React commits the
+  edited value asynchronously, so the `setTimeout(0)` caret restore ran against
+  the old value, was clamped to the old length, and the commit then dropped the
+  caret at the end — a multi-line Tab lost the selection over the block it had
+  just indented. jsdom's fake timers hid it. The restore now records a pending
+  selection and applies it in a layout effect after the commit.
+- **Record correction (round 3)** — the round-2 record repeated round 1's
+  Group-2 omission and carried stale coordinates. Three round-2 cases are
+  green on base and are now filed as guards ("a pane one pixel above the floor
+  keeps a real one-row panel", the `normalizeLineEndings` unit self-check, and
+  the metadata suggestion-subset test); FIX F's red count was 5 in the record
+  and is 7 in fact; FIX C's fifth case and two of FIX A's four were import-red,
+  not behavioural; and every line number in the round-2 choke-point audit came
+  from one commit before the code it described. The audit's conclusions were
+  re-derived at HEAD and hold. Coordinates in the record now cite enclosing
+  function and test names, because line numbers rot on the next commit — as
+  these did twice inside one round.
 - **Merged diff, round 4** — a fourth review returned BLOCK with nine
   findings, two of them reproduced by the orchestrator with probes before
   briefing. The two blockers: a no-op Shift+Tab left round-3 FIX M's
@@ -444,23 +488,6 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   the gate never ran against, and FIX X filed as mutation-only when it is
   behaviour-red on base. The header and the floor bullet above are the
   rewrites; the rest are in `.orchestrator/integration/status`.
-- **Merged diff, round 7** — a seventh review returned BLOCK with seven
-  findings and an independent proof added four. One user-facing: three YAML
-  shapes the block detector read wrongly (block-scalar openers, a `#` inside a
-  key, a quoted list scalar). One user-facing corner introduced by round 6:
-  hiding the Auto-Fix-All strip removed the only route to the bulk fix. Two
-  harness overwrite paths where a freshness check recorded a failure and let
-  the run continue to the autosave. The rest are test quality: a Shift+1
-  dispatch that never reached its handler, an alignment beat that never
-  wrapped a line, a touch beat that had lost its precondition, and a
-  hand-kept scenario list with nothing binding it to the call sites.
-- **Record correction (round 7)** — the round-6 record had five errors: a
-  quoted red inverted, a fix credited with one red when it had four, a
-  non-existent commit hash, a corrections count off by two, and the
-  **fourth consecutive** wrong commit attribution — this time by claiming two
-  gate runs are recorded in a file that holds one, since `lane-verify.sh`
-  truncates it. The header no longer reasons about the gated commit at all;
-  it carries the `HEAD=` line.
 - **Merged diff, round 6** — a sixth review returned BLOCK with six findings
   and an independent proof added two more. One reachable blocker: the three
   MANUAL fit routes had no empty-scene guard, so an empty spec plus any fit
@@ -485,30 +512,34 @@ recorded as such: the Group-2 regression guards, each labelled in its own
 source with why it is kept and that it is not evidence; and the fourteen cases
 in `scripts/test_e2e_guard.py`, which are new-surface tests of a module this
 work introduced, not evidence of a behaviour change.
-- **Merged diff, round 3** — a third Codex review returned BLOCK with seven
-  findings: the e2e scenarios could autosave over a real project; a short pane
-  still rendered a padded sliver labelled "Collapse"; the gate's base default
-  and real closures were still ignored; the e2e never checked selection bounds
-  after a multi-line Tab and had no multi-line Shift+Tab beat; the spec
-  over-stated the normalizer invariant; a dead guard; and a decoder that
-  truncated literal non-ASCII characters. **The selection finding turned out to
-  be a behaviour defect, not a test gap**: in a real browser React commits the
-  edited value asynchronously, so the `setTimeout(0)` caret restore ran against
-  the old value, was clamped to the old length, and the commit then dropped the
-  caret at the end — a multi-line Tab lost the selection over the block it had
-  just indented. jsdom's fake timers hid it. The restore now records a pending
-  selection and applies it in a layout effect after the commit.
-- **Record correction (round 3)** — the round-2 record repeated round 1's
-  Group-2 omission and carried stale coordinates. Three round-2 cases are
-  green on base and are now filed as guards ("a pane one pixel above the floor
-  keeps a real one-row panel", the `normalizeLineEndings` unit self-check, and
-  the metadata suggestion-subset test); FIX F's red count was 5 in the record
-  and is 7 in fact; FIX C's fifth case and two of FIX A's four were import-red,
-  not behavioural; and every line number in the round-2 choke-point audit came
-  from one commit before the code it described. The audit's conclusions were
-  re-derived at HEAD and hold. Coordinates in the record now cite enclosing
-  function and test names, because line numbers rot on the next commit — as
-  these did twice inside one round.
+- **Merged diff, round 7** — a seventh review returned BLOCK with seven
+  findings and an independent proof added four. One user-facing: three YAML
+  shapes the block detector read wrongly (block-scalar openers, a `#` inside a
+  key, a quoted list scalar). One user-facing corner introduced by round 6:
+  hiding the Auto-Fix-All strip removed the only route to the bulk fix. Two
+  harness overwrite paths where a freshness check recorded a failure and let
+  the run continue to the autosave. The rest are test quality: a Shift+1
+  dispatch that never reached its handler, an alignment beat that never
+  wrapped a line, a touch beat that had lost its precondition, and a
+  hand-kept scenario list with nothing binding it to the call sites.
+- **Record correction (round 7)** — the round-6 record had five errors: a
+  quoted red inverted, a fix credited with one red when it had four, a
+  non-existent commit hash, a corrections count off by two, and the
+  **fourth consecutive** wrong commit attribution — this time by claiming two
+  gate runs are recorded in a file that holds one, since `lane-verify.sh`
+  truncates it. The header no longer reasons about the gated commit at all;
+  it carries the `HEAD=` line.
+
+- **Merged diff, round 8** — an eighth review returned BLOCK with five
+  findings, **none reachable in normal use**, which is the exit condition the
+  orchestrator set: this was the last pass. One is a regression of round 7's
+  own (a quoted mapping key stopped opening a block); the others close a
+  documented coverage-gate limit (a change inside an uncovered multi-line
+  statement passed unchecked), a port guard that checked only the base port
+  while scenarios run on base+0..3, and a scenario name that could be listed
+  without a call site and still report success.
+- **Record correction (round 8)** — none outstanding. The round-7 record's
+  items were folded into round 7 itself.
 
 Round 1 recorded two **rejections**. Both have since been overturned, and
 both for the same reason: the rejection was argued from the code alone

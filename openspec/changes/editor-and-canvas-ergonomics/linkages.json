@@ -652,5 +652,43 @@
         ]
       }
     ]
+  },
+  "hardening_round8": {
+    "round": "integration-hardening round 8, the final pass (.orchestrator/integration/FIXES-round8-final.md)",
+    "note": "Five findings, none reachable in normal use, which is the exit condition: no further review round follows. FIX CCC repairs a regression round-7 FIX VV introduced.",
+    "links": [
+      {
+        "fix": "FIX CCC — a quoted mapping key stopped opening a block (regression from round-7 FIX VV)",
+        "requirement": "spec-editor/Enter key behaviour",
+        "design": "Decision 2: Enter auto-indent reuses the extracted detector — which has to read YAML as YAML defines it, quoted keys included",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX DDD — the coverage gate skipped continuation lines of an uncovered statement",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the documented limit is now the narrow one that actually remains",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX EEE — derived e2e ports could land on 3000 or 3110",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a harness that can reach the maintainer's dev server is not isolated",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX FFF — a scenario listed with no call site ran nothing and reported success",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the paired registry bound in both directions",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
   }
 }
