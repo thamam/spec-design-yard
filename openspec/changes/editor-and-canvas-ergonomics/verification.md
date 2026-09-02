@@ -359,12 +359,14 @@ Three things this section is meant to make impossible to miss:
   each was argued from the code in front of me without checking the project's
   own rules or the other file involved. The metadata-registry rejection fell in
   round 2, the `"use client"` one in round 6. They are set out after the list.
-- **Three of the defects were introduced by this work's own earlier rounds**
+- **Several of the defects were introduced by this work's own earlier rounds**
   and caught by later ones: round-3 FIX M's armed selection ref (caught in
   round 4), round-4 FIX U's coupling of the diagnostics panel to the spec's
   content (caught in rounds 5 and 6, and its Auto-Fix-All consequence in round
-  7), and round-7 FIX VV's quoted-key regression (caught in round 8). They are
-  labelled as regressions wherever they appear, not filed as finds.
+  7), round-7 FIX VV's quoted-key regression (caught in round 8), and round-8
+  FIX EEE's port guard — the only one to escape the local gate, caught by CI
+  on the open PR. They are labelled as regressions wherever they appear, not
+  filed as finds.
 - **The record itself was wrong repeatedly**, most persistently about which
   commit the gate had run against — four consecutive rounds, the fourth while
   claiming to have fixed the problem. The header now carries the `HEAD=` line
@@ -540,6 +542,28 @@ work introduced, not evidence of a behaviour change.
   without a call site and still report success.
 - **Record correction (round 8)** — none outstanding. The round-7 record's
   items were folded into round 7 itself.
+- **After the push — the one that escaped the gate.** With the branch pushed
+  and PR #14 open, CI's `e2e` job failed immediately. The cause was round-8
+  FIX EEE, written hours earlier in this same effort: it refused every derived
+  port matching 3000 **or 3110**, and 3110 is this harness's own default
+  (`BASE_PORT` 3109 + 1). `npm run test:e2e` with no port override — exactly
+  what CI runs — exited 2 before starting a single scenario.
+
+  The mistake was a category error rather than a slip. "Never 3000, 3110 or
+  3112" was a constraint the orchestrator placed on *worker sessions on one
+  machine*, where those ports were already occupied; generalising it into the
+  shared harness forbade the harness's own defaults. The range check was the
+  right half of EEE and stays; the forbidden list is now 3000 alone, which is
+  the one hazard that is global rather than machine-local.
+
+  **Why eight rounds of gating did not catch it: the gate never ran CI's
+  invocation.** `lane-verify.sh` is always called with an explicit port
+  (3140); CI calls `npm run test:e2e` bare. The default path was therefore the
+  one path no local run exercised, and it is the path the guard broke. The
+  lesson, recorded here because it outlives this change: **a harness's default
+  invocation is itself a code path, and the local gate must run it at least
+  once before a push.** Every other regression above was caught by a later
+  review round; this one reached an open PR.
 
 Round 1 recorded two **rejections**. Both have since been overturned, and
 both for the same reason: the rejection was argued from the code alone
