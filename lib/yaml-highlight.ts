@@ -54,8 +54,12 @@ const VALUE_WORDS = new Set<string>(
 // needs no quotes at all.
 const ID_LINE_RE = /^\s*(?:-\s*)?id:\s*(?:"([a-zA-Z0-9_\-]+)"|'([a-zA-Z0-9_\-]+)'|([a-zA-Z0-9_\-]+))/
 const TARGET_LINE_RE = /^\s*(?:-\s*)?target:\s*(?:"([a-zA-Z0-9_\-]+)"|'([a-zA-Z0-9_\-]+)'|([a-zA-Z0-9_\-]+))/
-const METADATA_KEY_RE = new RegExp(`^\\s*(${escapeAlt(METADATA_KEY_NAMES)})(?=:)`)
-const FIELD_KEY_RE = new RegExp(`^\\s*(?:-\\s*)?(${escapeAlt(FIELD_KEY_NAMES)})(?=:)`)
+// `["']?` around the name: a quoted KEY (`"id": api`) is ordinary YAML and
+// parses identically to the unquoted form, but rendered plain it read as if
+// the highlighter did not recognise it. The capture stays the bare name, so
+// the span lookup that follows is unaffected.
+const METADATA_KEY_RE = new RegExp(`^\\s*["']?(${escapeAlt(METADATA_KEY_NAMES)})["']?(?=:)`)
+const FIELD_KEY_RE = new RegExp(`^\\s*(?:-\\s*)?["']?(${escapeAlt(FIELD_KEY_NAMES)})["']?(?=:)`)
 const TRAILING_VALUE_RE = /:\s*([a-zA-Z0-9_\-]+)\s*$/
 
 function captureSpan(line: string, match: RegExpMatchArray, group: string | undefined, className: TokenClass): Span | null {

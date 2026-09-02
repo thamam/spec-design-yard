@@ -324,9 +324,9 @@ in `tests/editor-indent.test.ts`). Added in round 4:
 `extractComponentIds` in `lib/autocomplete.ts` accepts only unquoted component
 ids while `lib/yaml-highlight.ts` recognises quoted ones — the regex is
 identical on `origin/main`, so this predates the change and is not drift of
-the kind FIX F fixed. Added in round 6: `lib/yaml-highlight.ts` recognises
-quoted *values* (`id: "api"`) but not quoted *keys* (`"id": api`), which
-render plain — valid but rare YAML; and `unquoteGitPath` throws a
+the kind FIX F fixed. **Closed in round 8**, having been listed since round 6:
+the highlighter recognised quoted *values* but not quoted *keys*, so `"id":
+api` rendered plain; both key patterns now allow the quotes. Still open: `unquoteGitPath` throws a
 `RangeError` on a path ending in a lone backslash, unreachable from real git
 output (which escapes a backslash as two) and pre-existing rather than
 introduced by the round-5 escape work.

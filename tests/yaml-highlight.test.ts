@@ -131,3 +131,30 @@ describe('metadata keys come from one registry, shared with the linter', () => {
     expect(suggested.length).toBeGreaterThan(0)
   })
 })
+
+describe('quoted keys are keys', () => {
+  // Listed as a follow-up from round 6: the highlighter recognised quoted
+  // VALUES but not quoted KEYS, so `"id": api` rendered plain. Valid YAML,
+  // and the block detector learned the same distinction in round 8.
+  test('a quoted metadata key is highlighted as one', () => {
+    for (const line of ['        "status": active', "        'status': active"]) {
+      const tokens = tokenizeLine(line)
+      expect(tokens.find((t) => t.text === 'status')?.className).toBe('metadata-key')
+    }
+  })
+
+  test('a quoted component field is highlighted as one', () => {
+    for (const line of ['    - "id": inbox', "      'type': Store"]) {
+      const tokens = tokenizeLine(line)
+      const key = tokens.find((t) => t.text === 'id' || t.text === 'type')
+      expect(key?.className).toBe('field-key')
+    }
+  })
+
+  test('the unquoted forms are unchanged', () => {
+    expect(tokenizeLine('        status: active').find((t) => t.text === 'status')?.className)
+      .toBe('metadata-key')
+    expect(tokenizeLine('    - id: inbox').find((t) => t.text === 'id')?.className)
+      .toBe('field-key')
+  })
+})
