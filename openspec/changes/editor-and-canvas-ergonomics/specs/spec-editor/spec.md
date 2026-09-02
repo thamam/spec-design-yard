@@ -135,6 +135,28 @@ obstruct editing.
 - THEN the text remains fully visible and editable, uncoloured where it
   cannot be classified
 
+### Requirement: Line endings
+
+Spec text SHALL be normalised to LF (`\n`) at the point where it enters
+application state, so the editor's caret offsets and the spec text share one
+coordinate space. Every line terminator — `\r\n` and a lone `\r` — becomes
+`\n`. Keystroke handlers SHALL NOT translate between coordinate spaces, and
+SHALL NOT synthesise any other line terminator.
+
+#### Scenario: A CRLF project file loads as LF
+
+- GIVEN a project whose `main.spec.yaml` uses CRLF line endings
+- WHEN the workspace hydrates from it
+- THEN the spec text held in application state contains no carriage return
+- AND what is saved back to the project contains none either
+
+#### Scenario: Indenting a spec that was authored with CRLF
+
+- GIVEN a CRLF-authored spec that has been loaded
+- WHEN the user puts the caret at the end of a line and presses Tab
+- THEN the indent is inserted at the end of that line, not inside it
+- AND the saved spec still contains no carriage return
+
 ### Requirement: YAML write discipline
 
 Any code path added or modified by this change that writes YAML SHALL use

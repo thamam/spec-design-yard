@@ -1,51 +1,5 @@
 const INDENT = "  "
 
-/**
- * A textarea's `value`, `selectionStart` and `selectionEnd` speak the DOM's
- * API value, in which every line break is normalized to a single LF. The spec
- * text the editor holds is the project file's own text, CRLF included.
- * Splicing a DOM offset straight into that raw string is off by one per
- * preceding CRLF, which is how Tab and Enter used to corrupt a CRLF spec.
- *
- * We translate offsets rather than reading `textarea.value` because reading
- * the DOM would push an LF-only string back through onChange and autosave —
- * silently rewriting every line ending in the user's file, a larger and just
- * as invisible rewrite as the bug itself.
- *
- * Both directions treat a lone "\r" as one line break too, which is what the
- * DOM's newline normalization does.
- */
-export function domOffsetToRawOffset(raw: string, domOffset: number): number {
-  if (!raw.includes("\r")) return domOffset
-  let dom = 0
-  let i = 0
-  while (i < raw.length && dom < domOffset) {
-    i += raw[i] === "\r" && raw[i + 1] === "\n" ? 2 : 1
-    dom++
-  }
-  return i
-}
-
-/** The inverse of {@link domOffsetToRawOffset}. */
-export function rawOffsetToDomOffset(raw: string, rawOffset: number): number {
-  if (!raw.includes("\r")) return rawOffset
-  let dom = 0
-  let i = 0
-  while (i < raw.length && i < rawOffset) {
-    i += raw[i] === "\r" && raw[i + 1] === "\n" ? 2 : 1
-    dom++
-  }
-  return dom
-}
-
-/**
- * The line ending an inserted break should use, so an edit to a CRLF file does
- * not leave it with mixed endings.
- */
-export function dominantEol(raw: string): "\r\n" | "\n" {
-  return raw.includes("\r\n") ? "\r\n" : "\n"
-}
-
 export interface IndentResult {
   text: string
   selStart: number

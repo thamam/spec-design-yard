@@ -271,6 +271,43 @@ obvious spot is strictly better than one that disappears without warning. The
 keyboard shortcut and the top-right toolbar button remain as the other two
 routes to the same `zoomToFit()`.
 
+## Decision 8: Line endings normalise to LF once, where spec text enters app state
+
+Spec text carries whatever line endings the project file had. A textarea's
+`value`, `selectionStart` and `selectionEnd` speak the DOM's API value, in
+which every terminator is a single LF. Mixing the two coordinate spaces is
+what made Tab and Enter corrupt a CRLF spec (round-1 FIX 1).
+
+`normalizeLineEndings` (`lib/spec-model.ts`) is applied at the single seam
+foreign text crosses into React state: the hydration effect in
+`workspace-layout.tsx`, on the expression that resolves a loaded spec from the
+server file, the localStorage cache, or a template. It runs before
+`lastLoadedSpecRef` is set — normalised state against a raw ref would fire an
+autosave on every load. From there the whole app has one coordinate space:
+textarea offsets, the indent handlers, `reconcileSpec`, and undo/redo all agree.
+
+- **Rationale**: one coordinate space removes the bug class, rather than
+  paying translation at every reader. Every write site downstream derives from
+  text already in state, so none can reintroduce a `\r`.
+- **Rejected — preserve CRLF everywhere** (round 1's approach). The only spec
+  serialisation exit in the codebase is `lib/reconciler.ts` (`doc.toString()`),
+  and `yaml` emits LF only; `reconcileSpec` has 10+ call sites — every quick
+  fix, Auto-Fix All, inspector edit and canvas drag write-back — and
+  `handleTextareaChange` forwards the DOM's LF view on every keystroke. So
+  preservation would mean restoring the dominant ending at the reconciler's
+  exit and at every future writer: a persistence-layer invariant this change
+  does not own and no requirement asks for. Round 1 made Tab and Enter faithful
+  to a property nothing else in the app kept.
+- **User-visible consequence, stated deliberately**: a CRLF-authored spec shows
+  a whole-file diff the first time Spec Yard saves it. This is not a
+  regression — `main` already does this on the first typed character or the
+  first canvas drag — but it belongs in the PR description.
+- **Not done**: normalising in the API route (`pages/api/store/[...path].ts`).
+  The route must stay byte-faithful: a normalising GET would make the file on
+  disk differ from what the client believes it holds and turn every lost-ack
+  into a false divergence in `reconcileAfterConflict`; a normalising PUT would
+  rewrite the user's file the first time the app touched it.
+
 ### Note on Decision 4 and pointer events
 
 Decision 4 originally specified "pointer events with capture" for the

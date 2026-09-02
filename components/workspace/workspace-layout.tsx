@@ -8,7 +8,7 @@ import { db, type SyncState } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
-import { parseSpec, type DroppedConnection } from "../../lib/spec-model"
+import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -225,7 +225,13 @@ export function WorkspaceLayout() {
       // noise, not as a welcome. Only a deliberate browser-storage opt-out
       // keeps the demo, as something to play with.
       const unconfigured = db.getSyncState().status === "unconfigured"
-      const loaded =
+      // The one seam foreign spec text crosses into app state: a project file
+      // or a localStorage cache may carry CRLF, the templates never do.
+      // Normalise here and the whole app downstream — textarea offsets, the
+      // indent handlers, reconcileSpec, undo/redo — works in one coordinate
+      // space. Before `lastLoadedSpecRef`, not after: comparing normalised
+      // state against a raw ref would fire an autosave on every load.
+      const loaded = normalizeLineEndings(
         savedDoc && savedDoc.yamlContent
           ? savedDoc.yamlContent
           : fileMode
@@ -233,6 +239,7 @@ export function WorkspaceLayout() {
           : unconfigured
           ? UNCONFIGURED_SPEC
           : INITIAL_SPEC
+      )
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
       setLoadedSpecId((n) => n + 1)

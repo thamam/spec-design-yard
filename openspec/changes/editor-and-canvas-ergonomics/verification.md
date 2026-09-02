@@ -72,11 +72,19 @@ errors.
   that recorded set. The collapse toggle is unchanged and covered by "the header
   click still collapses and re-expands at the dragged height".
 - *Floor conflict* — on a pane too short to pay both the diagnostics floor and
-  the editor's, the editor wins: `diagnosticsMaxHeight` floors at 0, so the
-  panel collapses rather than leaving the textarea a box smaller than its own
-  padding. 72px remains the drag floor on any pane that can afford it. Covered
-  by "a pane too short for both floors gives the space to the editor" and "a
-  pane that misses the floors only just still prefers the editor".
+  the editor's, the editor wins: `diagnosticsMaxHeight` returns 0 rather than a
+  height below the one-row minimum, so the panel is either a usable row or
+  collapsed, never a clipped sliver of a row. 72px remains the drag floor on
+  any pane that can afford it. Covered by "a pane too short for both floors
+  gives the space to the editor", "a pane that misses the floors only just
+  collapses rather than clip", and "a pane one pixel above the floor keeps a
+  real one-row panel" (the 333px boundary the collapse rule must not eat).
+- *Drag mechanism* — window-level `mousedown`/`mousemove`/`mouseup` and
+  `touchstart`/`touchmove`/`touchend`/`touchcancel`. No `PointerEvent` and no
+  `setPointerCapture` anywhere: jsdom 24 provides neither, and the requirement's
+  intent is mouse-and-touch support, not a specific DOM API. design.md
+  Decision 4, `tasks.md` and the spec requirement were reworded to describe
+  what shipped; the note explaining why is kept.
 
 **diagram-canvas**
 
@@ -115,6 +123,20 @@ errors.
   write-back branch in `diffScene` sits behind a non-empty `updatedElements`,
   so an empty scene cannot round-trip back into the spec as a deletion.
 
+**shared vocabularies**
+
+- *One metadata registry* — `ALLOWED_METADATA_KEYS` in `lib/autocomplete.ts`
+  is the single source: `lib/linter.ts` validates against it and
+  `lib/yaml-highlight.ts` colours from it. Previously the linter accepted
+  sixteen keys and the highlighter coloured five, so a valid `latency: 50`
+  linted clean and rendered plain. The suggestion popup keeps a **curated
+  subset** — six spellings of rate-limit is not a useful popup — and a test
+  asserts the subset relationship, so the two lists can shrink or grow but
+  cannot become independent registries again. Covered by "…is highlighted as a
+  metadata key" (one case per linter-only key), "every key the linter accepts
+  is a key the highlighter colours", and "the suggestion list is a curated
+  subset of the allowed set".
+
 ## The gate's own guard
 
 `tests/coverage-config-sync.test.ts` used to compare `vitest.config.ts`
@@ -125,6 +147,24 @@ files are now **literals in the test**, independent of the module under test;
 the same mutation now fails three assertions. `scripts/tracked-files.mjs`
 itself joined the gate's tracked set, so the file that decides what the gate
 checks no longer escapes it.
+
+Two further holes in the gate closed in round 2:
+
+- *C-quoted paths* — git quotes any path with non-ASCII bytes or control
+  characters (`+++ "b/lib/caf\303\251.ts"`). The quotes survived into
+  `isTrackedFile`, failed the extension test, and dropped the file from
+  enforcement with no diagnostic — the gate went quiet on exactly the files it
+  exists to check. `parseDiffLines` now decodes git's C-style quoting, and the
+  CLI passes `-c core.quotePath=false` so the common case never quotes.
+- *A self-passing verdict* — the whole of `main()` sat inside a `v8 ignore`
+  block: base selection, the git call, the tracked-file filter, the coverage
+  read and every exit code. Changing the range to `HEAD...HEAD` made the gate
+  print "nothing to check" and exit 0, and neither the gate nor its own tests
+  could notice, because the changed lines were the ignored ones. The decision
+  now lives in an exported, side-effect-free `runGate(...)` returning an exit
+  code, with a test per exit path and two asserting the range actually handed
+  to git; only the CLI wiring stays ignored. The same mutation now fails two
+  tests.
 
 ## What is not covered by the coverage number
 

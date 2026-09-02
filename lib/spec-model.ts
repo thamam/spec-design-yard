@@ -115,6 +115,21 @@ function collectDroppedConnections(parsed: any): DroppedConnection[] {
 }
 
 /**
+ * Collapse every line terminator to LF.
+ *
+ * Spec text is normalised once, where foreign text enters app state (the
+ * hydration effect in components/workspace/workspace-layout.tsx), so the whole
+ * app works in a single coordinate space: a textarea's selection offsets index
+ * an LF view of its value, and every YAML serialisation exit already emits LF
+ * (`yaml`'s doc.toString(), reached through reconcileSpec). Keeping CRLF would
+ * mean restoring the dominant ending at every writer — see design.md Decision 8.
+ */
+export function normalizeLineEndings(text: string): string {
+  if (!text.includes("\r")) return text
+  return text.replace(/\r\n?/g, "\n")
+}
+
+/**
  * Parse and sanitize spec text. A non-object document (empty text, a bare
  * scalar) yields `spec: null` with no error — it is not a syntax problem, there
  * is just nothing usable yet.

@@ -48,6 +48,25 @@ with sync_playwright() as p:
     page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: console_errors.append(str(e)))
 
+    # ---------- Seed a CRLF project file, before any session exists ----------
+    # The one claim jsdom cannot make honestly: real CRLF bytes, the real
+    # server, a real browser. It must be in place BEFORE the first load —
+    # writing it behind a live session's back trips the app's
+    # external-change guard (a 409 and a refusal to overwrite, which is
+    # correct behaviour and not what this beat is testing).
+    os.makedirs(CLIENT_REPO, exist_ok=True)
+    crlf_spec_file = os.path.join(CLIENT_REPO, "main.spec.yaml")
+    with open(crlf_spec_file, "w", newline="") as fh:
+        fh.write(
+            "system:\r\n"
+            "  name: CRLF Project\r\n"
+            "  components:\r\n"
+            "    - id: crlf_node\r\n"
+            "      type: Stage\r\n"
+        )
+    check("the CRLF fixture really is CRLF on disk",
+          b"\r\n" in open(crlf_spec_file, "rb").read())
+
     # ---------- The workspace mounts ----------
     page.goto(BASE, wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="spec-textarea"]', timeout=20000)
@@ -60,6 +79,31 @@ with sync_playwright() as p:
     canvas_count = page.locator("canvas").count()
     check("excalidraw canvas mounts alongside the editor", canvas_count > 0)
     shot(page, "01-editor-ergonomics-mounted")
+
+    # ---------- The CRLF file normalises to LF on load ----------
+    for _ in range(40):
+        if "CRLF Project" in ta.input_value():
+            break
+        time.sleep(0.5)
+    check("the CRLF project file loaded", "CRLF Project" in ta.input_value(),
+          ta.input_value()[:120])
+
+    # Caret at the end of the last line, then Tab — the round-1 blocker's
+    # exact gesture. Under the old mixed coordinates the indent landed inside
+    # the line and the file kept its CRLF.
+    ta.click()
+    page.keyboard.press("Control+End")
+    page.keyboard.press("ArrowUp")  # the file ends in a newline; step back onto
+    page.keyboard.press("End")      # the last CONTENT line, not the empty one
+    page.keyboard.press("Tab")
+    time.sleep(2.5)  # autosave debounce is 1s
+
+    on_disk = open(crlf_spec_file, "rb").read()
+    check("a CRLF spec is rewritten LF-only once the app saves it",
+          b"\r" not in on_disk, repr(on_disk[:120]))
+    check("Tab indented at the end of the line, not inside it",
+          b"      type: Stage  \n" in on_disk, repr(on_disk[-60:]))
+    shot(page, "01b-editor-ergonomics-crlf-normalized")
 
     # ---------- Typing YAML lands on disk ----------
     spec_text = """system:

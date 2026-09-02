@@ -19,12 +19,7 @@ import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
 import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
-import {
-  applyIndent,
-  domOffsetToRawOffset,
-  rawOffsetToDomOffset,
-  dominantEol,
-} from "../../lib/editor-indent"
+import { applyIndent } from "../../lib/editor-indent"
 import { YamlHighlightOverlay } from "./yaml-highlight-overlay"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
@@ -91,12 +86,9 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     setCursorPos(e.currentTarget.selectionStart)
   }
 
-  // `cursorPos` is a textarea offset (LF-normalized); `value` is the file's raw
-  // text. Every handler below converts before the two meet — see
-  // domOffsetToRawOffset for why we translate instead of reading target.value.
   const autocomplete = useMemo(() => {
     if (cursorPos === null || suppressAutocomplete) return null
-    const res = getAutocompleteSuggestions(value, domOffsetToRawOffset(value, cursorPos))
+    const res = getAutocompleteSuggestions(value, cursorPos)
     if (res.suggestions.length > 0) return res
     return null
   }, [value, cursorPos, suppressAutocomplete])
@@ -113,15 +105,13 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
 
   const handleApplySuggestion = (sug: string) => {
     if (!autocomplete) return
-    // replaceRange is already in raw coordinates: the memo above hands
-    // getAutocompleteSuggestions a converted cursor.
     const [start, end] = autocomplete.replaceRange
     const newValue = value.substring(0, start) + sug + value.substring(end)
     onChange(newValue)
 
     // Return focus to textarea and adjust cursor position
     if (timerRef.current) clearTimeout(timerRef.current)
-    const newCursorPos = rawOffsetToDomOffset(newValue, start + sug.length)
+    const newCursorPos = start + sug.length
     timerRef.current = setTimeout(() => {
       const textarea = textareaRef.current
       if (textarea) {
@@ -135,23 +125,18 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const target = e.currentTarget
-    const { text, selStart, selEnd } = applyIndent(
-      value,
-      domOffsetToRawOffset(value, target.selectionStart),
-      domOffsetToRawOffset(value, target.selectionEnd),
-      { outdent: e.shiftKey }
-    )
+    const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
+      outdent: e.shiftKey,
+    })
     onChange(text)
 
     if (timerRef.current) clearTimeout(timerRef.current)
-    const domSelStart = rawOffsetToDomOffset(text, selStart)
-    const domSelEnd = rawOffsetToDomOffset(text, selEnd)
     timerRef.current = setTimeout(() => {
       const textarea = textareaRef.current
       if (textarea) {
         textarea.focus()
-        textarea.setSelectionRange(domSelStart, domSelEnd)
-        setCursorPos(domSelStart)
+        textarea.setSelectionRange(selStart, selEnd)
+        setCursorPos(selStart)
       }
     }, 0)
   }
@@ -159,14 +144,14 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const target = e.currentTarget
-    const rawStart = domOffsetToRawOffset(value, target.selectionStart)
-    const rawEnd = domOffsetToRawOffset(value, target.selectionEnd)
-    const { indentLevel, opensBlock } = detectIndentContext(value, rawStart)
+    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart)
     const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
-    // Match the file's own line ending, or a CRLF spec ends up with mixed ones.
-    const insertion = dominantEol(value) + newIndent
-    const newValue = value.slice(0, rawStart) + insertion + value.slice(rawEnd)
-    const newCursorPos = rawOffsetToDomOffset(newValue, rawStart + insertion.length)
+    // Spec text is LF-only by the time it reaches state (spec-model's
+    // normalizeLineEndings at the load seam), so the textarea's offsets index
+    // exactly this string and a bare LF is the right break.
+    const insertion = "\n" + newIndent
+    const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
+    const newCursorPos = target.selectionStart + insertion.length
     onChange(newValue)
 
     if (timerRef.current) clearTimeout(timerRef.current)
