@@ -74,10 +74,13 @@ describe('diagnostics panel resize', () => {
   })
 
   test('dragging the handle down shrinks the panel', () => {
-    // The panel goes 128 − 40 = 88; the body is that minus the 48px strip.
+    // The panel goes 128 − 40 = 88. That is under 72 + 48, so the strip
+    // hides rather than pushing the panel back up, and the body is the whole
+    // 88 — see "the strip never grows a panel the user shrank".
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, 640)
-    expect(body().style.height).toBe('72px') // the floor: one whole issue row
+    expect(body().style.height).toBe('88px')
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument() // the floor: one whole issue row
   })
 
   test('height clamps at the maximum when dragged far past the top of the pane', () => {
@@ -458,5 +461,58 @@ describe('a lost mouseup does not leave the resize armed', () => {
 
     fireEvent.mouseMove(window, { clientY: 200 })
     expect(body().style.height).toBe('180px')
+  })
+})
+
+describe('the strip never grows a panel the user shrank', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('a panel dragged below the strip threshold keeps its height', () => {
+    // Gating the strip on the CEILING rather than on the panel's own height
+    // meant a panel dragged to 90 grew to 120 the moment a fixable issue
+    // appeared: the editor lost 30px and the overlay shifted mid-edit, the
+    // exact thing this arrangement exists to prevent.
+    stubPaneHeight(700)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, 638) // 128 − 38 = 90, below 72 + 48
+    expect(body().style.height).toBe('90px')
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
+    // The row's own action button is still there, so the fix is a click away.
+    expect(screen.getAllByRole('button', { name: /add description/i }).length).toBeGreaterThan(0)
+  })
+
+  test('dragging up past the threshold brings the strip back', () => {
+    stubPaneHeight(700)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, 638)
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
+
+    dragMouse(handle(), 600, 560) // panel 90 + 40 = 130, above 72 + 48
+    expect(screen.getByTestId('diagnostics-fix-banner')).toBeInTheDocument()
+    expect(body().style.height).toBe('82px') // 130 panel − 48 strip
+  })
+
+  test('a clean spec and a fixable one occupy the same panel height', () => {
+    // The invariant, stated as a comparison rather than an example: at every
+    // height the user can drag to, the panel's total is the same whatever the
+    // spec contains. Only the strip's presence differs.
+    for (const to of [638, 598, 500, 400]) {
+      stubPaneHeight(700)
+      renderCleanPanel()
+      dragMouse(screen.getByTestId('diagnostics-resize-handle'), 600, to)
+      const clean = screen.getByTestId('diagnostics-body').style.height
+      cleanup()
+
+      stubPaneHeight(700)
+      renderPanel()
+      dragMouse(screen.getByTestId('diagnostics-resize-handle'), 600, to)
+      const noisyBody = Number.parseInt(screen.getByTestId('diagnostics-body').style.height, 10)
+      const strip = screen.queryByTestId('diagnostics-fix-banner') ? 48 : 0
+      cleanup()
+
+      expect({ to, total: noisyBody + strip }).toEqual({ to, total: Number.parseInt(clean, 10) })
+    }
   })
 })

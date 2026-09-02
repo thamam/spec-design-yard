@@ -250,6 +250,106 @@ describe('zoom to fit — a failing fit is reported, never thrown', () => {
   })
 })
 
+describe('zoom to fit — an empty scene is never fitted', () => {
+  // The automatic path gained this guard in round 4; the three MANUAL routes
+  // did not. getCommonBounds([]) is non-finite, so a spec with no components
+  // plus any fit control set a non-finite scroll and zoom: a blank canvas,
+  // with no error anywhere.
+  const emptySpec = { system: { name: 'Empty', components: [] } }
+  const oneComponent = {
+    system: { name: 'One', components: [{ id: 'solo', type: 'Stage', x: 10, y: 20 }] },
+  }
+
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('none of the three routes fits an empty scene', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    captured.scene = []
+    captured.api.scrollToContent.mockClear()
+
+    fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))
+    fireEvent.click(screen.getByTestId('canvas-footer-zoom-to-fit'))
+    fireEvent.keyDown(document.body, { key: '!', shiftKey: true })
+
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+
+  test('a scene with one element still fits, with finite bounds', async () => {
+    render(<ExcalidrawCanvas parsedSpec={oneComponent} specIdentity="one" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    captured.api.scrollToContent.mockClear()
+
+    fireEvent.click(screen.getByTestId('canvas-footer-zoom-to-fit'))
+
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+    const [elements, options] = captured.api.scrollToContent.mock.calls.at(-1)
+    expect(options).toEqual(FIT_OPTIONS)
+    expect(elements.length).toBeGreaterThan(0)
+    for (const el of elements) {
+      expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
+    }
+  })
+
+  test('an empty spec plus a fit control is a no-op, not a blank canvas', async () => {
+    render(<ExcalidrawCanvas parsedSpec={emptySpec} specIdentity="empty" />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+
+    fireEvent.click(screen.getByTestId('canvas-footer-zoom-to-fit'))
+    expect(captured.api.scrollToContent).not.toHaveBeenCalled()
+  })
+})
+
+describe('zoom to fit — a failed fit still counts as handled', () => {
+  const specA = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 0, y: 0 }] } }
+  const specAEdited = {
+    system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 40, y: 0 }] },
+  }
+
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  test('a throwing fit does not re-fit on the next ordinary edit', async () => {
+    // The latch used to advance only after scrollToContent SUCCEEDED, so a
+    // throw left the identity unhandled and the user's next keystroke yanked
+    // the viewport — "an edit to the same spec does not re-fit", violated.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { rerender } = render(<ExcalidrawCanvas parsedSpec={specA} specIdentity="spec-a" />)
+    await flushUntilCanvasMounted()
+    captured.api.scrollToContent.mockImplementationOnce(() => {
+      throw new Error('fit refused')
+    })
+    await flushInitialFit()
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+
+    rerender(<ExcalidrawCanvas parsedSpec={specAEdited} specIdentity="spec-a" />)
+    await flushInitialFit()
+
+    expect(captured.api.scrollToContent).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
+})
+
 describe('zoom to fit — one fit per loaded spec', () => {
   const specA = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 0, y: 0 }] } }
   const specAEdited = { system: { name: 'A', components: [{ id: 'a1', type: 'Stage', x: 40, y: 0 }] } }

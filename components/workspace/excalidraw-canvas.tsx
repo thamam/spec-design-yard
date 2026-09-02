@@ -620,7 +620,12 @@ export function ExcalidrawCanvas({
   const zoomToFit = useCallback(() => {
     if (!excalidrawAPI) return
     try {
-      excalidrawAPI.scrollToContent(excalidrawAPI.getSceneElements(), FIT_TO_VIEWPORT)
+      const sceneElements = excalidrawAPI.getSceneElements()
+      // Nothing to frame is a no-op, not a fit: getCommonBounds([]) is
+      // non-finite, so fitting an empty scene sets a non-finite scroll and
+      // zoom and blanks the canvas. The automatic path guards this too.
+      if (!sceneElements || sceneElements.length === 0) return
+      excalidrawAPI.scrollToContent(sceneElements, FIT_TO_VIEWPORT)
     } catch (e) {
       console.error("Failed to zoom to fit: ", e)
     }
@@ -781,9 +786,13 @@ export function ExcalidrawCanvas({
       // Belt and braces on the cancel above: fitting an empty scene sets a
       // non-finite scroll and zoom, so never call it with nothing to frame.
       if (latestElementsRef.current.length === 0) return
+      // Handled before the attempt, not after it succeeds: this identity has
+      // had its one automatic fit either way. Advancing only on success left
+      // a throwing fit unhandled, so the user's next ordinary edit scheduled
+      // another one and reset the viewport they had just panned.
+      handledSpecIdentityRef.current = specIdentity
       try {
         excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
-        handledSpecIdentityRef.current = specIdentity
       } catch (e) {
         console.error("Failed to scroll to content: ", e)
       }

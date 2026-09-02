@@ -372,6 +372,27 @@ with sync_playwright() as p:
     )
     shot(page, "08b-editor-ergonomics-overlay-color-alignment")
 
+    # ---------- Lane A: broken YAML degrades, it does not break ----------
+    # The overlay tokenises line by line and the linter parses the document;
+    # neither may throw on text the user is halfway through breaking.
+    ta.fill("system:\n  name: [unclosed\n  components:\n    - id: x\n   bad indent: y\n")
+    time.sleep(0.6)
+    check("a syntactically broken spec still renders the overlay",
+          page.locator('[data-testid="yaml-highlight-overlay"]').count() == 1)
+    overlay_text = page.locator('[data-testid="yaml-highlight-overlay"]').inner_text()
+    check("the overlay falls back to showing the text rather than blanking",
+          "unclosed" in overlay_text, overlay_text[:120])
+    check("the diagnostics panel reports the syntax error",
+          page.locator("text=syntax error").count() > 0
+          or page.locator("text=YAML Syntax Error:").count() > 0)
+    check("the editor is still usable after the broken spec",
+          ta.is_enabled() and ta.input_value().startswith("system:"))
+    shot(page, "08c-editor-ergonomics-invalid-yaml")
+
+    # Put a valid spec back for the beats that follow.
+    ta.fill(spec_text)
+    time.sleep(1.2)
+
     # ---------- Lane A: the edited YAML lands in main.spec.yaml on disk ----------
     final_spec = """system:
   name: Ergonomics Final
@@ -594,6 +615,49 @@ with sync_playwright() as p:
           fully_inside(first_row_box, floor_box),
           "row=%s body=%s" % (first_row_box, floor_box))
     shot(page, "11b-diagnostics-minimum-height")
+
+    # ---------- B1c: the touch drag, in a real browser ----------
+    # Playwright exposes no touch-drag helper, so this goes through CDP's
+    # Input.dispatchTouchEvent directly. jsdom covers the same handlers, but
+    # only a real browser proves the listeners are wired to events the browser
+    # actually emits.
+    try:
+        cdp = ctx.new_cdp_session(page)
+        # The panel is at its floor here (11b dragged it there), so there is
+        # room to grow and the assertion cannot be satisfied by a clamp.
+        hb = handle.bounding_box()
+        before_touch = body.bounding_box()["height"]
+        tx = hb["x"] + hb["width"] / 2
+        ty = hb["y"] + hb["height"] / 2
+        cdp.send("Input.dispatchTouchEvent",
+                 {"type": "touchStart",
+                  "touchPoints": [{"x": tx, "y": ty}]})
+        cdp.send("Input.dispatchTouchEvent",
+                 {"type": "touchMove",
+                  "touchPoints": [{"x": tx, "y": ty - 90}]})
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+        time.sleep(0.4)
+        after_touch = body.bounding_box()["height"]
+        check("a touch drag on the handle resizes the panel in a real browser",
+              after_touch > before_touch + 40,
+              "before=%s after=%s" % (before_touch, after_touch))
+        shot(page, "11c-diagnostics-touch-resize")
+        # Detach: an attached CDP session leaves the page in touch-emulation
+        # mode, and the later keyboard beats stop landing on the textarea.
+        cdp.detach()
+    except Exception as exc:  # noqa: BLE001 — the beat is the assertion
+        check("a touch drag on the handle resizes the panel in a real browser",
+              False, "CDP touch dispatch unavailable: %s" % exc)
+
+    # Leave the panel where the following beats found it.
+    hb = handle.bounding_box()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + 2000, steps=8)
+    page.mouse.up()
+    time.sleep(0.4)
+    page.locator('[data-testid="spec-textarea"]').click()
+
 
 
     # ---------- B2: three routes to one zoom-to-fit ----------

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import yaml from 'yaml'
 import { applyIndent } from '../lib/editor-indent'
+import { EditorPanel } from '../components/workspace/editor-panel'
 import Workspace from '../components/Workspace'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
 
@@ -411,32 +412,43 @@ describe('a no-op indent must not arm the pending selection', () => {
 })
 
 describe('the Esc escape hatch is disarmed by any edit, not just a typed one', () => {
-  test('a value change from outside disarms it, so the next Tab indents', async () => {
-    // The spec says any intervening edit disarms the one-shot escape. An
-    // Auto-Fix All or a canvas drag arrives as a controlled-value change, not
-    // as a keydown or a change event from this textarea.
-    render(React.createElement(Workspace))
-    await waitForWorkspaceHydration()
+  test('a PROP-driven value change disarms it, so the next Tab indents', async () => {
+    // The spec says any intervening edit disarms the one-shot escape. A typed
+    // edit already did — handleTextareaChange clears the flag — so driving
+    // the textarea's own change event proves nothing about the effect that
+    // handles the OTHER case: Auto-Fix All, a canvas drag, a quick fix, all
+    // of which arrive as a new `value` prop with no event on this element.
+    const setSpecText = vi.fn()
+    const { rerender } = render(
+      React.createElement(EditorPanel, {
+        specText: 'system:\n  name: hello',
+        setSpecText,
+        isHydrated: true,
+      })
+    )
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
-
-    fireEvent.change(textarea, { target: { value: 'system:\n  name: hello' } })
     textarea.focus()
-    textarea.setSelectionRange(20, 20)
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     fireEvent.select(textarea)
 
     fireEvent.keyDown(textarea, { key: 'Escape' })
-    // An edit arrives from elsewhere in the app.
-    fireEvent.change(textarea, { target: { value: 'system:\n  name: hello!' } })
-    textarea.setSelectionRange(21, 21)
+
+    // An edit arrives from elsewhere in the app: a new prop, no change event.
+    rerender(
+      React.createElement(EditorPanel, {
+        specText: 'system:\n  name: hello!',
+        setSpecText,
+        isHydrated: true,
+      })
+    )
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     fireEvent.select(textarea)
 
     // The escape is spent: Tab indents rather than moving focus out.
-    // fireEvent returns false when a handler called preventDefault, which is
-    // what the indent path does and the escape path deliberately does not.
     const prevented = fireEvent.keyDown(textarea, { key: 'Tab' })
     expect(prevented).toBe(false)
-    expect(textarea.value).toContain('  ')
-    expect(textarea.value.length).toBe('system:\n  name: hello!'.length + 2)
+    expect(setSpecText).toHaveBeenCalled()
+    expect(setSpecText.mock.calls.at(-1)![0]).toBe('system:\n  name: hello!  ')
   })
 
   test('Esc then Tab with no intervening edit still releases focus', async () => {

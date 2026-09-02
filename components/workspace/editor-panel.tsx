@@ -2035,7 +2035,6 @@ export function EditorPanel({
   // Written during render (below, once the diagnostics are known) so the drag
   // and resize handlers, which run after it, see the current bounds.
   const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
-  const diagnosticsMinRef = useRef(DIAGNOSTICS_MIN_HEIGHT)
   // The pane the panel lives in — measured, so the ceiling tracks a 900px
   // laptop or a short split instead of assuming a tall viewport.
   const editorPaneRef = useRef<HTMLElement>(null)
@@ -2070,7 +2069,7 @@ export function EditorPanel({
         clampDiagnosticsHeight(
           diagnosticsDragStartHeight.current - delta,
           diagnosticsMaxRef.current,
-          diagnosticsMinRef.current
+          DIAGNOSTICS_MIN_HEIGHT
         )
       )
     }
@@ -2175,18 +2174,23 @@ export function EditorPanel({
   // action button, so the fix is still one click away without it.
   const hasFixBanner = !yamlSyntaxError && fixableDiagnostics.length > 0
   const diagnosticsCeiling = diagnosticsMaxHeight(measuredPaneHeight)
-  const showsFixBanner =
-    hasFixBanner && diagnosticsCeiling >= DIAGNOSTICS_MIN_HEIGHT + DIAGNOSTICS_BANNER_HEIGHT
-  const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
-  // The floor is one whole issue row, plus the strip above it when it shows.
-  const diagnosticsMin = DIAGNOSTICS_MIN_HEIGHT + bannerHeight
+  // The panel's height first, WITHOUT reserving anything for the strip...
   const diagnosticsHeight = clampDiagnosticsHeight(
     wantedDiagnosticsHeight,
     diagnosticsCeiling,
-    diagnosticsMin
+    DIAGNOSTICS_MIN_HEIGHT
   )
+  // ...then the strip, gated on that height rather than on the ceiling. Gating
+  // on the ceiling meant a panel the user had DRAGGED below 72 + strip still
+  // grew to fit one when a fixable issue appeared — the editor lost 30px and
+  // the overlay shifted mid-edit, which is the whole thing this arrangement
+  // exists to prevent. Below the threshold the strip is simply absent; each
+  // issue row keeps its own action button, and dragging up past it brings the
+  // strip back.
+  const showsFixBanner =
+    hasFixBanner && diagnosticsHeight >= DIAGNOSTICS_MIN_HEIGHT + DIAGNOSTICS_BANNER_HEIGHT
+  const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
   const diagnosticsBodyHeight = Math.max(0, diagnosticsHeight - bannerHeight)
-  diagnosticsMinRef.current = diagnosticsMin
   diagnosticsMaxRef.current = diagnosticsCeiling
   diagnosticsHeightRef.current = diagnosticsHeight
   /** The pane can afford the panel AND the user has not collapsed it. */
@@ -2522,9 +2526,11 @@ export function EditorPanel({
             it, above the rows, it ate the whole one-row floor and clipped the
             first issue row, the floor's whole promise. And paid for out of the
             PANEL's height rather than added to it, so the panel's total height
-            does not change when the strip appears or disappears mid-edit;
-            adding it on top resized the editor as the user typed and
-            desynchronised the highlight overlay from the textarea's scroll. */}
+            never changes when the strip appears or disappears: adding it on
+            top resized the editor as the user typed and desynchronised the
+            highlight overlay from the textarea's scroll. The strip shows only
+            when the panel is already tall enough to carry it AND a whole issue
+            row, so it can never push the panel taller. */}
         {bodyVisible && showsFixBanner && (
           <div
             data-testid="diagnostics-fix-banner"

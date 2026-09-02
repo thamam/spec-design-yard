@@ -118,6 +118,22 @@ fi
 
 ONLY="${1:-}"
 
+# A selector that matches nothing used to run nothing and print "all e2e
+# scenarios passed": a typo in the scenario name turned the whole suite into a
+# no-op that reported success. Validate it before any server starts.
+KNOWN_SCENARIOS="file-mode first-run standalone editor-ergonomics"
+if [ -n "$ONLY" ]; then
+  MATCHED=0
+  for known in $KNOWN_SCENARIOS; do
+    if [ "$ONLY" = "$known" ]; then MATCHED=1; break; fi
+  done
+  if [ "$MATCHED" -ne 1 ]; then
+    echo "unknown e2e scenario: $ONLY" >&2
+    echo "known scenarios: $KNOWN_SCENARIOS" >&2
+    exit 2
+  fi
+fi
+
 # --- 1. file mode: launched straight into a project via the env var ---
 CLIENT="$TMP/client-repo"
 mkdir -p "$CLIENT"
