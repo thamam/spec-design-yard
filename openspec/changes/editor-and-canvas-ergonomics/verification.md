@@ -1,16 +1,17 @@
 # Verification — editor-and-canvas-ergonomics
 
-Verified on branch `feat/backlog-sweep` at `4bdf54b`, against base
-`origin/main` @ `3bd0211`. Two hardening rounds followed the first green
-gate at `f8f8ee7`: a cross-model review found nine defects (round 1), and a
-second review of the merged diff returned BLOCK with seven more (round 2).
-This table is the re-run after all sixteen landed.
+Verified on branch `feat/backlog-sweep` at `7e92d1d`, against base
+`origin/main` @ `3bd0211`. Three hardening rounds followed the first green
+gate at `f8f8ee7`: a cross-model review found nine defects (round 1), a second
+review returned BLOCK with seven more (round 2), and a third returned BLOCK
+with seven more again (round 3). This table is the re-run after all
+twenty-three landed.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 634 tests, 0 failures** (round 1 at `2a7bce6`: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 646 tests, 0 failures** (round 2 at `4bdf54b`: 73 / 634; round 1 at `2a7bce6`: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -24,6 +25,16 @@ The e2e run is full-system: a real `next dev` server per scenario on its own
 port, a real headless Chromium, real project folders on disk, and assertions on
 both the DOM and the files written. Every scenario asserts zero console and page
 errors.
+
+Every scenario now also **fails closed** before its first page action
+(`scripts/e2e_guard.py`): it reads `/api/project` and refuses to run unless the
+server is serving that scenario's own throwaway folder — or, for the two that
+own no folder, is in the expected mode. These scripts type into the editor and
+wait for autosave, which writes `main.spec.yaml` wherever the server points, so
+run by hand against a real project the old scripts overwrote it and only
+*recorded* the resulting check failures. Demonstrated against a decoy project:
+unguarded, the run destroyed its spec and repointed the server; guarded, it
+exits 2 having written nothing.
 
 ## Requirement coverage
 
@@ -84,12 +95,16 @@ errors.
   click still collapses and re-expands at the dragged height".
 - *Floor conflict* — on a pane too short to pay both the diagnostics floor and
   the editor's, the editor wins: `diagnosticsMaxHeight` returns 0 rather than a
-  height below the one-row minimum, so the panel is either a usable row or
-  collapsed, never a clipped sliver of a row. 72px remains the drag floor on
-  any pane that can afford it. Covered by "a pane too short for both floors
-  gives the space to the editor", "a pane that misses the floors only just
-  collapses rather than clip", and "a pane one pixel above the floor keeps a
-  real one-row panel" (the 333px boundary the collapse rule must not eat).
+  height below the one-row minimum, and the body is then **unmounted**, not
+  merely zero-height. A height-0 body still paints its `border-t` and `p-3`
+  under border-box: a 25px empty strip beneath a header offering to "Collapse"
+  what is already invisible. The resize handle goes with it, the label reads
+  "Expand", and the header click is a no-op carrying a `title` saying the pane
+  is too short. 72px remains the drag floor on any pane that can afford it.
+  Covered by presence/absence assertions at 200px and 300px, by "a pane one
+  pixel above the floor keeps a real one-row panel" (the 333px boundary the
+  collapse rule must not eat), and by "at a 340px pane the body mounts at the
+  one-row floor and can collapse".
 - *Drag mechanism* — window-level `mousedown`/`mousemove`/`mouseup` and
   `touchstart`/`touchmove`/`touchend`/`touchcancel`. No `PointerEvent` and no
   `setPointerCapture` anywhere: jsdom 24 provides neither, and the requirement's
@@ -128,6 +143,12 @@ errors.
   missing coordinate does. Fixture `POISONED_YAML` in
   `tests/canvas-zoom-to-fit.test.tsx` is parsed through `parseSpec`, and a
   companion test asserts the fixture really does yield non-finite numbers.
+  The invariant is stated precisely: the normalizer guarantees `angle: 0`,
+  finite geometry, `opacity: 100` and `lineHeight: 1.25` on text, and
+  *defaults* `strokeStyle` to `'solid'` — it spreads the element over that
+  default, so the STRIDE threat zones keep their deliberate `'dashed'`. Only
+  `angle` and finite geometry affect bounds. Covered by "the normalizer
+  defaults strokeStyle without overriding a deliberate one".
 - *Scene sync* — `updateScene` runs for an empty element list too. Skipping it
   left the previous spec's diagram drawn under a newly loaded empty one. The
   skip guarded nothing: the scene starts empty via `initialData`, and every
@@ -174,8 +195,22 @@ Two further holes in the gate closed in round 2:
   could notice, because the changed lines were the ignored ones. The decision
   now lives in an exported, side-effect-free `runGate(...)` returning an exit
   code, with a test per exit path and two asserting the range actually handed
-  to git; only the CLI wiring stays ignored. The same mutation now fails two
-  tests.
+  to git. The same mutation now fails two tests.
+- *…and what the shim still owned* (round 3) — that first pass left the base
+  default, the real `git diff` closure and the real coverage read inside the
+  ignored block, so changing the default to `'HEAD'` would have reproduced the
+  same silent pass. `runGate` now takes `argv` and resolves the base itself,
+  and `gitDiff` / `readCoverageFile` are exported and tested for real against
+  a temporary `git init` repo and a real report file. The ignored region is now
+  the `import.meta.url` entry guard and the `process.exit` call, nothing else.
+- *Mangled non-ASCII paths* (round 3) — the round-2 decoder pushed a literal
+  character with `charCodeAt`, one byte. Real git under `core.quotePath=false`
+  still quotes a path containing `"` and emits its non-ASCII characters
+  literally inside those quotes, so `"b/lib/sa\"y-café.ts"` decoded to a
+  mangled key: `isTrackedFile` still said true, `findCoverageEntry` could never
+  match, and the gate failed closed on a fully covered file naming a path
+  nobody could find. Literal characters are now UTF-8 encoded, iterating by
+  code point so surrogate pairs survive; an emoji and a CJK path are asserted.
 
 ## What is not covered by the coverage number
 
@@ -251,6 +286,30 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   then FIX E — which round 1 did not record at all. The corrected
   classification is in `.orchestrator/integration/status`; the commit messages
   stand as written.
+- **Merged diff, round 3** — a third Codex review returned BLOCK with seven
+  findings: the e2e scenarios could autosave over a real project; a short pane
+  still rendered a padded sliver labelled "Collapse"; the gate's base default
+  and real closures were still ignored; the e2e never checked selection bounds
+  after a multi-line Tab and had no multi-line Shift+Tab beat; the spec
+  over-stated the normalizer invariant; a dead guard; and a decoder that
+  truncated literal non-ASCII characters. **The selection finding turned out to
+  be a behaviour defect, not a test gap**: in a real browser React commits the
+  edited value asynchronously, so the `setTimeout(0)` caret restore ran against
+  the old value, was clamped to the old length, and the commit then dropped the
+  caret at the end — a multi-line Tab lost the selection over the block it had
+  just indented. jsdom's fake timers hid it. The restore now records a pending
+  selection and applies it in a layout effect after the commit.
+- **Record correction (round 3)** — the round-2 record repeated round 1's
+  Group-2 omission and carried stale coordinates. Three round-2 cases are
+  green on base and are now filed as guards ("a pane one pixel above the floor
+  keeps a real one-row panel", the `normalizeLineEndings` unit self-check, and
+  the metadata suggestion-subset test); FIX F's red count was 5 in the record
+  and is 7 in fact; FIX C's fifth case and two of FIX A's four were import-red,
+  not behavioural; and every line number in the round-2 choke-point audit came
+  from one commit before the code it described. The audit's conclusions were
+  re-derived at HEAD and hold. Coordinates in the record now cite enclosing
+  function and test names, because line numbers rot on the next commit — as
+  these did twice inside one round.
 
 One reviewer finding was **rejected** after verification: a claim that
 `"use client"` in the new overlay is a stray directive (four existing

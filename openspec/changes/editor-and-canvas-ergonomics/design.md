@@ -97,14 +97,14 @@ text rather than erroring.
 
 ## Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct
 
-Add a thin drag-handle strip on the panel's top edge (above the header at
-`editor-panel.tsx:2127`). Pressing the handle arms a drag that tracks
+Add a thin drag-handle strip on the panel's top edge, above the header
+(`data-testid="diagnostics-header"`). Pressing the handle arms a drag that tracks
 vertical movement on `window`, via parallel mouse and touch listeners; the
 panel body's height becomes a state-driven inline
-height (replacing the `max-h-32` cap at `editor-panel.tsx:2162`), clamped
+height (replacing the `max-h-32` cap on `data-testid="diagnostics-body"`), clamped
 to a minimum (~one row) and a maximum (a fraction of the editor pane so the
 textarea can never be squeezed out). The existing collapse toggle — state
-`showDiagnostics` at line 1830, header `onClick` at 2127-2129 — is
+the `showDiagnostics` state and the header's own `onClick` — is
 untouched; the handle is a separate element outside the header's click
 target, and a drag gesture (movement beyond a small threshold) never
 synthesises a click on the header.

@@ -254,5 +254,75 @@
         ]
       }
     ]
+  },
+  "hardening_round3": {
+    "round": "integration-hardening round 3 (.orchestrator/integration/FIXES-round3.md + FIXES-round3-addendum.md)",
+    "note": "Seven findings from a third Codex review, plus FIX Q's corrections to the round-2 record. FIX M turned out to be a behaviour defect (the caret restore raced React's commit), not only the test gap it was filed as.",
+    "links": [
+      {
+        "fix": "FIX J — the e2e scenarios could autosave over a real project",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — an e2e that can damage the machine it runs on is not a gate",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX K — a short pane rendered a padded sliver labelled Collapse",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel is at least one issue row or collapsed, never in between",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX L — the gate's base default and real closures were still ignored",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate's own decision must be covered end to end",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX M — no selection assertion after a multi-line Tab; the caret restore raced React's commit",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown — the requirement's 'preserve the selection' clause needed a real-browser assertion to be true",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX N — the spec over-stated the normalizer invariant (docs + one test)",
+        "requirement": "diagram-canvas/Element normalization invariant",
+        "design": "Decision 6: Invariants carried as requirements — an invariant stated wider than the code is not an invariant",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX O — a dead clearTimeout left by round 1's cancel block",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX P — unquoteGitPath truncated literal non-ASCII characters",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a gate that fails closed on an unfindable path enforces nothing useful",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX Q — five corrections to the round-2 red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence for them has to be classified honestly and cited durably",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
   }
 }

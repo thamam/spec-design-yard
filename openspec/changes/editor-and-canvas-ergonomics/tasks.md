@@ -53,9 +53,9 @@ modifies.
 
 - [ ] **Task 4: Resizable diagnostics panel**
   - Drag handle on the panel's top edge (above the header at
-    `editor-panel.tsx:2127`); a mouse-and-touch drag sets a clamped height
-    that replaces the `max-h-32` cap (`editor-panel.tsx:2162`).
-  - Collapse toggle (`showDiagnostics`, header onClick at 2127-2129) keeps
+    `data-testid="diagnostics-header"`); a mouse-and-touch drag sets a clamped
+    height that replaces the `max-h-32` cap on `data-testid="diagnostics-body"`.
+  - Collapse toggle (`showDiagnostics`, the header's own onClick) keeps
     working; a drag never triggers a collapse.
   - Unit tests: drag changes height within clamps, clamp floor/ceiling
     respected, header click still collapses/expands, drag gesture does not
