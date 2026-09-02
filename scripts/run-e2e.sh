@@ -22,14 +22,19 @@ BASE_PORT="${SPEC_YARD_E2E_PORT:-3109}"
 # Every scenario runs on BASE_PORT + 0..3, so guarding only BASE_PORT let
 # SPEC_YARD_E2E_PORT=2997 put editor-ergonomics on 3000 — the maintainer's dev
 # server. Check the whole derived range, before anything starts.
+#
+# 3000 ONLY. An earlier version of this guard also refused 3110 and 3112,
+# which are ports the ORCHESTRATOR told its worker sessions to avoid on one
+# particular machine — they are this harness's own defaults (3109 + 1 and
+# 3109 + 3), so forbidding them here made the default invocation exit 2 and
+# broke CI. A machine-specific avoidance list does not belong in the shared
+# harness; the one genuinely global hazard is the dev server on 3000.
 for offset in 0 1 2 3; do
   derived=$((BASE_PORT + offset))
-  for forbidden in 3000 3110; do
-    if [ "$derived" = "$forbidden" ]; then
-      echo "refusing port $derived (BASE_PORT $BASE_PORT + $offset): $forbidden is not ours" >&2
-      exit 2
-    fi
-  done
+  if [ "$derived" = "3000" ]; then
+    echo "refusing port 3000 (BASE_PORT $BASE_PORT + $offset): that is the dev server" >&2
+    exit 2
+  fi
 done
 
 if [ "$BASE_PORT" = "3000" ]; then
