@@ -1,21 +1,23 @@
 # Verification — editor-and-canvas-ergonomics
 
 Verified on branch `feat/backlog-sweep` against base `origin/main` @
-`3bd0211`. The gate was run twice and both are recorded in
-`.orchestrator/integration/status`: at **`09ce584`**, the last code-bearing
-commit, and again at **`cd113a8`**, this file's own commit, so that no
-documentation change sits on an ungated tree. Both hashes are copied from the
-gate's `HEAD=` line, not inferred — three rounds running this line named a
-commit the gate had not run against, each time by reasoning about which it
-must have been. (A documentation edit necessarily lands after the run that
-names it; stating both hashes is what makes that terminate honestly.)
+`3bd0211`. The gated commit is the one on the `HEAD=` line of
+`.orchestrator/integration/status`, filled in below from that line and from
+nothing else. Four rounds running, this paragraph named a commit the gate had
+not run against — three times by reasoning about which it must have been, and
+once by inventing a second run the file cannot hold (`lane-verify.sh`
+truncates `status` on every run, so it records exactly one).
 
-Six hardening rounds followed the first green gate at `f8f8ee7`: nine defects
-(round 1), seven (round 2), seven (round 3), nine (round 4), eleven (round 5)
-and eight (round 6), each a BLOCK from an independent cross-model review of
-the merged diff.
+<!-- GATED COMMIT: copy the HEAD= line from status verbatim, nothing more. -->
+**Gate: `HEAD=GATE_HEAD_PLACEHOLDER`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
+STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0.
 
-Four of those are defects **this work introduced**, recorded as regressions
+Seven hardening rounds followed the first green gate at `f8f8ee7`: nine
+defects (round 1), seven (round 2), seven (round 3), nine (round 4), eleven
+(round 5), eight (round 6) and eight (round 7), each a BLOCK from an
+independent cross-model review of the merged diff.
+
+Five of those are defects **this work introduced**, recorded as regressions
 rather than finds: round-3 FIX M's caret restore left its pending-selection
 ref armed after a no-op indent, so the stale range stole focus on the next
 unrelated commit (fixed in round 4); round-4 FIX U tied the panel's floor to
@@ -23,13 +25,17 @@ the Auto-Fix-All strip, which made the panel's *existence* depend on the
 spec's content (fixed in round 5 by FIX JJ) and its *height* likewise when
 dragged small (fixed in round 6 by FIX RR); and round-5 FIX HH shipped with a
 test that passed on the pre-fix code, so the effect it added was unevidenced
-until round 6 rewrote the test to drive the case it exists for.
+until round 6 rewrote the test to drive the case it exists for; and round-6 FIX RR, hiding the
+Auto-Fix-All strip on a short panel, removed the only route to the bulk fix,
+which round 7 restored as a compact header button (the record's claim that
+"the row's own action button remains" was true per issue and false for the
+bulk action).
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 681 tests, 0 failures** (round 5 at `010eb09`: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 691 tests, 0 failures** (round 6: 73 / 681; round 5: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -159,16 +165,25 @@ exits 2 with the decoy byte-identical.
   and paid for out of the panel's own height rather than added to it (added,
   the panel's height moved with the spec's content, which resized the editor
   mid-edit and desynchronised the highlight overlay from the textarea's
-  scroll). Whether the strip shows depends on the pane; whether the PANEL
-  shows does not. In the band that affords a row but not the strip, the strip
-  yields and every issue row keeps its own action button, so the fix stays one
-  click away. Covered by "the panel appears at the same pane height whatever
-  the spec contains", "a pane that fits the row but not the strip drops the
-  STRIP, not the panel", "the strip comes back once the pane can pay for it",
-  and the real-browser beats "the Auto-Fix-All banner is a sibling of the
-  body, not inside it" and "at the floor the first issue row is fully inside
-  the body". Every jsdom height in that suite is derived in a comment from the
-  two constants rather than from a remembered number.
+  scroll). It shows only when the panel is ALREADY tall enough to carry it and
+  a whole issue row, so it can never push the panel taller: gating it on the
+  pane's ceiling instead meant a panel the user had dragged small still grew
+  when a fixable issue appeared. Neither the panel's presence nor its height
+  depends on what the spec contains; only the strip's does.
+  While the strip is hidden a compact **Auto-Fix All (N)** button appears in
+  the panel header. `handleFixAll` is wired to exactly one element, so hiding
+  the strip otherwise removed the bulk fix from the UI entirely — each issue
+  row keeps its own action either way, which covers the per-issue fix and not
+  the bulk one, and this record said otherwise until round 7.
+  Covered by "the panel appears at the same pane height whatever the spec
+  contains", "a pane that fits the row but not the strip drops the STRIP, not
+  the panel", "a clean spec and a fixable one occupy the same panel height",
+  "below the threshold the header carries a compact stand-in", "above the
+  threshold only the strip carries it, never both", and the real-browser beats
+  "at the floor the strip is gone, not squeezing the row" and "dragging back
+  up past the threshold brings the strip back". Every jsdom height in that
+  suite is derived in a comment from the two constants rather than from a
+  remembered number.
 - *Drag mechanism* — window-level `mousedown`/`mousemove`/`mouseup` and
   `touchstart`/`touchmove`/`touchend`/`touchcancel`. No `PointerEvent` and no
   `setPointerCapture` anywhere: jsdom 24 provides neither, and the requirement's
@@ -424,6 +439,23 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   the gate never ran against, and FIX X filed as mutation-only when it is
   behaviour-red on base. The header and the floor bullet above are the
   rewrites; the rest are in `.orchestrator/integration/status`.
+- **Merged diff, round 7** — a seventh review returned BLOCK with seven
+  findings and an independent proof added four. One user-facing: three YAML
+  shapes the block detector read wrongly (block-scalar openers, a `#` inside a
+  key, a quoted list scalar). One user-facing corner introduced by round 6:
+  hiding the Auto-Fix-All strip removed the only route to the bulk fix. Two
+  harness overwrite paths where a freshness check recorded a failure and let
+  the run continue to the autosave. The rest are test quality: a Shift+1
+  dispatch that never reached its handler, an alignment beat that never
+  wrapped a line, a touch beat that had lost its precondition, and a
+  hand-kept scenario list with nothing binding it to the call sites.
+- **Record correction (round 7)** — the round-6 record had five errors: a
+  quoted red inverted, a fix credited with one red when it had four, a
+  non-existent commit hash, a corrections count off by two, and the
+  **fourth consecutive** wrong commit attribution — this time by claiming two
+  gate runs are recorded in a file that holds one, since `lane-verify.sh`
+  truncates it. The header no longer reasons about the gated commit at all;
+  it carries the `HEAD=` line.
 - **Merged diff, round 6** — a sixth review returned BLOCK with six findings
   and an independent proof added two more. One reachable blocker: the three
   MANUAL fit routes had no empty-scene guard, so an empty spec plus any fit

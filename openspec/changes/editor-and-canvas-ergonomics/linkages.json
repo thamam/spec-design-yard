@@ -573,9 +573,80 @@
         ]
       },
       {
-        "fix": "FIX TT — four corrections to the round-5 record, including a third commit attribution error",
+        "fix": "FIX TT — six corrections to the round-5 record, including a third commit attribution error",
         "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
         "design": "Decision 6: Invariants carried as requirements — evidence classified honestly and the gated commit copied, not inferred",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round7": {
+    "round": "integration-hardening round 7 (.orchestrator/integration/FIXES-round7.md + FIXES-round7-addendum.md)",
+    "note": "Seven findings from a seventh review plus four from an independent proof. FIX ZZ repairs a corner round-6 FIX RR introduced. Intended as the last behaviour change before the PR.",
+    "links": [
+      {
+        "fix": "FIX UU — two freshness checks recorded a failure and let the run overwrite a project",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — identity is not disposability",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX VV — block-scalar openers, a # inside a key, and quoted list scalars",
+        "requirement": "spec-editor/Enter key behaviour",
+        "design": "Decision 2: Enter auto-indent reuses the extracted detector — which has to read YAML as YAML defines it",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX WW — the empty-scene test's Shift+1 never reached its handler",
+        "requirement": "diagram-canvas/Zoom-to-fit keyboard shortcut, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a dispatch the handler ignores tests nothing",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX XX — the overlay alignment beat never wrapped a line",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: the overlay must wrap exactly as the textarea does, or every highlight below a wrap is displaced",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX ZZ — hiding the strip removed the only Auto-Fix-All (regression from round-6 FIX RR)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: shrinking the panel may cost chrome, never the action itself",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX AAA — the touch beat lost its at-the-floor precondition",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — an assertion satisfied by headroom rather than by the behaviour",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX BBB — KNOWN_SCENARIOS duplicated the call sites with nothing binding them",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the paired-registry shape FIX F fixed once already",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX YY — five corrections to the round-6 record, including a fourth commit attribution error",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gated commit is copied from status, never inferred",
         "tasks": [
           "Task 6: Quality gate"
         ]
