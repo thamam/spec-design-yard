@@ -78,6 +78,17 @@ PASSED=()
 
 run_scenario() {
   local name="$1" port="$2" script="$3"; shift 3
+  # Bind the call sites to KNOWN_SCENARIOS: a hand-kept list beside the calls
+  # with nothing checking it is the paired-registry shape that has bitten this
+  # repo before. A scenario missing from the list would silently become
+  # unselectable by name; this makes that a hard failure at run time.
+  case " $KNOWN_SCENARIOS " in
+    *" $name "*) ;;
+    *)
+      echo "scenario '$name' is not in KNOWN_SCENARIOS — add it there too" >&2
+      exit 2
+      ;;
+  esac
   if [ -n "${ONLY:-}" ] && [ "$ONLY" != "$name" ]; then
     return 0
   fi
@@ -121,6 +132,9 @@ ONLY="${1:-}"
 # A selector that matches nothing used to run nothing and print "all e2e
 # scenarios passed": a typo in the scenario name turned the whole suite into a
 # no-op that reported success. Validate it before any server starts.
+# The one source for which scenarios exist. run_scenario asserts its own name
+# is in here, so a scenario added below without being listed fails loudly
+# instead of becoming unselectable by name.
 KNOWN_SCENARIOS="file-mode first-run standalone editor-ergonomics"
 if [ -n "$ONLY" ]; then
   MATCHED=0

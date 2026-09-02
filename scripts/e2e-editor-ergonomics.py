@@ -352,6 +352,9 @@ with sync_playwright() as p:
             lineHeight: [tStyle.lineHeight, oStyle.lineHeight],
             paddingLeft: [tStyle.paddingLeft, oStyle.paddingLeft],
             paddingTop: [tStyle.paddingTop, oStyle.paddingTop],
+            whiteSpace: [tStyle.whiteSpace, oStyle.whiteSpace],
+            overflowWrap: [tStyle.overflowWrap, oStyle.overflowWrap],
+            wordBreak: [tStyle.wordBreak, oStyle.wordBreak],
           };
         }"""
     )
@@ -370,7 +373,55 @@ with sync_playwright() as p:
         and alignment["paddingTop"][0] == alignment["paddingTop"][1],
         str(alignment),
     )
+    check(
+        "the overlay wraps exactly as the textarea does",
+        alignment["whiteSpace"][0] == alignment["whiteSpace"][1]
+        and alignment["overflowWrap"][0] == alignment["overflowWrap"][1]
+        and alignment["wordBreak"][0] == alignment["wordBreak"][1],
+        str(alignment),
+    )
     shot(page, "08b-editor-ergonomics-overlay-color-alignment")
+
+    # ---------- Lane A: a line long enough to wrap stays aligned ----------
+    # Every alignment check above is on an unwrapped line. A wrap that happens
+    # in one layer and not the other displaces every highlight below it, which
+    # is exactly the failure the matched scrollbar-gutter and wrap rules exist
+    # to prevent — and none of the previous beats would notice.
+    long_id = "a_very_long_component_identifier_" * 4
+    ta.fill("system:\n  components:\n    - id: %s\n      type: Stage\n" % long_id)
+    time.sleep(0.8)
+    wrap = page.evaluate(
+        """(id) => {
+          const ta = document.querySelector('[data-testid="spec-textarea"]');
+          const overlay = document.querySelector('[data-testid="yaml-highlight-overlay"]');
+          // The tokenised id lives in its own span; find it by text.
+          const spans = Array.from(overlay.querySelectorAll('span'));
+          const token = spans.find((s) => s.textContent === id);
+          if (!token) return { found: false };
+          const t = token.getBoundingClientRect();
+          const o = overlay.getBoundingClientRect();
+          return {
+            found: true,
+            wrapped: t.height > parseFloat(getComputedStyle(overlay).lineHeight) + 1,
+            insideX: t.left >= o.left - 1 && t.right <= o.right + 1,
+            taScrollWidth: ta.scrollWidth,
+            taClientWidth: ta.clientWidth,
+            overlayScrollWidth: overlay.scrollWidth,
+          };
+        }""",
+        long_id,
+    )
+    check("the wrapping identifier is tokenised in the overlay", wrap.get("found") is True, str(wrap))
+    check("the long identifier actually wraps rather than overflowing",
+          wrap.get("wrapped") is True and wrap.get("insideX") is True, str(wrap))
+    check("neither layer scrolls horizontally where the other does not",
+          wrap.get("taScrollWidth") == wrap.get("overlayScrollWidth")
+          or (wrap.get("taScrollWidth", 0) <= wrap.get("taClientWidth", 0) + 1),
+          str(wrap))
+    shot(page, "08b2-editor-ergonomics-overlay-wrap-alignment")
+
+    ta.fill(spec_text)
+    time.sleep(0.8)
 
     # ---------- Lane A: broken YAML degrades, it does not break ----------
     # The overlay tokenises line by line and the linter parses the document;
@@ -638,8 +689,17 @@ with sync_playwright() as p:
     # actually emits.
     try:
         cdp = ctx.new_cdp_session(page)
-        # The panel is at its floor here (11b dragged it there), so there is
-        # room to grow and the assertion cannot be satisfied by a clamp.
+        # Put the panel back at its floor first. 11b now drags UP at its end
+        # (to show the strip returning), so without this the touch would start
+        # near the ceiling and "grew by 40" would be measuring headroom rather
+        # than the touch working.
+        hb = handle.bounding_box()
+        page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + 2000, steps=8)
+        page.mouse.up()
+        time.sleep(0.4)
+
         hb = handle.bounding_box()
         before_touch = body.bounding_box()["height"]
         tx = hb["x"] + hb["width"] / 2

@@ -21,7 +21,7 @@ nothing else should.
 import os
 import sys
 import time
-from e2e_guard import require_config_writes_allowed, require_mode
+from e2e_guard import require_config_writes_allowed, require_fresh_dir, require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -73,6 +73,12 @@ def spec_text(page):
 # opt-in is the only honest signal that the config dir is throwaway.
 require_config_writes_allowed(scenario="first-run")
 require_mode(BASE, "unconfigured", scenario="first-run")
+# The scenario CREATES these two through the picker and then autosaves into
+# them. The "does not exist before the GUI creates it" checks below are
+# contract checks and record a failure without stopping, so the fill would
+# still land on whatever is already there.
+require_fresh_dir(PROJECT_A, scenario="first-run/project-A")
+require_fresh_dir(PROJECT_B, scenario="first-run/project-B")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

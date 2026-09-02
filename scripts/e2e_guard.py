@@ -117,6 +117,38 @@ def require_safe_to_seed(folder, scenario=""):
         sys.exit(2)
 
 
+def require_fresh_dir(path, scenario=""):
+    """Refuse to run against a folder that already holds somebody's spec.
+
+    Identity is not disposability: require_project_dir proves the server is
+    serving THIS scenario's folder, and require_safe_to_seed guards a folder
+    the scenario writes directly — but a scenario that expects to CREATE a
+    project, or to start from a blank slate, will happily autosave over a
+    folder that already has a main.spec.yaml. The existing checks recorded
+    that as a failed assertion and carried on to the fill.
+    """
+    spec = os.path.join(path, "main.spec.yaml")
+    if not os.path.exists(spec):
+        return
+    try:
+        with open(spec, encoding="utf-8") as fh:
+            existing = fh.read()
+    except OSError as exc:
+        existing = ""
+        print(f"e2e preflight: could not read {spec} ({exc})", file=sys.stderr)
+    if SEED_MARKER in existing:
+        return
+    print(
+        f"e2e preflight FAILED{' for ' + scenario if scenario else ''}: "
+        f"{path} already holds a main.spec.yaml this harness did not write "
+        f"(no {SEED_MARKER!r} marker).\n"
+        "Refusing to run: this scenario expects a fresh folder and would "
+        "autosave over that file.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def require_mode(base, expected_mode, scenario=""):
     """Require that BASE reports `expected_mode`. Else exit 2.
 

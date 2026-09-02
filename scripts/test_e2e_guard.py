@@ -107,6 +107,30 @@ class SeedGuardTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
 
 
+class FreshDirTests(unittest.TestCase):
+    def test_an_absent_folder_is_fresh(self):
+        with tempfile.TemporaryDirectory() as d:
+            e2e_guard.require_fresh_dir(os.path.join(d, "not-created-yet"))
+
+    def test_an_empty_folder_is_fresh(self):
+        with tempfile.TemporaryDirectory() as d:
+            e2e_guard.require_fresh_dir(d)
+
+    def test_a_folder_holding_our_own_fixture_is_fresh(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "main.spec.yaml"), "w", encoding="utf-8") as fh:
+                fh.write(e2e_guard.SEED_MARKER + "\nsystem:\n  name: last run\n")
+            e2e_guard.require_fresh_dir(d)
+
+    def test_a_folder_holding_somebody_elses_spec_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "main.spec.yaml"), "w", encoding="utf-8") as fh:
+                fh.write("system:\n  name: PRECIOUS REAL PROJECT\n")
+            with self.assertRaises(SystemExit) as cm:
+                e2e_guard.require_fresh_dir(d, scenario="first-run/project-A")
+        self.assertEqual(cm.exception.code, 2)
+
+
 class FailClosedTests(unittest.TestCase):
     def test_an_unreachable_server_is_a_refusal_not_a_pass(self):
         with mock.patch.object(

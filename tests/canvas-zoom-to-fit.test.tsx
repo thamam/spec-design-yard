@@ -280,10 +280,20 @@ describe('zoom to fit — an empty scene is never fitted', () => {
 
     fireEvent.click(screen.getByTestId('canvas-zoom-to-fit'))
     fireEvent.click(screen.getByTestId('canvas-footer-zoom-to-fit'))
-    fireEvent.keyDown(document.body, { key: '!', shiftKey: true })
+    // `code: 'Digit1'` matters: workspace-layout's handler returns early
+    // without it, so a dispatch that omits it never reaches the fit at all
+    // and this assertion would pass with the keyboard route absent entirely.
+    // The positive control is "Shift+1 fits the diagram when focus is outside
+    // any field" in this same file: it renders the full Workspace (the
+    // handler lives in workspace-layout, not in the canvas) and asserts the
+    // identical dispatch DOES fit a non-empty scene. If the dispatch ever
+    // stopped reaching the handler, that test fails while this one would keep
+    // passing for the wrong reason — which is why they are cited together.
+    fireEvent.keyDown(document.body, { key: '!', code: 'Digit1', shiftKey: true })
 
     expect(captured.api.scrollToContent).not.toHaveBeenCalled()
   })
+
 
   test('a scene with one element still fits, with finite bounds', async () => {
     render(<ExcalidrawCanvas parsedSpec={oneComponent} specIdentity="one" />)

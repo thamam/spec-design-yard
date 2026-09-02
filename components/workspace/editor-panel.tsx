@@ -2186,7 +2186,8 @@ export function EditorPanel({
   // the overlay shifted mid-edit, which is the whole thing this arrangement
   // exists to prevent. Below the threshold the strip is simply absent; each
   // issue row keeps its own action button, and dragging up past it brings the
-  // strip back.
+  // strip back — and while it is hidden a compact stand-in in the header
+  // keeps the bulk fix reachable, since handleFixAll has no other route.
   const showsFixBanner =
     hasFixBanner && diagnosticsHeight >= DIAGNOSTICS_MIN_HEIGHT + DIAGNOSTICS_BANNER_HEIGHT
   const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
@@ -2517,9 +2518,29 @@ export function EditorPanel({
               <span className="text-[10px] text-zinc-500 font-medium">all checks passing</span>
             )}
           </div>
-          <span className="text-zinc-500 text-[11px] font-medium">
-            {bodyVisible ? "Collapse" : "Expand"}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* handleFixAll is wired to exactly ONE element. When the panel is
+                too short to carry the strip, that button disappears and the
+                bulk fix has no route in the UI at all — each row keeps its own
+                action, but "fix everything" does not. This compact stand-in
+                keeps it reachable. */}
+            {bodyVisible && !showsFixBanner && hasFixBanner && (
+              <button
+                type="button"
+                data-testid="diagnostics-fix-all-compact"
+                onClick={(e) => {
+                  e.stopPropagation() // the header itself toggles collapse
+                  handleFixAll()
+                }}
+                className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow transition-colors active:scale-95"
+              >
+                Auto-Fix All ({fixableDiagnostics.length})
+              </button>
+            )}
+            <span className="text-zinc-500 text-[11px] font-medium">
+              {bodyVisible ? "Collapse" : "Expand"}
+            </span>
+          </div>
         </div>
 
         {/* Auto-Fix-All strip. OUTSIDE the scrollable body — rendered inside

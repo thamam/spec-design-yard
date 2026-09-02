@@ -516,3 +516,54 @@ describe('the strip never grows a panel the user shrank', () => {
     }
   })
 })
+
+describe('Auto-Fix All stays reachable when the strip is hidden', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('below the threshold the header carries a compact stand-in', () => {
+    // handleFixAll is wired to exactly one element. Hiding the strip removed
+    // the bulk fix from the UI entirely — each row keeps its own action, but
+    // "fix everything" had no route at all.
+    stubPaneHeight(700)
+    const { handle } = renderPanel()
+    dragMouse(handle(), 600, 638) // panel 90, below 72 + 48
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
+    const compact = screen.getByTestId('diagnostics-fix-all-compact')
+    expect(compact).toBeInTheDocument()
+    expect(compact.textContent).toMatch(/Auto-Fix All \(\d+\)/)
+  })
+
+  test('above the threshold only the strip carries it, never both', () => {
+    stubPaneHeight(700)
+    renderPanel()
+    expect(screen.getByTestId('diagnostics-fix-banner')).toBeInTheDocument()
+    expect(screen.queryByTestId('diagnostics-fix-all-compact')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Auto-Fix All/i })).toHaveLength(1)
+  })
+
+  test('a clean spec offers neither', () => {
+    stubPaneHeight(700)
+    const { handle } = renderCleanPanel()
+    dragMouse(handle(), 600, 638)
+    expect(screen.queryByTestId('diagnostics-fix-all-compact')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Auto-Fix All/i })).not.toBeInTheDocument()
+  })
+
+  test('the compact button fixes without collapsing the panel', () => {
+    // The header's own onClick toggles collapse, so the button must stop the
+    // event or fixing everything would also hide the result.
+    stubPaneHeight(700)
+    const setSpecText = vi.fn()
+    cleanup()
+    render(<EditorPanel specText={NOISY_SPEC} setSpecText={setSpecText} isHydrated />)
+    const handle = screen.getByTestId('diagnostics-resize-handle')
+    dragMouse(handle, 600, 638)
+
+    fireEvent.click(screen.getByTestId('diagnostics-fix-all-compact'))
+
+    expect(setSpecText).toHaveBeenCalled()
+    expect(screen.getByTestId('diagnostics-body')).toBeInTheDocument()
+  })
+})

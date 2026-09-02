@@ -316,3 +316,57 @@ describe('Enter mid-line decides the block from the text before the caret', () =
     expect(detectIndentContext(spec, caret, { upToCursor: true }).opensBlock).toBe(true)
   })
 })
+
+describe('YAML shapes the block detector was getting wrong', () => {
+  // All three are reachable in this app's own specs, and all three are about
+  // the same question: does this line open a block the next line belongs in?
+
+  test('a block-scalar opener nests what follows', () => {
+    // `description: |` is how a multi-line description is written, and the
+    // next line belongs INSIDE it. Ending in "|" rather than ":" is what the
+    // endsWith(":") test missed.
+    for (const opener of ['      description: |', '      description: >']) {
+      const spec = 'system:\n' + opener
+      expect(detectIndentContext(spec, spec.length).opensBlock).toBe(true)
+    }
+  })
+
+  test('the block-scalar chomping and indent indicators are opener syntax too', () => {
+    for (const opener of ['  d: |-', '  d: |+', '  d: >-', '  d: |2', '  d: |2-']) {
+      const spec = 'system:\n' + opener
+      expect(detectIndentContext(spec, spec.length).opensBlock).toBe(true)
+    }
+  })
+
+  test('a "#" inside a key is not a comment', () => {
+    // YAML starts a comment at "#" only at the start of a line or after
+    // whitespace. Cutting at any unquoted "#" truncated the line to "a" and
+    // hid the colon, so the key never opened its block.
+    const line = '  a#b:'
+    const spec = 'system:\n' + line
+    expect(detectIndentContext(spec, spec.length).opensBlock).toBe(true)
+  })
+
+  test('a real trailing comment is still stripped', () => {
+    const line = '  metadata: # keep this comment'
+    expect(detectIndentContext(line, line.length).opensBlock).toBe(true)
+    const notAnOpener = '  name: x # trailing'
+    expect(detectIndentContext(notAnOpener, notAnOpener.length).opensBlock).toBe(false)
+  })
+
+  test('a quoted list scalar is not a mapping entry', () => {
+    // `- "key: value"` is one string in a sequence, not a mapping that opens
+    // a block; indenting under it puts the next line nowhere useful.
+    for (const item of ['    - "key: value"', "    - 'key: value'"]) {
+      const spec = 'system:\n' + item
+      expect(detectIndentContext(spec, spec.length).opensBlock).toBe(false)
+    }
+  })
+
+  test('an unquoted list mapping entry still opens a block', () => {
+    // Decision 2's case, unchanged: "- id: inbox" opens a mapping whose
+    // sibling keys align under "id".
+    const line = '    - id: inbox'
+    expect(detectIndentContext(line, line.length).opensBlock).toBe(true)
+  })
+})

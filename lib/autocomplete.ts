@@ -147,12 +147,28 @@ export function detectIndentContext(
   // A list-item mapping entry ("- id: inbox") opens a mapping too: its
   // sibling keys (type:, name:, ...) align two spaces under the dash, i.e.
   // under "id", not under "-".
-  const opensBlock = trimmed.endsWith(":") || /^-\s+\S+:(\s|$)/.test(trimmed)
+  // Three ways a line says "what follows belongs inside me":
+  //   `metadata:`            a mapping key
+  //   `description: |`       a block scalar (with optional chomping `-`/`+`
+  //                          and an explicit indent digit: `|2-`)
+  //   `- id: inbox`          a list item that is itself a mapping — but NOT
+  //                          `- "key: value"`, which is one quoted string in
+  //                          a sequence and opens nothing.
+  const opensBlock =
+    trimmed.endsWith(":") ||
+    /:\s*[|>][0-9+-]*\s*$/.test(trimmed) ||
+    (/^-\s+\S+:(\s|$)/.test(trimmed) && !/^-\s+["']/.test(trimmed))
 
   return { indentLevel, parentBlock, opensBlock }
 }
 
-/** Strips a trailing "# ..." comment, ignoring a "#" inside a quoted scalar. */
+/**
+ * Strips a trailing "# ..." comment, ignoring a "#" inside a quoted scalar.
+ *
+ * YAML starts a comment at "#" only where it begins the line or follows
+ * whitespace — `a#b` is an ordinary scalar. Cutting at any unquoted "#" left
+ * `a#b:` as `a`, hiding the colon, so the key never opened its block.
+ */
 function stripComment(line: string): string {
   let inSingle = false
   let inDouble = false
@@ -169,7 +185,7 @@ function stripComment(line: string): string {
     }
     if (ch === "'") inSingle = true
     else if (ch === '"') inDouble = true
-    else if (ch === "#") return line.slice(0, i)
+    else if (ch === "#" && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i)
   }
   return line
 }
