@@ -1,25 +1,30 @@
 # Verification — editor-and-canvas-ergonomics
 
-Verified on branch `feat/backlog-sweep` at `257ea54` — the commit the gate
-below actually ran against — with base `origin/main` @ `3bd0211`. Five
-hardening rounds followed the first green gate at `f8f8ee7`: nine defects
-(round 1), seven (round 2), seven (round 3), nine (round 4) and eleven
-(round 5), each a BLOCK from an independent cross-model review of the merged
-diff. This table is the re-run after all forty-three landed.
+Verified on branch `feat/backlog-sweep` against base `origin/main` @
+`3bd0211`. The gated commit is recorded below, copied from the gate's own
+`status` file rather than inferred — three rounds running, this line named a
+commit the gate had not run against.
 
-Two of those are defects **this work introduced** and are recorded as
-regressions, not finds: round-3 FIX M's caret restore left its
-pending-selection ref armed after a no-op indent, so the stale range stole
-focus on the next unrelated commit (fixed in round 4); and round-4 FIX U tied
-the diagnostics panel's floor to the Auto-Fix-All strip, which made the
-panel's *existence* depend on the spec's content in a narrow band of pane
-heights (fixed in round 5).
+Six hardening rounds followed the first green gate at `f8f8ee7`: nine defects
+(round 1), seven (round 2), seven (round 3), nine (round 4), eleven (round 5)
+and eight (round 6), each a BLOCK from an independent cross-model review of
+the merged diff.
+
+Four of those are defects **this work introduced**, recorded as regressions
+rather than finds: round-3 FIX M's caret restore left its pending-selection
+ref armed after a no-op indent, so the stale range stole focus on the next
+unrelated commit (fixed in round 4); round-4 FIX U tied the panel's floor to
+the Auto-Fix-All strip, which made the panel's *existence* depend on the
+spec's content (fixed in round 5 by FIX JJ) and its *height* likewise when
+dragged small (fixed in round 6 by FIX RR); and round-5 FIX HH shipped with a
+test that passed on the pre-fix code, so the effect it added was unevidenced
+until round 6 rewrote the test to drive the case it exists for.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 674 tests, 0 failures** (round 4 at `6d40bc0`: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 681 tests, 0 failures** (round 5 at `010eb09`: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -295,7 +300,20 @@ in `tests/editor-indent.test.ts`). Added in round 4:
 `extractComponentIds` in `lib/autocomplete.ts` accepts only unquoted component
 ids while `lib/yaml-highlight.ts` recognises quoted ones — the regex is
 identical on `origin/main`, so this predates the change and is not drift of
-the kind FIX F fixed.
+the kind FIX F fixed. Added in round 6: `lib/yaml-highlight.ts` recognises
+quoted *values* (`id: "api"`) but not quoted *keys* (`"id": api`), which
+render plain — valid but rare YAML; and `unquoteGitPath` throws a
+`RangeError` on a path ending in a lone backslash, unreachable from real git
+output (which escapes a backslash as two) and pre-existing rather than
+introduced by the round-5 escape work.
+
+**Touch resize is covered in a real browser** as of round 6, through a CDP
+`Input.dispatchTouchEvent` sequence on the handle — Playwright exposes no
+touch-drag helper, so the beat drives the protocol directly and detaches the
+session afterwards (left attached it puts the page in touch-emulation mode and
+the later keyboard beats stop landing). Invalid-YAML fallback is covered too:
+a beat types a broken spec and asserts the overlay still renders the text, the
+diagnostics panel reports the syntax error, and the editor stays usable.
 
 `bin/spec-yard` and `scripts/*.py` cannot appear in a v8 coverage map. They are
 exercised by the e2e suite, not by the gate. The gate also enforces **line**
@@ -401,6 +419,24 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   the gate never ran against, and FIX X filed as mutation-only when it is
   behaviour-red on base. The header and the floor bullet above are the
   rewrites; the rest are in `.orchestrator/integration/status`.
+- **Merged diff, round 6** — a sixth review returned BLOCK with six findings
+  and an independent proof added two more. One reachable blocker: the three
+  MANUAL fit routes had no empty-scene guard, so an empty spec plus any fit
+  control blanked the canvas. One user-facing edge: a throwing fit left its
+  identity unhandled, so the next ordinary edit re-fitted and reset the
+  viewport. One harness hole that made the suite lie: a mistyped scenario
+  selector ran nothing and printed "all e2e scenarios passed". Plus the
+  `"use client"` directive above, two e2e gaps now closed rather than
+  excused, and two regressions of this work's own (FIX RR, FIX SS — see the
+  header).
+- **Record correction (round 6)** — the round-5 record had a boundary pair
+  inverted (the green-on-base and red-on-base halves swapped), a test count
+  off by one, an unclassified red, and a **third** consecutive commit
+  attribution error: this file claimed a gated commit the gate had not run
+  against. The rule adopted, and followed here, is to copy the `HEAD=` line
+  out of the gate's own `status` file rather than reason about which commit it
+  must have been — and, because the docs commit necessarily follows the code
+  commit, to run the gate again on the docs commit so the two agree.
 
 Two classes of never-red assertion the review flagged are deliberate and
 recorded as such: the Group-2 regression guards, each labelled in its own
@@ -432,9 +468,18 @@ work introduced, not evidence of a behaviour change.
   function and test names, because line numbers rot on the next commit — as
   these did twice inside one round.
 
-One reviewer finding was **rejected** after verification: a claim that
-`"use client"` in the new overlay is a stray directive (four existing
-components already carry it).
+Round 1 recorded two **rejections**. Both have since been overturned, and
+both for the same reason: the rejection was argued from the code alone
+without checking the project's own stated rules or the other file involved.
+
+- The metadata-registry finding, rejected with "no such registry exists" —
+  false; `lib/linter.ts` carried its own sixteen-key allow-list. Overturned in
+  round 2 (FIX F).
+- The `"use client"` finding, rejected because four existing components carry
+  the directive. That was the wrong test: `_bmad-output/project-context.md`
+  says this is the Pages Router, that such directives are inert, and — in
+  those words — "don't add more". The new overlay had added one. Overturned in
+  round 6 (FIX PP); the directive is removed, with no behaviour change.
 
 A second rejection was **wrong and has been reversed**. Round 1 dismissed a
 metadata-registry finding with "no such registry exists; `METADATA_KEYS` is the

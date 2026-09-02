@@ -508,5 +508,78 @@
         ]
       }
     ]
+  },
+  "hardening_round6": {
+    "round": "integration-hardening round 6 (.orchestrator/integration/FIXES-round6.md + FIXES-round6-addendum.md)",
+    "note": "Six findings from a sixth review plus two from an independent proof. FIX RR and FIX SS repair defects this work introduced in rounds 4 and 5. FIX PP overturns the second of round 1's two rejections; both are now overturned.",
+    "links": [
+      {
+        "fix": "FIX MM — the manual fit routes had no empty-scene guard",
+        "requirement": "diagram-canvas/Zoom-to-fit affordance, diagram-canvas/Element normalization invariant",
+        "design": "Decision 5: one fit implementation every route calls — the guard belongs in it, not only in the automatic caller; Decision 6: the fit never sets a non-finite scroll or zoom",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX NN — a throwing fit left its identity unhandled and re-fitted on the next edit",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: one fit per loaded spec — attempted is the latch's meaning, not succeeded",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX OO — an unknown e2e scenario selector exited green",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a suite that runs nothing must not report success",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX PP — the new overlay added a \"use client\" directive the project context forbids",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: syntax colour via an overlay — which lives under the Pages Router, where the directive is inert and _bmad-output/project-context.md says not to add more",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX QQ — invalid-YAML fallback and touch resize were not covered in a real browser",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — every user-visible behaviour covered in real Chromium, or the gap recorded",
+        "tasks": [
+          "Task 3: Syntax colour overlay",
+          "Task 4: Resizable diagnostics panel",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX RR — the strip still grew a panel dragged below its threshold (regression from round-4 FIX U)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel's height is the user's, and nothing the spec contains may change it",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX SS — round-5 FIX HH shipped with a test that was green on the pre-fix code",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a test that never went red is not evidence",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX TT — four corrections to the round-5 record, including a third commit attribution error",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence classified honestly and the gated commit copied, not inferred",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
   }
 }
