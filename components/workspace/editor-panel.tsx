@@ -1901,17 +1901,20 @@ const DIAGNOSTICS_RESERVED_HEIGHT = 261
  * or a first render before layout — falls back to the flat constant so the
  * behaviour stays deterministic.
  *
- * The floor here is 0, not DIAGNOSTICS_MIN_HEIGHT: on a pane too short to pay
- * both floors they cannot both be honoured, and holding the panel's 72px left
- * the textarea a 27px box carrying 40px of its own padding — not one visible
- * editing line. The editor wins that contest, so diagnostics shrinks past its
- * floor and collapses entirely rather than squeezing the editor out. 72px is
- * still the floor of a drag on any pane that can afford it.
+ * On a pane too short to pay both floors they cannot both be honoured, and
+ * holding the panel's 72px left the textarea a 27px box carrying 40px of its
+ * own padding — not one visible editing line. The editor wins that contest.
+ *
+ * The panel is then either at least one issue row or collapsed, never in
+ * between: anything under DIAGNOSTICS_MIN_HEIGHT is a clipped sliver of the
+ * first row, which is neither usable nor an honest collapse. 72px remains the
+ * floor of a drag on any pane that can afford it.
  */
 function diagnosticsMaxHeight(paneHeight: number) {
   if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
   const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
-  return Math.max(0, Math.min(DIAGNOSTICS_MAX_HEIGHT, available))
+  if (available < DIAGNOSTICS_MIN_HEIGHT) return 0
+  return Math.min(DIAGNOSTICS_MAX_HEIGHT, available)
 }
 
 function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIGHT) {

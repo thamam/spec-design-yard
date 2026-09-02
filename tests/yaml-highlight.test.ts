@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { tokenizeLine, tokenizeSpec } from '../lib/yaml-highlight'
+import { ALLOWED_METADATA_KEYS, METADATA_KEYS } from '../lib/autocomplete'
 
 describe('yaml-highlight tokenizer', () => {
   test('classifies a component id value distinctly from its field key', () => {
@@ -98,5 +99,35 @@ describe('yaml-highlight tokenizer', () => {
     const tokens = tokenizeLine('  type: store')
     const valueToken = tokens.find((t) => t.text === 'store')
     expect(valueToken?.className).toBe('value')
+  })
+})
+
+describe('metadata keys come from one registry, shared with the linter', () => {
+  // The linter accepted sixteen metadata keys while the highlighter derived
+  // its colour from a five-key list, so a spec the linter passes clean could
+  // still render plain — two registries, silently drifting.
+  const LINTER_ONLY_KEYS = ['latency', 'throughput', 'rate_limit', 'throttled', 'buffer']
+
+  test.each(LINTER_ONLY_KEYS)('%s is highlighted as a metadata key', (key) => {
+    const tokens = tokenizeLine(`        ${key}: 50`)
+    expect(tokens.find((t) => t.text === key)?.className).toBe('metadata-key')
+  })
+
+  test('every key the linter accepts is a key the highlighter colours', () => {
+    for (const key of ALLOWED_METADATA_KEYS) {
+      const tokens = tokenizeLine(`        ${key}: x`)
+      expect(tokens.find((t) => t.text === key)?.className).toBe('metadata-key')
+    }
+  })
+
+  test('the suggestion list is a curated subset of the allowed set, never a second registry', () => {
+    // Suggestions stay curated — offering six spellings of rate-limit in a
+    // popup is not a feature — but they can only ever be a SUBSET of what the
+    // linter allows, so the two cannot drift apart again.
+    const suggested = METADATA_KEYS.map((k) => k.replace(/:$/, ''))
+    for (const key of suggested) {
+      expect(ALLOWED_METADATA_KEYS).toContain(key)
+    }
+    expect(suggested.length).toBeGreaterThan(0)
   })
 })

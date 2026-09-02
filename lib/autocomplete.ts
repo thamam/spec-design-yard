@@ -22,6 +22,25 @@ export function extractComponentIds(specText: string): string[] {
 export const VALID_TYPES = ["Store", "Stage", "Brick", "Gateway"]
 export const VALID_STATUSES = ["draft", "active", "deprecated"]
 export const VALID_COLORS = ["indigo", "purple", "emerald", "amber", "rose", "sky", "zinc"]
+/**
+ * Every metadata key a spec may use. THE registry: the linter validates
+ * against it (lib/linter.ts) and the highlighter colours from it
+ * (lib/yaml-highlight.ts). It previously lived only in the linter, so a valid
+ * `latency: 50` linted clean and rendered plain — two lists, silently drifting.
+ */
+export const ALLOWED_METADATA_KEYS = [
+  "owner", "description", "status", "version", "color",
+  "rate_limit", "rate_limiting", "rateLimit", "rateLimiting", "rate-limit", "rate-limiting",
+  "throttled", "throttling", "buffer",
+  "latency", "throughput",
+]
+
+/**
+ * What the suggestion popup offers: a deliberately curated SUBSET of
+ * ALLOWED_METADATA_KEYS — six spellings of rate-limit in a popup is not a
+ * feature. tests/yaml-highlight.test.ts enforces the subset relationship, so
+ * this cannot quietly become a second registry again.
+ */
 export const METADATA_KEYS = ["owner:", "description:", "status:", "version:", "color:"]
 export const CONNECTION_KEYS = ["- target:", "target:", "label:"]
 export const COMPONENT_FIELDS = ["id:", "type:", "name:", "connections:", "metadata:"]

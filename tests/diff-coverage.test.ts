@@ -4,6 +4,8 @@ import {
   isTrackedFile,
   fileLineHits,
   uncoveredLines,
+  unquoteGitPath,
+  runGate,
 } from '../scripts/check-diff-coverage.mjs'
 
 describe('parseDiffLines', () => {
@@ -154,6 +156,60 @@ index abc123..def456 100644
   })
 })
 
+describe('parseDiffLines — git C-quoted paths', () => {
+  // Git quotes any path with non-ASCII bytes or control characters. Left
+  // quoted, the trailing `"` defeats the `\.(ts|tsx|mjs)$` test in
+  // isTrackedFile and the file drops out of enforcement with no diagnostic.
+  it('decodes an octal-escaped UTF-8 path and still tracks it', () => {
+    const diff = [
+      'diff --git "a/lib/caf\\303\\251.ts" "b/lib/caf\\303\\251.ts"',
+      'new file mode 100644',
+      'index 0000000..1234567',
+      '--- /dev/null',
+      '+++ "b/lib/caf\\303\\251.ts"',
+      '@@ -0,0 +1,2 @@',
+      '+export const x = 1',
+      '+export const y = 2',
+      '',
+    ].join('\n')
+
+    const result = parseDiffLines(diff)
+    expect([...result.keys()]).toEqual(['lib/café.ts'])
+    expect([...result.get('lib/café.ts')].sort((a, b) => a - b)).toEqual([1, 2])
+    expect(isTrackedFile('lib/café.ts')).toBe(true)
+  })
+
+  it('decodes an escaped double quote in a path', () => {
+    const diff = [
+      'diff --git "a/lib/sa\\"y.ts" "b/lib/sa\\"y.ts"',
+      'index abc123..def456 100644',
+      '--- "a/lib/sa\\"y.ts"',
+      '+++ "b/lib/sa\\"y.ts"',
+      '@@ -1 +1 @@',
+      '+export const z = 3',
+      '',
+    ].join('\n')
+
+    const result = parseDiffLines(diff)
+    expect([...result.keys()]).toEqual(['lib/sa"y.ts'])
+    expect(isTrackedFile('lib/sa"y.ts')).toBe(true)
+  })
+
+  it('decodes backslash, tab, newline and carriage-return escapes', () => {
+    // All legal in a POSIX filename, and all quoted by git regardless of
+    // core.quotePath, which is why the decoder cannot be dropped.
+    expect(unquoteGitPath('"b/lib/a\\\\b.ts"')).toBe('b/lib/a\\b.ts')
+    expect(unquoteGitPath('"b/lib/a\\tb.ts"')).toBe('b/lib/a\tb.ts')
+    expect(unquoteGitPath('"b/lib/a\\nb.ts"')).toBe('b/lib/a\nb.ts')
+    expect(unquoteGitPath('"b/lib/a\\rb.ts"')).toBe('b/lib/a\rb.ts')
+  })
+
+  it('leaves an unquoted path exactly as it is', () => {
+    expect(unquoteGitPath('b/lib/plain.ts')).toBe('b/lib/plain.ts')
+    expect(unquoteGitPath('/dev/null')).toBe('/dev/null')
+  })
+})
+
 describe('isTrackedFile', () => {
   it('accepts .ts/.tsx/.mjs files under the coverage-config roots', () => {
     expect(isTrackedFile('lib/foo.ts')).toBe(true)
@@ -223,5 +279,120 @@ describe('uncoveredLines', () => {
       { file: 'lib/untested.ts', line: 2, reason: 'no coverage data recorded for this file' },
       { file: 'lib/untested.ts', line: 3, reason: 'no coverage data recorded for this file' },
     ])
+  })
+})
+
+describe('runGate — every exit path', () => {
+  // The gate's verdict used to live entirely inside a `v8 ignore` block, so
+  // changing the diff range to `HEAD...HEAD` made it pass everything with
+  // nothing — not the gate, not its tests, not the coverage gate itself —
+  // able to notice. These drive each exit path directly.
+  const REPO = '/repo'
+  const TRACKED_DIFF = `diff --git a/lib/foo.ts b/lib/foo.ts
+index abc123..def456 100644
+--- a/lib/foo.ts
++++ b/lib/foo.ts
+@@ -5 +5 @@ export function foo() {
++  return 2
+`
+  const COVERED = {
+    'lib/foo.ts': {
+      statementMap: { '0': { start: { line: 5, column: 0 }, end: { line: 5, column: 9 } } },
+      s: { '0': 1 },
+    },
+  }
+  const UNCOVERED = {
+    'lib/foo.ts': {
+      statementMap: { '0': { start: { line: 5, column: 0 }, end: { line: 5, column: 9 } } },
+      s: { '0': 0 },
+    },
+  }
+
+  function harness({ diff, readCoverage = () => COVERED, base = 'origin/main' }: any) {
+    const logs: string[] = []
+    const errors: string[] = []
+    const code = runGate({
+      base,
+      repoRoot: REPO,
+      diff,
+      readCoverage,
+      log: (m: string) => logs.push(m),
+      error: (m: string) => errors.push(m),
+    })
+    return { code, logs, errors }
+  }
+
+  it('asks git for `${base}...HEAD`, so a mutated range cannot pass unnoticed', () => {
+    const ranges: string[] = []
+    harness({
+      diff: (range: string) => {
+        ranges.push(range)
+        return TRACKED_DIFF
+      },
+      base: 'origin/main',
+    })
+    expect(ranges).toEqual(['origin/main...HEAD'])
+  })
+
+  it('honours a non-default base ref', () => {
+    const ranges: string[] = []
+    harness({
+      diff: (range: string) => {
+        ranges.push(range)
+        return ''
+      },
+      base: 'upstream/release',
+    })
+    expect(ranges).toEqual(['upstream/release...HEAD'])
+  })
+
+  it('exits 1 with the reason when git fails', () => {
+    const { code, errors } = harness({
+      diff: () => {
+        throw new Error('bad revision')
+      },
+    })
+    expect(code).toBe(1)
+    expect(errors).toEqual([
+      'diff-coverage-gate: failed to diff against origin/main: bad revision',
+    ])
+  })
+
+  it('exits 0 when the diff touches no tracked file', () => {
+    const untracked = `diff --git a/README.md b/README.md
+index abc123..def456 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
++# hello
+`
+    const { code, logs } = harness({ diff: () => untracked })
+    expect(code).toBe(0)
+    expect(logs).toEqual([
+      'diff-coverage-gate: no tracked file changes in this diff — nothing to check.',
+    ])
+  })
+
+  it('exits 1 when the coverage report is missing', () => {
+    const { code, errors } = harness({ diff: () => TRACKED_DIFF, readCoverage: () => null })
+    expect(code).toBe(1)
+    expect(errors).toEqual([
+      'diff-coverage-gate: /repo/coverage/coverage-final.json not found — run "npx vitest run --coverage" first.',
+    ])
+  })
+
+  it('exits 1 listing every uncovered line', () => {
+    const { code, errors } = harness({ diff: () => TRACKED_DIFF, readCoverage: () => UNCOVERED })
+    expect(code).toBe(1)
+    expect(errors).toEqual([
+      'diff-coverage-gate: 1 added/modified line(s) not covered by tests:',
+      '  lib/foo.ts:5 — not covered by any test',
+    ])
+  })
+
+  it('exits 0 when every added line is covered', () => {
+    const { code, logs } = harness({ diff: () => TRACKED_DIFF })
+    expect(code).toBe(0)
+    expect(logs).toEqual(['diff-coverage-gate: all added/modified lines are covered.'])
   })
 })

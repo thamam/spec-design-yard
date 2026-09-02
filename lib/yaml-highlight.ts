@@ -1,4 +1,5 @@
 import {
+  ALLOWED_METADATA_KEYS,
   METADATA_KEYS,
   CONNECTION_KEYS,
   COMPONENT_FIELDS,
@@ -31,7 +32,11 @@ const stripKey = (k: string) => k.replace(/^-\s*/, "").replace(/:$/, "")
 const escapeAlt = (words: string[]) =>
   words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
 
-const METADATA_KEY_NAMES = METADATA_KEYS.map(stripKey)
+// Every key the linter accepts, not just the ones the popup suggests: a spec
+// that lints clean must not render plain.
+const METADATA_KEY_NAMES = Array.from(
+  new Set([...ALLOWED_METADATA_KEYS, ...METADATA_KEYS.map(stripKey)])
+)
 const FIELD_KEY_NAMES = Array.from(new Set([...COMPONENT_FIELDS, ...CONNECTION_KEYS].map(stripKey)))
 // Lower-cased so matching is case-insensitive, consistent with the linter
 // (lib/linter.ts resolves comp.type via .toLowerCase() before comparing).

@@ -17,8 +17,11 @@ The diagnostics panel SHALL provide a drag handle on its top edge. Dragging
 the handle vertically SHALL grow or shrink the panel body, clamped between
 a minimum height (at least one issue row remains visible) and a maximum
 height (the spec textarea above SHALL always retain a usable editing area).
-The drag SHALL work via pointer events (mouse and touch). Panel height is
-session-local; persisting it across mounts is out of scope for this change.
+When the pane is too short to honour both minimums, the panel SHALL collapse
+so the editor keeps its usable area — the panel is either at least one issue
+row or collapsed, never a clipped sliver of a row. The drag SHALL work with
+mouse and touch input. Panel height is session-local; persisting it across
+mounts is out of scope for this change.
 
 #### Scenario: Dragging up reveals clipped content
 
@@ -27,6 +30,15 @@ session-local; persisting it across mounts is out of scope for this change.
 - WHEN the user drags the top-edge handle upward
 - THEN the panel body grows and the previously clipped action buttons
   become visible and clickable
+
+#### Scenario: A pane too short for both minimums collapses the panel
+
+- GIVEN an editor pane too short to give the panel its minimum height and
+  still leave the spec textarea a usable editing area
+- WHEN the panel height is resolved, on first paint or after a drag
+- THEN the panel is collapsed rather than shown at a height below its
+  one-row minimum
+- AND the spec textarea keeps every pixel the panel gave up
 
 #### Scenario: Height is clamped
 

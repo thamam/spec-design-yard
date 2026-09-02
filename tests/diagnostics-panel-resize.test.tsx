@@ -186,13 +186,22 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     expect(body().style.height).toBe('0px')
   })
 
-  test('a pane that misses the floors only just still prefers the editor', () => {
-    // 300 − 261 reserved = 39: below the 72px diagnostics floor, so the panel
-    // takes 39 and the textarea keeps its own 160px floor intact.
+  test('a pane that misses the floors only just collapses rather than clip', () => {
+    // 300 − 261 reserved = 39, below the 72px one-row floor. 39px is neither
+    // one usable issue row nor a collapse — just a clipped sliver of the
+    // first row. The panel is one or the other, never in between.
     stubPaneHeight(300)
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, -5000)
-    expect(body().style.height).toBe('39px')
+    expect(body().style.height).toBe('0px')
+  })
+
+  test('a pane one pixel above the floor keeps a real one-row panel', () => {
+    // 333 − 261 = 72 exactly: the boundary the collapse rule must not eat.
+    stubPaneHeight(333)
+    const { handle, body } = renderPanel()
+    dragMouse(handle(), 600, -5000)
+    expect(body().style.height).toBe('72px')
   })
 
   test('a short pane clamps the INITIAL height, before any drag happens', () => {

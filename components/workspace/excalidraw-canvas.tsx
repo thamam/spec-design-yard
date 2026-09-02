@@ -747,9 +747,11 @@ export function ExcalidrawCanvas({
     scheduledFitIdentityRef.current = specIdentity
     fitTimerRef.current = setTimeout(() => {
       fitTimerRef.current = null
-      /* v8 ignore next 3 -- defence in depth: the cancel above already stops a
-         stale callback, and the effect's specIdentity dependency guarantees it
-         runs before any timer can fire, so this branch is unreachable today. */
+      /* v8 ignore next 3 -- React flushes passive effects through a scheduler
+         task, so a fit timer already due when the identity render commits can
+         run before the cancelling effect does. This check is what saves that
+         ordering; jsdom cannot reproduce it, which is why it is unhittable
+         here rather than unreachable in production. */
       if (latestSpecIdentityRef.current !== specIdentity) return
       try {
         excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)

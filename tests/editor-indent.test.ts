@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
+import yaml from 'yaml'
 import { applyIndent } from '../lib/editor-indent'
 import Workspace from '../components/Workspace'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
@@ -316,15 +317,35 @@ describe('Tab routing when the suggestion popup is open', () => {
     )
   })
 
+  // The other half of the contract: routing indent first must not take the
+  // popup's Tab away from the ordinary single-caret case. This fixture puts
+  // the caret at the end of a partial token on its own line, so accepting
+  // produces YAML that parses.
+  //
+  // Known pre-existing wart, deliberately NOT asserted here: the popup also
+  // opens on an empty prefix at column 0, and accepting there splices `id:`
+  // ahead of the indentation and yields YAML the parser rejects. That
+  // behaviour is on main, is out of scope for this round, and is on the
+  // follow-up list — a test asserting it would lock it in.
   test('Tab at a collapsed caret still accepts the highlighted suggestion', async () => {
-    // The other half of the contract: routing indent first must not take the
-    // popup's Tab away from the ordinary single-caret case.
-    const textarea = await setup(LINE_3, LINE_3)
+    const partial = 'system:\n  components:\n    - id: alpha\n      ty\n'
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: partial } })
+    textarea.focus()
+    const caret = partial.indexOf('      ty') + '      ty'.length
+    textarea.setSelectionRange(caret, caret)
+    fireEvent.select(textarea)
+    expect(screen.getByText('type:')).toBeInTheDocument()
 
     fireEvent.keyDown(textarea, { key: 'Tab' })
 
-    expect(textarea.value).toBe(
-      'system:\n  components:\nid:    - id: alpha\n      type: Stage\n'
-    )
+    const completed = 'system:\n  components:\n    - id: alpha\n      type:\n'
+    expect(textarea.value).toBe(completed)
+    // "Structurally valid" as an assertion, not a claim in a comment.
+    expect(yaml.parse(completed)).toEqual({
+      system: { components: [{ id: 'alpha', type: null }] },
+    })
   })
 })

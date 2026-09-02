@@ -41,14 +41,14 @@
     },
     {
       "requirement": "diagnostics-panel/Resizable panel height",
-      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct — see the Decision 7 note on pointer events under jsdom 24",
+      "design": "Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct — see the note on Decision 4 and pointer events under jsdom 24",
       "tasks": [
         "Task 4: Resizable diagnostics panel"
       ]
     },
     {
       "requirement": "diagnostics-panel/Collapse toggle",
-      "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct",
+      "design": "Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct",
       "tasks": [
         "Task 4: Resizable diagnostics panel"
       ]

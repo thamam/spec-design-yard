@@ -53,7 +53,7 @@ modifies.
 
 - [ ] **Task 4: Resizable diagnostics panel**
   - Drag handle on the panel's top edge (above the header at
-    `editor-panel.tsx:2127`); pointer-capture drag sets a clamped height
+    `editor-panel.tsx:2127`); a mouse-and-touch drag sets a clamped height
     that replaces the `max-h-32` cap (`editor-panel.tsx:2162`).
   - Collapse toggle (`showDiagnostics`, header onClick at 2127-2129) keeps
     working; a drag never triggers a collapse.

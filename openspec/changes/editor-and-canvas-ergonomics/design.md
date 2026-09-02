@@ -95,11 +95,12 @@ text rather than erroring.
   That is a platform migration, not an ergonomics fix — out of proportion
   to colouring three token classes.
 
-## Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct
+## Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct
 
 Add a thin drag-handle strip on the panel's top edge (above the header at
-`editor-panel.tsx:2127`). Pointer-down captures the pointer and tracks
-vertical movement; the panel body's height becomes a state-driven inline
+`editor-panel.tsx:2127`). Pressing the handle arms a drag that tracks
+vertical movement on `window`, via parallel mouse and touch listeners; the
+panel body's height becomes a state-driven inline
 height (replacing the `max-h-32` cap at `editor-panel.tsx:2162`), clamped
 to a minimum (~one row) and a maximum (a fraction of the editor pane so the
 textarea can never be squeezed out). The existing collapse toggle — state
@@ -108,11 +109,14 @@ untouched; the handle is a separate element outside the header's click
 target, and a drag gesture (movement beyond a small threshold) never
 synthesises a click on the header.
 
-- **Rationale**: pointer events with capture are the one drag mechanism
-  that works for mouse and touch without a document-level listener
-  teardown dance; keeping the handle out of the header's DOM makes
-  "drag must not collapse" true structurally instead of via event
-  gymnastics.
+- **Rationale**: window-level mouse and touch listeners, armed on
+  handle press and torn down on release (or `touchcancel`), cover both
+  input types and are the mechanism the existing pane splitter in
+  `workspace-layout.tsx` already uses; keeping the handle out of the
+  header's DOM makes "drag must not collapse" true structurally instead
+  of via event gymnastics. Pointer events with capture would be the
+  tidier API and were the original intent — see the note below for why
+  they are not what shipped.
 - **Rejected**: CSS `resize: vertical` on the panel — free, but the browser
   puts the grip on the bottom-right corner while this panel is anchored to
   the bottom edge and must resize from its *top*; no control over clamps;
@@ -269,14 +273,18 @@ routes to the same `zoomToFit()`.
 
 ### Note on Decision 4 and pointer events
 
-Decision 4 specifies "pointer events with capture" for the diagnostics resize
-drag. jsdom 24 — this repo's test environment — ships **no `PointerEvent`
-constructor and no `Element.prototype.setPointerCapture`**; a synthetic
+Decision 4 originally specified "pointer events with capture" for the
+diagnostics resize drag; its title, mechanism and rationale above have been
+corrected to describe what actually shipped. jsdom 24 — this repo's test
+environment — ships **no `PointerEvent` constructor and no
+`Element.prototype.setPointerCapture`**; a synthetic
 `pointerdown` arrives with `clientY` null, so a pointer-capture drag cannot be
 unit-tested here at all. Since the same change requires 100% diff coverage and
 red-before-green on every behaviour, the implementation delivers the
-requirement's stated intent — "the drag SHALL work via pointer events (mouse
-and touch)" — with parallel `mousedown`/`mousemove`/`mouseup` and
-`touchstart`/`touchmove`/`touchend` listeners, which is also the mechanism the
-existing pane splitter in `workspace-layout.tsx` uses. Both paths are covered
-by tests.
+requirement's stated intent — the drag works with mouse and touch input —
+with parallel `mousedown`/`mousemove`/`mouseup` and
+`touchstart`/`touchmove`/`touchend`/`touchcancel` listeners, which is also the
+mechanism the existing pane splitter in `workspace-layout.tsx` uses. No
+`PointerEvent` and no `setPointerCapture` are involved anywhere in the
+implementation. Both paths are covered by tests, and the real-browser
+behaviour is covered in `scripts/e2e-editor-ergonomics.py`.
