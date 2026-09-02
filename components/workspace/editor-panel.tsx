@@ -43,6 +43,11 @@ interface EditorPanelProps {
   isHydrated?: boolean
 }
 
+// The pane measurement has to happen before paint, but this page is
+// server-rendered and useLayoutEffect warns there — so fall back to useEffect
+// on the server, where there is no layout to measure anyway.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
+
 /* ── Code Tab ── */
 interface CodeTabProps {
   value: string
@@ -56,9 +61,16 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(false)
   const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
+  // Where the caret/selection must land once the edited value has been
+  // committed to the DOM. A setTimeout(0) was not good enough: in a real
+  // browser React commits the new value asynchronously, so the timer fired
+  // against the OLD value, its range was clamped to the old length, and the
+  // commit then dropped the caret at the end — a multi-line Tab lost the
+  // selection over the block it had just indented. jsdom's fake timers hid it;
+  // scripts/e2e-editor-ergonomics.py asserts the real selection bounds.
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
 
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const overlay = overlayRef.current
@@ -68,11 +80,18 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     }
   }
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
-  }, [])
+  // No dependency list: this must run after EVERY commit, because the commit
+  // that carries the new value is the one that moved the caret.
+  useIsomorphicLayoutEffect(() => {
+    const pending = pendingSelectionRef.current
+    if (!pending) return
+    pendingSelectionRef.current = null
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.focus()
+    textarea.setSelectionRange(pending.start, pending.end)
+    setCursorPos(pending.start)
+  })
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value
@@ -110,16 +129,8 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     onChange(newValue)
 
     // Return focus to textarea and adjust cursor position
-    if (timerRef.current) clearTimeout(timerRef.current)
     const newCursorPos = start + sug.length
-    timerRef.current = setTimeout(() => {
-      const textarea = textareaRef.current
-      if (textarea) {
-        textarea.focus()
-        textarea.setSelectionRange(newCursorPos, newCursorPos)
-        setCursorPos(newCursorPos)
-      }
-    }, 0)
+    pendingSelectionRef.current = { start: newCursorPos, end: newCursorPos }
   }
 
   const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -128,17 +139,8 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
       outdent: e.shiftKey,
     })
+    pendingSelectionRef.current = { start: selStart, end: selEnd }
     onChange(text)
-
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      const textarea = textareaRef.current
-      if (textarea) {
-        textarea.focus()
-        textarea.setSelectionRange(selStart, selEnd)
-        setCursorPos(selStart)
-      }
-    }, 0)
   }
 
   const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -152,17 +154,8 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     const insertion = "\n" + newIndent
     const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
     const newCursorPos = target.selectionStart + insertion.length
+    pendingSelectionRef.current = { start: newCursorPos, end: newCursorPos }
     onChange(newValue)
-
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      const textarea = textareaRef.current
-      if (textarea) {
-        textarea.focus()
-        textarea.setSelectionRange(newCursorPos, newCursorPos)
-        setCursorPos(newCursorPos)
-      }
-    }, 0)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1906,11 +1899,6 @@ function clampDiagnosticsHeight(height: number, maxHeight = DIAGNOSTICS_MAX_HEIG
   return Math.min(Math.max(height, DIAGNOSTICS_MIN_HEIGHT), maxHeight)
 }
 
-// The pane measurement has to happen before paint, but this page is
-// server-rendered and useLayoutEffect warns there — so fall back to useEffect
-// on the server, where there is no layout to measure anyway.
-const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
-
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -1967,8 +1955,16 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  // A ceiling of 0 means the pane cannot pay the panel's one-row floor. The
+  // body must then be UNMOUNTED, not merely zero-height: under border-box a
+  // height-0 body still paints its border-t and p-3 as an empty strip, under a
+  // header offering to "Collapse" what is already invisible.
+  const [diagnosticsCeiling, setDiagnosticsCeiling] = useState(DIAGNOSTICS_MAX_HEIGHT)
   const [diagnosticsHeight, setDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
   const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
+  /** The pane can afford the panel AND the user has not collapsed it. */
+  const diagnosticsFits = diagnosticsCeiling > 0
+  const bodyVisible = showDiagnostics && diagnosticsFits
   const diagnosticsDragStartY = useRef(0)
   const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
   const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
@@ -1999,6 +1995,7 @@ export function EditorPanel({
     const applyPaneCeiling = () => {
       const max = measureDiagnosticsMax()
       diagnosticsMaxRef.current = max
+      setDiagnosticsCeiling(max)
       setDiagnosticsHeight((h) => clampDiagnosticsHeight(h, max))
     }
     applyPaneCeiling()
@@ -2336,7 +2333,7 @@ export function EditorPanel({
         {/* Resize handle. Deliberately its own strip ABOVE the header: the
             collapse toggle is the entire header div's onClick, so a handle
             placed inside it would collapse the panel on mouseup. */}
-        {showDiagnostics && (
+        {bodyVisible && (
           <div
             role="separator"
             aria-orientation="horizontal"
@@ -2380,7 +2377,12 @@ export function EditorPanel({
         {/* Panel header */}
         <div
           data-testid="diagnostics-header"
-          onClick={() => setShowDiagnostics((s) => !s)}
+          onClick={() => {
+            // Nothing to toggle when the pane cannot show the panel at all.
+            if (!diagnosticsFits) return
+            setShowDiagnostics((s) => !s)
+          }}
+          title={diagnosticsFits ? undefined : "The editor pane is too short to show diagnostics"}
           className="flex items-center justify-between px-3 h-8 cursor-pointer hover:bg-zinc-900/30 transition-colors"
         >
           <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase">
@@ -2407,12 +2409,12 @@ export function EditorPanel({
             )}
           </div>
           <span className="text-zinc-500 text-[11px] font-medium">
-            {showDiagnostics ? "Collapse" : "Expand"}
+            {bodyVisible ? "Collapse" : "Expand"}
           </span>
         </div>
 
         {/* Panel body */}
-        {showDiagnostics && (
+        {bodyVisible && (
           <div
             data-testid="diagnostics-body"
             className="border-t overflow-y-auto p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"

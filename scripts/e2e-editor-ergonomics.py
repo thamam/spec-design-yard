@@ -14,6 +14,7 @@ started with a throwaway SPEC_YARD_CONFIG_DIR / SPEC_YARD_PROJECT_DIR.
 import os
 import sys
 import time
+from e2e_guard import require_project_dir
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3112")
@@ -39,6 +40,32 @@ def check(name, cond, detail=""):
 def shot(page, name):
     page.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=False)
 
+
+def selection_of(page):
+    """The spec textarea's live selection bounds, as the browser reports them."""
+    return page.evaluate(
+        """() => {
+          const el = document.querySelector('[data-testid="spec-textarea"]');
+          return { start: el.selectionStart, end: el.selectionEnd };
+        }"""
+    )
+
+
+def select_all_in_textarea(page):
+    page.evaluate(
+        """() => {
+          const el = document.querySelector('[data-testid="spec-textarea"]');
+          el.focus();
+          el.setSelectionRange(0, el.value.length);
+        }"""
+    )
+
+
+# Fail closed BEFORE anything is typed: this scenario fills the editor and
+# waits for autosave, which writes main.spec.yaml into whatever folder the
+# server on BASE is serving. Run by hand against a real project, that write
+# lands on real work and the scenario's own checks only record it.
+require_project_dir(BASE, CLIENT_REPO, scenario="editor-ergonomics")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -153,17 +180,30 @@ with sync_playwright() as p:
 
     # ---------- Lane A: a multi-line selection indents every selected line ----------
     ta.fill("aaa\nbbb\nccc")
-    page.evaluate(
-        """() => {
-          const el = document.querySelector('[data-testid="spec-textarea"]');
-          el.focus();
-          el.setSelectionRange(0, el.value.length);
-        }"""
-    )
+    select_all_in_textarea(page)
     page.keyboard.press("Tab")
     val = ta.input_value()
     check("Tab over a multi-line selection indents every selected line", val == "  aaa\n  bbb\n  ccc")
+    # Text alone is not enough: an implementation that collapsed the controlled
+    # textarea's selection would still pass the check above. applyIndent maps
+    # 0..11 to 2..17 for this input (tests/editor-indent.test.ts defines the
+    # mapping); assert the browser really restored that span.
+    sel = selection_of(page)
+    check("the multi-line Tab keeps the selection over the indented block",
+          sel == {"start": 2, "end": 17}, str(sel))
     shot(page, "05-editor-ergonomics-multiline-indent")
+
+    # ---------- Lane A: multi-line Shift+Tab outdents every selected line ----------
+    ta.fill("  aaa\n  bbb\n  ccc")
+    select_all_in_textarea(page)
+    page.keyboard.press("Shift+Tab")
+    val = ta.input_value()
+    check("Shift+Tab over a multi-line selection outdents every selected line",
+          val == "aaa\nbbb\nccc", repr(val))
+    sel = selection_of(page)
+    check("the multi-line Shift+Tab keeps the selection over the outdented block",
+          sel == {"start": 0, "end": 11}, str(sel))
+    shot(page, "05b-editor-ergonomics-multiline-outdent")
 
     # ---------- Lane A: Enter lands at the block's indent ----------
     ta.fill("system:\n  metadata:")
@@ -696,6 +736,8 @@ with sync_playwright() as p:
     check("the badge follows the switch into project B", switched)
 
     page.wait_for_selector('[data-testid="spec-textarea"]', timeout=20000)
+    # The switch is the one point where the served folder changes under us.
+    require_project_dir(BASE, CLIENT_REPO_B, scenario="editor-ergonomics/project-B")
     ta = page.locator('[data-testid="spec-textarea"]')
     for _ in range(40):
         if "Project B System" in ta.input_value():

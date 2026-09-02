@@ -16,6 +16,7 @@ Screenshots land in /tmp/specyard-firstrun-shots/.
 import os
 import sys
 import time
+from e2e_guard import require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -60,6 +61,11 @@ def spec_text(page):
     page.wait_for_selector('[data-testid="spec-textarea"]', timeout=20000)
     return page.locator('[data-testid="spec-textarea"]').input_value()
 
+
+# No project folder of its own to compare against — this scenario CREATES
+# one through the picker — so the guard is on mode: a server already bound to
+# somebody's project is not the server this scenario may drive.
+require_mode(BASE, "unconfigured", scenario="first-run")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

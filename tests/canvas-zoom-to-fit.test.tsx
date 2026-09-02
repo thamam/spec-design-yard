@@ -503,6 +503,47 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
     }
   })
 
+  test('the normalizer defaults strokeStyle without overriding a deliberate one', () => {
+    // The normalizer spreads `...el` over its defaults, so an element that
+    // sets its own strokeStyle keeps it. The STRIDE threat zones are dashed on
+    // purpose; only `angle` and finite geometry matter for bounds, so the
+    // invariant must not be stated as "everything is solid".
+    const threatened = {
+      system: {
+        name: 'Threat Fixture',
+        components: [
+          {
+            id: 'leaky',
+            type: 'Store',
+            name: 'Leaky',
+            x: 0,
+            y: 0,
+            // A sensitive metadata KEY with any non-placeholder value is what
+            // the STRIDE rule flags; the value is deliberately short and
+            // low-entropy so no secret scanner mistakes the fixture for one.
+            metadata: { api_key: 'x' },
+          },
+        ],
+      },
+    }
+    const elements = compileSpecToExcalidrawElements(
+      threatened,
+      undefined,
+      undefined,
+      [],
+      true // showSecurityOverlay — this is what emits the dashed threat zone
+    )
+    const dashed = elements.filter((el) => el.strokeStyle === 'dashed')
+    expect(dashed.length).toBeGreaterThan(0)
+    for (const el of dashed) {
+      expect(el.angle).toBe(0)
+      expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
+    }
+    // And an element that expresses no preference still gets the default.
+    const solid = elements.filter((el) => el.strokeStyle === 'solid')
+    expect(solid.length).toBeGreaterThan(0)
+  })
+
   test('the elements handed to scrollToContent are all finite', async () => {
     vi.useFakeTimers()
     try {

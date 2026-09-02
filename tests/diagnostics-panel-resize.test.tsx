@@ -179,11 +179,12 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     // 200px of pane, 101px of fixed chrome. Holding the 72px diagnostics floor
     // left the textarea a 27px box carrying 40px of its own padding — no
     // visible editing line at all. When the two floors cannot both be paid,
-    // diagnostics collapses rather than the editor.
+    // diagnostics goes away entirely (a zero-height body still paints its
+    // border and padding), and there is no handle left to drag.
     stubPaneHeight(200)
-    const { handle, body } = renderPanel()
-    dragMouse(handle(), 600, -5000)
-    expect(body().style.height).toBe('0px')
+    renderPanel()
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('diagnostics-resize-handle')).not.toBeInTheDocument()
   })
 
   test('a pane that misses the floors only just collapses rather than clip', () => {
@@ -191,9 +192,8 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     // one usable issue row nor a collapse — just a clipped sliver of the
     // first row. The panel is one or the other, never in between.
     stubPaneHeight(300)
-    const { handle, body } = renderPanel()
-    dragMouse(handle(), 600, -5000)
-    expect(body().style.height).toBe('0px')
+    renderPanel()
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
   })
 
   test('a pane one pixel above the floor keeps a real one-row panel', () => {
@@ -204,13 +204,13 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     expect(body().style.height).toBe('72px')
   })
 
-  test('a short pane clamps the INITIAL height, before any drag happens', () => {
+  test('a short pane collapses the panel on first paint, before any drag', () => {
     // The 128px default is an ask, not a measurement. On a ~200px pane it plus
     // the fixed chrome exceeds the pane and the YAML editor collapses to
     // nothing on first paint — the exact failure the clamp exists to prevent.
     stubPaneHeight(200)
-    const { body } = renderPanel()
-    expect(body().style.height).toBe('0px')
+    renderPanel()
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
   })
 
   test('a mid-height pane clamps the initial height to what the pane leaves', () => {
@@ -252,5 +252,53 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
     stubPaneHeight(700)
     fireEvent(window, new Event('resize'))
     expect(body().style.height).toBe('439px')
+  })
+})
+
+describe('a pane too short for the panel collapses it, rather than clipping it', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('at a 300px pane the body is not mounted at all', () => {
+    // A height-0 body still renders border-t and p-3 under border-box: a 25px
+    // empty strip under a header reading "Collapse". Neither collapsed nor a
+    // usable row. Presence, not inline height, is what this asserts.
+    stubPaneHeight(300)
+    renderPanel()
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
+    expect(screen.getByText('Expand')).toBeInTheDocument()
+    expect(screen.queryByText('Collapse')).not.toBeInTheDocument()
+  })
+
+  test('the header says why, and clicking it changes nothing', () => {
+    stubPaneHeight(300)
+    renderPanel()
+    const header = screen.getByTestId('diagnostics-header')
+    expect(header).toHaveAttribute('title', expect.stringMatching(/too short/i))
+
+    fireEvent.click(header)
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
+    expect(screen.getByText('Expand')).toBeInTheDocument()
+  })
+
+  test('at a 340px pane the body mounts at the one-row floor and can collapse', () => {
+    // 340 − 261 reserved = 79 ≥ 72, so the panel is affordable and behaves
+    // exactly as before: this is the boundary the collapse rule must not eat.
+    stubPaneHeight(340)
+    const { body } = renderPanel()
+    expect(body()).toBeInTheDocument()
+    expect(body().style.height).toBe('79px')
+    expect(screen.getByText('Collapse')).toBeInTheDocument()
+    expect(screen.getByTestId('diagnostics-header')).not.toHaveAttribute('title')
+
+    fireEvent.click(screen.getByTestId('diagnostics-header'))
+    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
+  })
+
+  test('the resize handle is gone when the panel cannot be shown', () => {
+    stubPaneHeight(300)
+    renderPanel()
+    expect(screen.queryByTestId('diagnostics-resize-handle')).not.toBeInTheDocument()
   })
 })

@@ -743,7 +743,9 @@ export function ExcalidrawCanvas({
     // A fit for this same spec is already in flight — let it land rather than
     // cancelling and re-queueing it on every elements churn.
     if (fitTimerRef.current !== null && scheduledFitIdentityRef.current === specIdentity) return
-    if (fitTimerRef.current !== null) clearTimeout(fitTimerRef.current)
+    // No clearTimeout here: the cancel block above already cleared any timer
+    // for another identity, and the guard on the line above returned on a
+    // timer for this one, so the ref is always null by now.
     scheduledFitIdentityRef.current = specIdentity
     fitTimerRef.current = setTimeout(() => {
       fitTimerRef.current = null

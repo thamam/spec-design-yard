@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import {
   parseDiffLines,
   isTrackedFile,
@@ -6,6 +11,10 @@ import {
   uncoveredLines,
   unquoteGitPath,
   runGate,
+  resolveBase,
+  gitDiff,
+  readCoverageFile,
+  DEFAULT_BASE,
 } from '../scripts/check-diff-coverage.mjs'
 
 describe('parseDiffLines', () => {
@@ -204,6 +213,20 @@ describe('parseDiffLines — git C-quoted paths', () => {
     expect(unquoteGitPath('"b/lib/a\\rb.ts"')).toBe('b/lib/a\rb.ts')
   })
 
+  it('keeps a literal non-ASCII character whole, bytes and all', () => {
+    // Real git under core.quotePath=false quotes a path containing `"` and
+    // emits its non-ASCII characters LITERALLY inside those quotes:
+    //     +++ "b/lib/sa\"y-café.ts"
+    //     +++ "b/lib/emoji🔥\"x.ts"
+    // Pushing charCodeAt truncated é to one byte and halved the astral
+    // character, so isTrackedFile still said true while findCoverageEntry
+    // could never match the key — the gate then failed closed on a fully
+    // covered file, naming a path nobody could find.
+    expect(unquoteGitPath('"b/lib/sa\\"y-café.ts"')).toBe('b/lib/sa"y-café.ts')
+    expect(unquoteGitPath('"b/lib/emoji🔥\\"x.ts"')).toBe('b/lib/emoji🔥"x.ts')
+    expect(unquoteGitPath('"b/lib/日本語\\tx.ts"')).toBe('b/lib/日本語\tx.ts')
+  })
+
   it('leaves an unquoted path exactly as it is', () => {
     expect(unquoteGitPath('b/lib/plain.ts')).toBe('b/lib/plain.ts')
     expect(unquoteGitPath('/dev/null')).toBe('/dev/null')
@@ -308,11 +331,11 @@ index abc123..def456 100644
     },
   }
 
-  function harness({ diff, readCoverage = () => COVERED, base = 'origin/main' }: any) {
+  function harness({ diff, readCoverage = () => COVERED, argv = [] }: any) {
     const logs: string[] = []
     const errors: string[] = []
     const code = runGate({
-      base,
+      argv,
       repoRoot: REPO,
       diff,
       readCoverage,
@@ -329,7 +352,7 @@ index abc123..def456 100644
         ranges.push(range)
         return TRACKED_DIFF
       },
-      base: 'origin/main',
+      argv: [],
     })
     expect(ranges).toEqual(['origin/main...HEAD'])
   })
@@ -341,7 +364,7 @@ index abc123..def456 100644
         ranges.push(range)
         return ''
       },
-      base: 'upstream/release',
+      argv: ['upstream/release'],
     })
     expect(ranges).toEqual(['upstream/release...HEAD'])
   })
@@ -394,5 +417,68 @@ index abc123..def456 100644
     const { code, logs } = harness({ diff: () => TRACKED_DIFF })
     expect(code).toBe(0)
     expect(logs).toEqual(['diff-coverage-gate: all added/modified lines are covered.'])
+  })
+})
+
+describe('the gate resolves its own base ref', () => {
+  // This used to live in the ignored CLI shim: changing the default to 'HEAD'
+  // made the gate diff HEAD...HEAD, print "nothing to check", exit 0, and no
+  // test or coverage line could see it.
+  it('defaults to origin/main when argv names no base', () => {
+    expect(resolveBase([])).toBe('origin/main')
+    expect(resolveBase(undefined as any)).toBe('origin/main')
+    expect(DEFAULT_BASE).toBe('origin/main')
+  })
+
+  it('uses the base argv names', () => {
+    expect(resolveBase(['upstream/release'])).toBe('upstream/release')
+  })
+})
+
+describe('gitDiff and readCoverageFile, against a real repo and a real file', () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'diff-coverage-gate-'))
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: tmp, encoding: 'utf8' })
+    git('init', '-q')
+    git('config', 'user.email', 'gate@example.test')
+    git('config', 'user.name', 'Gate Test')
+    git('config', 'commit.gpgsign', 'false')
+    writeFileSync(join(tmp, 'tracked.ts'), 'export const a = 1\n')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'base', '--no-verify')
+    writeFileSync(join(tmp, 'tracked.ts'), 'export const a = 1\nexport const b = 2\n')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'change', '--no-verify')
+  })
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('returns a diff naming the changed file', () => {
+    const out = gitDiff('HEAD~1...HEAD', tmp)
+    expect(out).toContain('tracked.ts')
+    expect(out).toContain('+export const b = 2')
+  })
+
+  it('returns nothing for a range with no changes', () => {
+    expect(gitDiff('HEAD...HEAD', tmp)).toBe('')
+  })
+
+  it('throws on a bad revision, which runGate turns into exit 1', () => {
+    expect(() => gitDiff('no-such-ref...HEAD', tmp)).toThrow()
+  })
+
+  it('reads the coverage report, and answers null when it is absent', () => {
+    expect(readCoverageFile(tmp)).toBeNull()
+    mkdirSync(join(tmp, 'coverage'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'coverage', 'coverage-final.json'),
+      JSON.stringify({ 'lib/foo.ts': { statementMap: {}, s: {} } })
+    )
+    expect(readCoverageFile(tmp)).toEqual({ 'lib/foo.ts': { statementMap: {}, s: {} } })
   })
 })

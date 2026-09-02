@@ -15,9 +15,12 @@ keyboard shortcut, the button bypasses React data flow via the `window`
 global, and the per-mount latch means switching project or spec never
 re-fits. The global keyboard handler (`workspace-layout.tsx:126-153`)
 handles only undo/redo and deliberately passes the spec textarea through
-via `isSpecTextarea`. All elements fed to Excalidraw pass a normalizer
-(`excalidraw-canvas.tsx:540-548`) guaranteeing `angle: 0`, `opacity: 100`,
-`strokeStyle: 'solid'`, and `lineHeight: 1.25` on text.
+via `isSpecTextarea`. All elements fed to Excalidraw pass a normalizer (the
+final `elements.map` in `compileSpecToExcalidrawElements`) guaranteeing
+`angle: 0`, finite `x`/`y`/`width`/`height`, `opacity: 100`, and
+`lineHeight: 1.25` on text. It *defaults* `strokeStyle` to `'solid'` and
+spreads the element over that default, so an element's own value wins — the
+STRIDE threat zones keep their deliberate `'dashed'`.
 
 ## MODIFIED Requirements
 
@@ -113,13 +116,23 @@ undo/redo handling uses.
 
 ### Requirement: Element normalization invariant
 
-All elements passed to the fit action SHALL satisfy the canvas normalizer
-(`angle: 0`, `opacity: 100`, `strokeStyle: 'solid'`, and `lineHeight: 1.25`
-on text elements). The fit action SHALL never set scroll or zoom to a
-non-finite value. (Excalidraw 0.18 computes bounds via
-`Math.cos(element.angle)`; a missing `angle` yields NaN, poisons
-`getCommonBounds`, and blanks the canvas — this has broken zoom-to-fit
-before.)
+All elements passed to the fit action SHALL carry `angle: 0`, finite
+`x`/`y`/`width`/`height`, `opacity: 100`, and `lineHeight: 1.25` on text
+elements. The normalizer SHALL *default* `strokeStyle` to `'solid'` without
+overriding an element's own value — only `angle` and finite geometry affect
+bounds, and elements such as the STRIDE threat zones set `'dashed'`
+deliberately. The fit action SHALL never set scroll or zoom to a non-finite
+value. (Excalidraw 0.18 computes bounds via `Math.cos(element.angle)`; a
+missing `angle` yields NaN, poisons `getCommonBounds`, and blanks the canvas
+— this has broken zoom-to-fit before.)
+
+#### Scenario: A deliberate stroke style survives normalization
+
+- GIVEN a compiled element that sets its own `strokeStyle` (a STRIDE threat
+  zone's `'dashed'`)
+- WHEN the elements are normalized for the fit action
+- THEN that element still carries `'dashed'`
+- AND it still carries `angle: 0` and finite geometry
 
 #### Scenario: Fit stays finite
 

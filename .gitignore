@@ -38,3 +38,4 @@ next-env.d.ts
 /.codegraph/
 /.kimi-code/
 .e2e-failures/
+__pycache__/

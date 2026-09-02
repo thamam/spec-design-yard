@@ -13,6 +13,8 @@ import os
 import sys
 import time
 import urllib.request
+
+from e2e_guard import require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -44,6 +46,11 @@ with urllib.request.urlopen(BASE + "/api/store/spec/main") as resp:
 compact = body.replace(" ", "")
 check("store API answers enabled:false with no project", '"enabled":false' in compact, body)
 check("store API reports the opt-out as standalone", '"mode":"standalone"' in compact, body)
+
+# After the scenario's own opt-out, and before the browser: a server still in
+# project mode here would mean the PUT did not take, and the beats below would
+# be driving somebody's project.
+require_mode(BASE, "standalone", scenario="standalone")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

@@ -31,7 +31,14 @@ export function unquoteGitPath(raw) {
   const bytes = []
   for (let i = 0; i < body.length; i++) {
     if (body[i] !== '\\') {
-      bytes.push(body.charCodeAt(i))
+      // A literal character inside the quotes: with core.quotePath=false git
+      // emits non-ASCII raw, and a path with a `"` in it is quoted anyway. So
+      // push its UTF-8 BYTES, not charCodeAt — that truncated é to 0xE9 and
+      // halved every astral character, producing a key findCoverageEntry
+      // could never match. Iterate by code point so surrogate pairs stay whole.
+      const ch = String.fromCodePoint(body.codePointAt(i))
+      i += ch.length - 1
+      for (const byte of Buffer.from(ch, 'utf8')) bytes.push(byte)
       continue
     }
     const next = body[++i]
@@ -49,8 +56,10 @@ export function unquoteGitPath(raw) {
       bytes.push(parseInt(octal, 8))
     } else {
       // `\\` and `\"` both mean "the escaped character, literally", and so does
-      // any escape git may add later.
-      bytes.push(body.charCodeAt(i))
+      // any escape git may add later. Same UTF-8 treatment as above.
+      const ch = String.fromCodePoint(body.codePointAt(i))
+      i += ch.length - 1
+      for (const byte of Buffer.from(ch, 'utf8')) bytes.push(byte)
     }
   }
   return Buffer.from(bytes).toString('utf8')
@@ -184,17 +193,52 @@ export function uncoveredLines(coverageJson, fileLinesMap, repoRoot = process.cw
   return report
 }
 
+/** The default base the gate diffs against when argv names none. */
+export const DEFAULT_BASE = 'origin/main'
+
+/** Resolve the base ref from the gate's argv (everything after the script). */
+export function resolveBase(argv) {
+  return (argv && argv[0]) || DEFAULT_BASE
+}
+
+/**
+ * The real `git diff` the gate runs. Exported and tested for real, because
+ * the ignored CLI shim used to own it: a mutation here (a wrong range, a
+ * dropped flag) was invisible to every test and to the gate itself.
+ *
+ * `core.quotePath=false` stops git octal-escaping non-ASCII paths at source;
+ * unquoteGitPath still covers the control characters and quotes git escapes
+ * regardless of this setting.
+ */
+export function gitDiff(range, cwd = process.cwd()) {
+  return execFileSync('git', ['-c', 'core.quotePath=false', 'diff', '--unified=0', range], {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+}
+
+/** The real coverage-report read: the parsed object, or null when absent. */
+export function readCoverageFile(repoRoot) {
+  const coveragePath = path.join(repoRoot, 'coverage', 'coverage-final.json')
+  if (!existsSync(coveragePath)) return null
+  return JSON.parse(readFileSync(coveragePath, 'utf8'))
+}
+
 /**
  * The gate's whole decision, with every side effect injected so each exit path
  * is reachable from a test. Returns the exit code and never calls
- * process.exit: previously all of this sat inside a `v8 ignore` block, so
+ * process.exit: all of this used to sit inside a `v8 ignore` block, so
  * changing the diff range to `HEAD...HEAD` made the gate pass everything while
  * neither the gate nor its own tests could notice.
  *
- * `diff(range)` returns the diff text or throws; `readCoverage()` returns the
- * parsed coverage JSON or null when the report is missing.
+ * `argv` is everything after the script name; the base ref is resolved here,
+ * not by the caller, so the default is testable too. `diff(range)` returns the
+ * diff text or throws; `readCoverage()` returns the parsed coverage JSON or
+ * null when the report is missing.
  */
-export function runGate({ base, repoRoot, diff, readCoverage, log, error }) {
+export function runGate({ argv = [], repoRoot, diff, readCoverage, log, error }) {
+  const base = resolveBase(argv)
   let diffText
   try {
     diffText = diff(`${base}...HEAD`)
@@ -235,27 +279,17 @@ export function runGate({ base, repoRoot, diff, readCoverage, log, error }) {
   return 1
 }
 
-/* v8 ignore start -- CLI wiring only: argv, the real git invocation, the real
-   coverage-file read, and the process exit. Every decision the gate makes now
-   lives in runGate above, which is unit-tested exit path by exit path. */
+/* v8 ignore start -- the entry-point guard and the process exit, and nothing
+   else: argv parsing, the git invocation and the coverage read are all
+   exported above and unit-tested against a real repo and a real file. */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const repoRoot = process.cwd()
   process.exit(
     runGate({
-      base: process.argv[2] || 'origin/main',
+      argv: process.argv.slice(2),
       repoRoot,
-      // core.quotePath=false stops git octal-escaping non-ASCII paths at
-      // source; unquoteGitPath still covers the control characters and quotes
-      // git escapes regardless of this setting.
-      diff: (range) =>
-        execFileSync('git', ['-c', 'core.quotePath=false', 'diff', '--unified=0', range], {
-          encoding: 'utf8',
-          maxBuffer: 64 * 1024 * 1024,
-        }),
-      readCoverage: () => {
-        const coveragePath = path.join(repoRoot, 'coverage', 'coverage-final.json')
-        return existsSync(coveragePath) ? JSON.parse(readFileSync(coveragePath, 'utf8')) : null
-      },
+      diff: gitDiff,
+      readCoverage: () => readCoverageFile(repoRoot),
       log: console.log,
       error: console.error,
     })
