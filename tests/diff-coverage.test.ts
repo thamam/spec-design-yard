@@ -276,6 +276,60 @@ describe('fileLineHits', () => {
   })
 })
 
+describe('fileLineHits — continuation lines', () => {
+  it('records every line a statement spans, not just its start', () => {
+    // The hole this closes: a diff touching only line 2 of an uncovered
+    // statement that starts on line 1 hit no entry at all, so the gate
+    // treated it as "not a checkable point" and passed.
+    const entry = {
+      statementMap: {
+        '0': { start: { line: 1, column: 0 }, end: { line: 3, column: 1 } },
+      },
+      s: { '0': 0 },
+    }
+    const hits = fileLineHits(entry)
+    expect(hits.get(1)).toBe(0)
+    expect(hits.get(2)).toBe(0)
+    expect(hits.get(3)).toBe(0)
+  })
+
+  it('a covered statement on a shared line still wins', () => {
+    const entry = {
+      statementMap: {
+        '0': { start: { line: 1, column: 0 }, end: { line: 3, column: 1 } },
+        '1': { start: { line: 2, column: 4 }, end: { line: 2, column: 20 } },
+      },
+      s: { '0': 0, '1': 7 },
+    }
+    const hits = fileLineHits(entry)
+    expect(hits.get(1)).toBe(0)
+    expect(hits.get(2)).toBe(7)
+    expect(hits.get(3)).toBe(0)
+  })
+
+  it('an entry with no end line falls back to the start line', () => {
+    const entry = { statementMap: { '0': { start: { line: 5, column: 0 } } }, s: { '0': 0 } }
+    expect(fileLineHits(entry).get(5)).toBe(0)
+  })
+})
+
+describe('uncoveredLines — a diff inside a multi-line statement', () => {
+  it('reports a changed continuation line of an uncovered statement', () => {
+    const coverageJson = {
+      'lib/multi.ts': {
+        statementMap: {
+          '0': { start: { line: 10, column: 0 }, end: { line: 12, column: 1 } },
+        },
+        s: { '0': 0 },
+      },
+    }
+    const diffFiles = new Map([['lib/multi.ts', new Set([11])]])
+    expect(uncoveredLines(coverageJson, diffFiles, '/repo')).toEqual([
+      { file: 'lib/multi.ts', line: 11, reason: 'not covered by any test' },
+    ])
+  })
+})
+
 describe('uncoveredLines', () => {
   const coverageJson = {
     'lib/foo.ts': {

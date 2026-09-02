@@ -338,9 +338,12 @@ a beat types a broken spec and asserts the overlay still renders the text, the
 diagnostics panel reports the syntax error, and the editor stays usable.
 
 `bin/spec-yard` and `scripts/*.py` cannot appear in a v8 coverage map. They are
-exercised by the e2e suite, not by the gate. The gate also enforces **line**
-coverage: an added line carrying no statement start is not a checkable point.
-Both limits are stated in design.md.
+exercised by the e2e suite, not by the gate. The gate enforces **line**
+coverage over every line a statement spans — continuation lines included as of
+round 8, which closed a hole where a change in the middle of an uncovered
+multi-line expression passed unchecked. What remains outside it is a line no
+statement spans at all: a closing brace, a bare `} else {`. Both limits are
+stated in design.md.
 
 ## Review
 

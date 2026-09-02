@@ -187,18 +187,20 @@ implementation session cannot miss them:
 
 ### What "100% diff coverage" means precisely
 
-The gate (`scripts/check-diff-coverage.mjs`) uses v8/istanbul **line** coverage:
-it checks every added or modified line on which a statement *starts*. Lines that
-carry no statement start — continuation lines of a multi-line expression, a bare
-`} else {`, a closing brace — are not executable points in the coverage map and
-are therefore not checked.
+The gate (`scripts/check-diff-coverage.mjs`) uses v8/istanbul **line**
+coverage, and checks every added or modified line that any statement *spans* —
+its start line and its continuation lines alike. istanbul's own line summary
+counts only start lines, and this gate followed it until round 8: a change
+confined to the middle of an uncovered multi-line expression matched no entry
+in the map, was treated as "not a checkable point", and passed. It is now
+reported like any other uncovered line.
 
-So the requirement is enforceable and enforced, but it means "every added
-executable line is exercised", not "every added character is exercised". A
-change confined to the middle of a multi-line ternary can pass the gate without
-a test touching that branch. Reviewers should read the requirement that way, and
-lanes must not treat a green gate as proof that a branch is tested — that is
-what the red-before-green rule is for.
+What remains outside the gate is narrower: a line no statement spans at all —
+a bare `} else {`, a closing brace, a blank line — is not an executable point
+in the coverage map and cannot be checked. So the requirement means "every
+added executable line is exercised", not "every added character is exercised".
+A green gate is still not proof that a *branch* is tested; that is what the
+red-before-green rule is for.
 
 ## Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas
 

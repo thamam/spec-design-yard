@@ -151,13 +151,16 @@ export function detectIndentContext(
   //   `metadata:`            a mapping key
   //   `description: |`       a block scalar (with optional chomping `-`/`+`
   //                          and an explicit indent digit: `|2-`)
-  //   `- id: inbox`          a list item that is itself a mapping — but NOT
-  //                          `- "key: value"`, which is one quoted string in
-  //                          a sequence and opens nothing.
+  //   `- id: inbox`          a list item that is itself a mapping. The key may
+  //                          be quoted (`- "id": inbox` parses as {id: inbox},
+  //                          colons inside it and all), but a COMPLETE quoted
+  //                          string that is not followed by a colon is a plain
+  //                          scalar in a sequence — `- "key: value"` — and
+  //                          opens nothing.
   const opensBlock =
     trimmed.endsWith(":") ||
     /:\s*[|>][0-9+-]*\s*$/.test(trimmed) ||
-    (/^-\s+\S+:(\s|$)/.test(trimmed) && !/^-\s+["']/.test(trimmed))
+    /^-\s+(?:"[^"]*"|'[^']*'|[^\s"'][^\s]*):(\s|$)/.test(trimmed)
 
   return { indentLevel, parentBlock, opensBlock }
 }

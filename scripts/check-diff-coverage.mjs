@@ -147,20 +147,31 @@ export function isTrackedFile(filePath) {
 }
 
 /**
- * Per-line hit counts for one file's istanbul-shaped coverage entry, using
- * the same rule istanbul-lib-coverage uses for its own line-coverage summary:
- * a line is "executable" if some statement starts there, and its hit count
- * is the max across any statements starting on that line.
+ * Per-line hit counts for one file's istanbul-shaped coverage entry.
+ *
+ * EVERY line a statement spans is recorded, not just the line it starts on.
+ * istanbul's own line summary counts only start lines, and this gate used to
+ * follow it — which left a real hole: a diff touching the middle of an
+ * uncovered multi-line statement hit no entry in the map, was treated as "not
+ * a checkable point", and passed. A statement's continuation lines are as
+ * uncovered as its first line.
+ *
+ * A line covered by several statements takes the max, so a covered statement
+ * on the same line as an uncovered one still reads as covered — the same rule
+ * as before, applied to a larger set of lines.
  */
 export function fileLineHits(fileCoverageEntry) {
   const lineMap = new Map()
   const statementMap = fileCoverageEntry.statementMap || {}
   const s = fileCoverageEntry.s || {}
   for (const [id, stmt] of Object.entries(statementMap)) {
-    const line = stmt.start.line
     const count = s[id] ?? 0
-    const prev = lineMap.get(line)
-    if (prev === undefined || count > prev) lineMap.set(line, count)
+    const first = stmt.start.line
+    const last = stmt.end?.line ?? first
+    for (let line = first; line <= last; line++) {
+      const prev = lineMap.get(line)
+      if (prev === undefined || count > prev) lineMap.set(line, count)
+    }
   }
   return lineMap
 }

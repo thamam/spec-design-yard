@@ -19,6 +19,19 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_PORT="${SPEC_YARD_E2E_PORT:-3109}"
 
+# Every scenario runs on BASE_PORT + 0..3, so guarding only BASE_PORT let
+# SPEC_YARD_E2E_PORT=2997 put editor-ergonomics on 3000 — the maintainer's dev
+# server. Check the whole derived range, before anything starts.
+for offset in 0 1 2 3; do
+  derived=$((BASE_PORT + offset))
+  for forbidden in 3000 3110; do
+    if [ "$derived" = "$forbidden" ]; then
+      echo "refusing port $derived (BASE_PORT $BASE_PORT + $offset): $forbidden is not ours" >&2
+      exit 2
+    fi
+  done
+done
+
 if [ "$BASE_PORT" = "3000" ]; then
   echo "refusing to run on port 3000 — that is the conventional dev-server port" >&2
   exit 2
@@ -76,6 +89,8 @@ stop_server() {
 FAILED=()
 PASSED=()
 
+SCENARIOS_RUN=0
+
 run_scenario() {
   local name="$1" port="$2" script="$3"; shift 3
   # Bind the call sites to KNOWN_SCENARIOS: a hand-kept list beside the calls
@@ -92,6 +107,7 @@ run_scenario() {
   if [ -n "${ONLY:-}" ] && [ "$ONLY" != "$name" ]; then
     return 0
   fi
+  SCENARIOS_RUN=$((SCENARIOS_RUN + 1))
   echo
   echo "==> $name (port $port)"
   # Never adopt (and never later kill) a server this script did not start.
@@ -180,6 +196,14 @@ SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)"
               "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
   "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
+
+# The KNOWN_SCENARIOS check binds the CALLS to the list; this binds the list
+# to the calls. A name listed with no run_scenario call would otherwise be
+# selectable, run nothing, and print "all e2e scenarios passed".
+if [ -n "$ONLY" ] && [ "$SCENARIOS_RUN" -eq 0 ]; then
+  echo "scenario '$ONLY' is listed but never invoked — no run_scenario call for it" >&2
+  exit 2
+fi
 
 echo
 for name in ${PASSED[@]+"${PASSED[@]}"}; do echo "PASS  $name"; done

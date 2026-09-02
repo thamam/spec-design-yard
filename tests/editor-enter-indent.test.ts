@@ -363,6 +363,22 @@ describe('YAML shapes the block detector was getting wrong', () => {
     }
   })
 
+  test('a QUOTED key still opens a block', () => {
+    // `- "id": inbox` is a quoted KEY — YAML parses it as {id: inbox}, and the
+    // sibling keys align under it exactly as for the unquoted form. Round 7
+    // stopped the list-item rule at any leading quote, which caught this too.
+    for (const item of ['    - "id": inbox', "    - 'id': inbox"]) {
+      const spec = 'system:\n' + item
+      expect(detectIndentContext(spec, spec.length).opensBlock).toBe(true)
+    }
+  })
+
+  test('a quoted key with a colon inside it still opens a block', () => {
+    const item = '    - "a:b": inbox'
+    const spec = 'system:\n' + item
+    expect(detectIndentContext(spec, spec.length).opensBlock).toBe(true)
+  })
+
   test('an unquoted list mapping entry still opens a block', () => {
     // Decision 2's case, unchanged: "- id: inbox" opens a mapping whose
     // sibling keys align under "id".
