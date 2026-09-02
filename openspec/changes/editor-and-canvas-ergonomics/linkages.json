@@ -4,22 +4,30 @@
     {
       "requirement": "spec-editor/Tab key behaviour",
       "design": "Decision 1: Tab/Shift+Tab handled inside `handleKeyDown`, before the autocomplete branch",
-      "tasks": ["Task 1: Tab / Shift+Tab indentation"]
+      "tasks": [
+        "Task 1: Tab / Shift+Tab indentation"
+      ]
     },
     {
       "requirement": "spec-editor/Enter key behaviour",
       "design": "Decision 2: Enter auto-indent reuses the detector extracted from `lib/autocomplete.ts`",
-      "tasks": ["Task 2: Enter auto-indent (detector extraction first)"]
+      "tasks": [
+        "Task 2: Enter auto-indent (detector extraction first)"
+      ]
     },
     {
       "requirement": "spec-editor/Syntax colouring",
       "design": "Decision 3: Syntax colour via a highlight overlay, not an editor swap",
-      "tasks": ["Task 3: Syntax colour overlay"]
+      "tasks": [
+        "Task 3: Syntax colour overlay"
+      ]
     },
     {
       "requirement": "spec-editor/YAML write discipline",
       "design": "Decision 6: Invariants carried as requirements, not implementation notes",
-      "tasks": ["Task 6: Quality gate"]
+      "tasks": [
+        "Task 6: Quality gate"
+      ]
     },
     {
       "requirement": "spec-editor/Test coverage for editor behaviours",
@@ -34,42 +42,59 @@
     {
       "requirement": "diagnostics-panel/Resizable panel height",
       "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct — see the Decision 7 note on pointer events under jsdom 24",
-      "tasks": ["Task 4: Resizable diagnostics panel"]
+      "tasks": [
+        "Task 4: Resizable diagnostics panel"
+      ]
     },
     {
       "requirement": "diagnostics-panel/Collapse toggle",
       "design": "Decision 4: Diagnostics panel resizes via a pointer-event drag handle; drag and click stay distinct",
-      "tasks": ["Task 4: Resizable diagnostics panel"]
+      "tasks": [
+        "Task 4: Resizable diagnostics panel"
+      ]
     },
     {
       "requirement": "diagnostics-panel/Test coverage for panel behaviours",
       "design": "Decision 6: Invariants carried as requirements, not implementation notes",
-      "tasks": ["Task 4: Resizable diagnostics panel", "Task 6: Quality gate"]
+      "tasks": [
+        "Task 4: Resizable diagnostics panel",
+        "Task 6: Quality gate"
+      ]
     },
     {
       "requirement": "diagram-canvas/Zoom-to-fit affordance",
       "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec; amended by Decision 7 — the toolbar control is kept, not replaced",
-      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
     },
     {
       "requirement": "diagram-canvas/Fit on content load",
       "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
-      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
     },
     {
       "requirement": "diagram-canvas/Fit control in Excalidraw's own footer",
       "design": "Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas (incl. 'Placement within the footer: centre, not adjacent to the zoom widget')",
-      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
     },
     {
       "requirement": "diagram-canvas/Zoom-to-fit keyboard shortcut",
       "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
-      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
     },
     {
       "requirement": "diagram-canvas/Element normalization invariant",
       "design": "Decision 6: Invariants carried as requirements, not implementation notes",
-      "tasks": ["Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"]
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
     },
     {
       "requirement": "diagram-canvas/Test coverage for canvas behaviours",
@@ -79,5 +104,84 @@
         "Task 6: Quality gate"
       ]
     }
-  ]
+  ],
+  "hardening": {
+    "round": "integration-hardening (.orchestrator/integration/FIXES.md)",
+    "note": "Nine defects found by a cross-model review of the merged diff. No new requirement was added: each fix defends a requirement this change already carries. Red/green evidence per fix is in .orchestrator/integration/status.",
+    "links": [
+      {
+        "fix": "FIX 1 — CRLF specs corrupted by Tab and Enter, then autosaved",
+        "requirement": "spec-editor/Tab key behaviour, spec-editor/Enter key behaviour",
+        "design": "Decision 1 (Tab/Shift+Tab inside handleKeyDown) and Decision 2 (Enter reuses the extracted detector) — both assumed one coordinate space; offsets are now translated, and CRLF is preserved rather than normalised away",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX 2 — non-finite coordinates reach Excalidraw",
+        "requirement": "diagram-canvas/Element normalization invariant",
+        "design": "Decision 6: Invariants carried as requirements — the invariant's 'never non-finite' clause now covers x/y, not only angle",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 3 — autocomplete outranks multi-line indent",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown, before the autocomplete branch — the ordering the decision names is now actually enforced for multi-line selections and Shift+Tab",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX 4 — an emptied spec leaves the old diagram on screen",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec — the scene must follow the loaded spec too, including when it is empty",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 5 — a stale fit timer resurrects the previous identity",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 6 — the coverage-policy guard cannot detect the drift it claims to",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate that enforces them must be able to fail",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX 7 — the panel clamp cannot honour both floors on a short pane",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel resizes via a drag handle; the pane ceiling now resolves the floor conflict in the editor's favour",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX 8 — two e2e assertions that cannot fail",
+        "requirement": "diagram-canvas/Test coverage for canvas behaviours, spec-editor/YAML write discipline",
+        "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX 9 — the honest red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  }
 }
