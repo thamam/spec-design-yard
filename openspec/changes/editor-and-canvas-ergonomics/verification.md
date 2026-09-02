@@ -1,17 +1,21 @@
 # Verification — editor-and-canvas-ergonomics
 
-Verified on branch `feat/backlog-sweep` at `7e92d1d`, against base
-`origin/main` @ `3bd0211`. Three hardening rounds followed the first green
-gate at `f8f8ee7`: a cross-model review found nine defects (round 1), a second
-review returned BLOCK with seven more (round 2), and a third returned BLOCK
-with seven more again (round 3). This table is the re-run after all
-twenty-three landed.
+Verified on branch `feat/backlog-sweep` at `84d87f6`, against base
+`origin/main` @ `3bd0211`. Four hardening rounds followed the first green gate
+at `f8f8ee7`: nine defects (round 1), seven (round 2), seven (round 3) and
+nine (round 4), each round a BLOCK from an independent cross-model review of
+the merged diff. This table is the re-run after all thirty-two landed.
+
+Round 4 includes a defect **this work introduced**: round-3 FIX M's caret
+restore left its pending-selection ref armed when an indent was a no-op, and
+the stale range then stole focus on the next unrelated commit. It is recorded
+as a regression, not as a find.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 646 tests, 0 failures** (round 2 at `4bdf54b`: 73 / 634; round 1 at `2a7bce6`: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 658 tests, 0 failures** (round 3 at `3c6e45a`: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -26,15 +30,34 @@ port, a real headless Chromium, real project folders on disk, and assertions on
 both the DOM and the files written. Every scenario asserts zero console and page
 errors.
 
-Every scenario now also **fails closed** before its first page action
-(`scripts/e2e_guard.py`): it reads `/api/project` and refuses to run unless the
-server is serving that scenario's own throwaway folder — or, for the two that
-own no folder, is in the expected mode. These scripts type into the editor and
-wait for autosave, which writes `main.spec.yaml` wherever the server points, so
-run by hand against a real project the old scripts overwrote it and only
-*recorded* the resulting check failures. Demonstrated against a decoy project:
-unguarded, the run destroyed its spec and repointed the server; guarded, it
-exits 2 having written nothing.
+Every scenario **fails closed** before it writes anything
+(`scripts/e2e_guard.py`, itself covered by `scripts/test_e2e_guard.py`, which
+`run-e2e.sh` runs before it starts any server). These scripts type into the
+editor and wait for autosave, which writes `main.spec.yaml` wherever the server
+points, so run by hand against a real project the old scripts overwrote it and
+only *recorded* the resulting check failures.
+
+Round 3 added the server-side guard; round 4 found three scenarios that wrote
+*before* theirs and closed each hole:
+
+- `editor-ergonomics` and `file-mode` require `mode == "project"` with a
+  realpath match on their own folder, before the first page action.
+- The project-B beat seeds a spec into a folder no server-side check can see
+  (it is not yet the folder being served), so it refuses to overwrite any
+  `main.spec.yaml` lacking this harness's marker comment.
+- `standalone` used to PUT the browser-storage opt-out and *then* check the
+  mode — validating the state it had just created. Against a real project-mode
+  server it flipped the live session, persisted standalone into `config.json`,
+  and exited 0. It now requires `unconfigured` before the PUT.
+- `first-run` and `standalone` mutate server-side config, and `/api/project`
+  cannot tell a throwaway config dir from a real install that has simply never
+  been configured. Both now refuse unless `SPEC_YARD_E2E_CONFIG_WRITES_OK=1`,
+  which only `run-e2e.sh` sets.
+
+Demonstrated against decoy servers in both rounds: unguarded, the runs
+destroyed a project's spec, repointed its configured project, and flipped a
+project-mode install to standalone while reporting success; guarded, each
+exits 2 with the decoy byte-identical.
 
 ## Requirement coverage
 
@@ -50,6 +73,14 @@ exits 2 having written nothing.
   still accepts. Covered by "Tab routing when the suggestion popup is open" in
   `tests/editor-indent.test.ts`, whose fixture sits at a 4-space indent so
   component-field autocomplete is genuinely live.
+- *Blank-line indent* — `detectIndentContext` reports a whitespace-only line's
+  literal indent, which Enter needs so a blank line inside a block keeps its
+  indentation. `origin/main`'s inline autocomplete detector reported 0, so
+  sharing one implementation silently changed what the popup offers. The
+  detector takes a `blankLine` option; autocomplete passes `"zero"` and Enter
+  keeps the literal default. The proposal promised extraction, not
+  reimplementation. Covered by "autocomplete offers nothing at the end of a
+  whitespace-only line".
 - *Line endings* — normalised to LF **once**, at the single seam foreign spec
   text enters app state: `normalizeLineEndings` (`lib/spec-model.ts`) applied
   in the hydration effect of `workspace-layout.tsx`, before `lastLoadedSpecRef`
@@ -95,7 +126,16 @@ exits 2 having written nothing.
   click still collapses and re-expands at the dragged height".
 - *Floor conflict* — on a pane too short to pay both the diagnostics floor and
   the editor's, the editor wins: `diagnosticsMaxHeight` returns 0 rather than a
-  height below the one-row minimum, and the body is then **unmounted**, not
+  height below the one-row minimum — where "one row" now includes the
+  Auto-Fix-All banner strip, which used to render *inside* the body above the
+  rows and ate the whole floor, leaving the first issue row clipped. The banner
+  is chrome above the scrollable body, paid for out of the panel's own height
+  rather than added to it: outside the body it cannot clip a row, and inside
+  the panel's budget it does not change the panel's total height when it
+  appears or disappears mid-edit. That second half matters — the first attempt
+  added it on top, which resized the editor as the user typed and
+  desynchronised the highlight overlay from the textarea's scroll, caught by an
+  existing e2e beat and by no unit test. The body is **unmounted**, not
   merely zero-height. A height-0 body still paints its `border-t` and `p-3`
   under border-box: a 25px empty strip beneath a header offering to "Collapse"
   what is already invisible. The resize handle goes with it, the label reads
@@ -124,9 +164,17 @@ exits 2 having written nothing.
   input or textarea. Covered by "typing ! in the YAML textarea never yanks the
   canvas" and, as a regression guard, "undo still reaches the spec textarea".
 - *One fit per loaded spec* — the latch records an identity as **handled**, not
-  merely fitted, so an empty spec's first component is an ordinary edit. A fit
-  already scheduled for a previous identity is cancelled the moment the
-  identity changes — including on the empty-spec path, which used to return
+  merely fitted, so an empty spec's first component is an ordinary edit. A
+  scheduled fit is cancelled when the identity changes **and** when the spec is
+  emptied under the same identity — the second case was missed until round 4
+  and left a timer calling `scrollToContent([])`, whose `getCommonBounds` is
+  non-finite: the blank canvas this change names as its top risk. The callback
+  also refuses to fit an empty scene. The derivation feeding all of it
+  (`loadedSpecId` → `specIdentity`) is now covered against the real
+  `WorkspaceLayout` with a hand-released hydration response, so deleting it
+  fails a test; until round 4 every fit test handed the canvas a fabricated
+  identity. A fit for a previous identity is cancelled the moment the identity
+  changes — including on the empty-spec path, which used to return
   with the old timer still armed, letting it fire and rewind the latch. e2e
   switches projects for real and asserts project B is already framed on load;
   that beat covers the **reloaded** path only (the picker calls
@@ -225,7 +273,11 @@ asserts against a spy, never a real Excalidraw. Also carried forward: the
 suggestion popup opens on an empty prefix at column 0, and accepting there
 splices a key ahead of the indentation and yields YAML the parser rejects —
 pre-existing on `main`, deliberately not asserted by any test (see the comment
-in `tests/editor-indent.test.ts`).
+in `tests/editor-indent.test.ts`). Added in round 4:
+`extractComponentIds` in `lib/autocomplete.ts` accepts only unquoted component
+ids while `lib/yaml-highlight.ts` recognises quoted ones — the regex is
+identical on `origin/main`, so this predates the change and is not drift of
+the kind FIX F fixed.
 
 `bin/spec-yard` and `scripts/*.py` cannot appear in a v8 coverage map. They are
 exercised by the e2e suite, not by the gate. The gate also enforces **line**
@@ -286,6 +338,28 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   then FIX E — which round 1 did not record at all. The corrected
   classification is in `.orchestrator/integration/status`; the commit messages
   stand as written.
+- **Merged diff, round 4** — a fourth review returned BLOCK with nine
+  findings, two of them reproduced by the orchestrator with probes before
+  briefing. The two blockers: a no-op Shift+Tab left round-3 FIX M's
+  pending-selection ref armed, so the stale range stole focus and re-selected
+  an abandoned block on the next unrelated commit (a regression **this work
+  introduced**, not a pre-existing defect); and the standalone e2e scenario
+  validated the server state it had itself just created, flipping a real
+  project-mode install to standalone and exiting 0. The rest: a spec emptied
+  under its own identity still fired a fit at an empty scene; the panel floor
+  forgot the Auto-Fix-All banner; no test covered the `loadedSpecId` →
+  `specIdentity` derivation; a window resize destroyed the dragged height; the
+  extracted indent detector silently changed autocomplete on a blank line; and
+  three OpenSpec tasks were unchecked while this file called them done.
+- **Record correction (round 4)** — the round-3 record had nine errors, each
+  re-verified before correction: FIX K's red count (six behavioural, not
+  three), three `gitDiff`/`readCoverageFile` cases misfiled as green-on-base
+  when they were import-red, one that passed *vacuously* on base (calling
+  `undefined` satisfies `.toThrow()`), two `resolveBase` cases in neither
+  group, three unrecorded behavioural reds for FIX L, an unnamed test for FIX
+  P, a HEAD attributed to the wrong commit, and the FIX J e2e claim that every
+  scenario "exits 2 having written nothing" — untrue for three of them until
+  round 4 fixed it. That claim has been rewritten above rather than deleted.
 - **Merged diff, round 3** — a third Codex review returned BLOCK with seven
   findings: the e2e scenarios could autosave over a real project; a short pane
   still rendered a padded sliver labelled "Collapse"; the gate's base default
