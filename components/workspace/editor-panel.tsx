@@ -61,6 +61,10 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(false)
   const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
+  // The Esc escape is armed for the NEXT Tab only, and any intervening edit
+  // disarms it — including one the user did not type: Auto-Fix All, a canvas
+  // drag, a quick fix. Keying on `value` covers those; the keydown and change
+  // handlers cover the rest.
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   // Where the caret/selection must land once the edited value has been
@@ -85,10 +89,12 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const commitWithSelection = (
     nextValue: string,
     selection: { start: number; end: number },
-    target: HTMLTextAreaElement
+    target: HTMLTextAreaElement | null
   ) => {
     if (nextValue === value) {
-      target.setSelectionRange(selection.start, selection.end)
+      // Nothing to commit, so nothing will ever consume a pending range —
+      // apply it now, or it would sit armed until an unrelated edit fired it.
+      target?.setSelectionRange(selection.start, selection.end)
       setCursorPos(selection.start)
       return
     }
@@ -97,6 +103,16 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     pendingSelectionRef.current = selection
     onChange(nextValue)
   }
+
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    // Not on the first render: mounting is not an edit.
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    setReleaseFocusOnTab(false)
+  }, [value])
 
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     const overlay = overlayRef.current
@@ -153,9 +169,10 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     const [start, end] = autocomplete.replaceRange
     const newValue = value.substring(0, start) + sug + value.substring(end)
     const newCursorPos = start + sug.length
-    const textarea = textareaRef.current
-    if (!textarea) return
-    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, textarea)
+    // Commit regardless of the ref; only the caret restore needs the element.
+    // Returning early here would have dropped the whole edit if the ref were
+    // ever null — currently unreachable, but the wrong thing to lose.
+    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, textareaRef.current)
   }
 
   const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -170,7 +187,11 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
     const target = e.currentTarget
-    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart)
+    // upToCursor: the text after the caret is about to move to the new line,
+    // so only the half being left behind can decide the block.
+    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart, {
+      upToCursor: true,
+    })
     const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
     // Spec text is LF-only by the time it reaches state (spec-model's
     // normalizeLineEndings at the load seam), so the textarea's offsets index
@@ -182,6 +203,12 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // An IME owns its own Enter and Tab: they commit or cycle a composition
+    // candidate. Intercepting them throws the composition away and inserts an
+    // indented newline instead. keyCode 229 is the legacy signal browsers
+    // still send for a composing key.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+
     // WCAG 2.1.2 keyboard-trap escape hatch: Esc arms a one-shot release so
     // the very next Tab moves focus out via the browser default, regardless
     // of whether the suggestion popup was open.
@@ -1891,21 +1918,11 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 // an unclamped ask can eat the YAML textarea whole on a short pane.
 const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
 const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
-// The Auto-Fix-All banner (p-2.5 + mb-3 + border) renders INSIDE the body,
-// above the rows, so at the bare 72px floor it was visible and the first
-// issue row was clipped — the floor's whole promise. The minimum grows by the
-// banner when there is one.
-// Measured in real Chromium (scripts/e2e-editor-ergonomics.py prints the
-// boxes): from the body's top to the bottom of the first row's action button
-// is ~166px when the banner is present, against the 72px that one row alone
-// needs. 96 is that difference, rounded up.
-// Measured in real Chromium: the Auto-Fix-All strip is ~48px with its border
-// and padding. It is chrome above the scrollable body rather than a row inside
-// it, but it is paid for out of the PANEL's height, not added on top — see the
-// JSX comment. Two things depend on that: the first issue row is never clipped
-// by the banner, and the panel's total height does not change when the banner
-// appears or disappears mid-edit, which would otherwise resize the editor and
-// desynchronise the highlight overlay from the textarea's scroll.
+// The Auto-Fix-All strip's BUDGET, not a measurement: its real box is ~45px,
+// so reserving 48 leaves the panel a couple of pixels shorter than asked,
+// never taller. It is chrome above the scrollable body, paid for out of the
+// panel's own height rather than added to it — see the JSX comment on the
+// strip for why both halves of that matter.
 const DIAGNOSTICS_BANNER_HEIGHT = 48
 const DIAGNOSTICS_MAX_HEIGHT = 480 // the ceiling on a tall viewport
 // Everything in the pane that is not diagnostics body: the fixed chrome (tab
@@ -1927,10 +1944,13 @@ const DIAGNOSTICS_RESERVED_HEIGHT = 261
  * first row, which is neither usable nor an honest collapse. 72px remains the
  * floor of a drag on any pane that can afford it.
  */
-function diagnosticsMaxHeight(paneHeight: number, minHeight = DIAGNOSTICS_MIN_HEIGHT) {
+function diagnosticsMaxHeight(paneHeight: number) {
   if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
   const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
-  if (available < minHeight) return 0
+  // One whole issue row or nothing — a sliver of a row is neither usable nor
+  // an honest collapse. The banner is NOT part of this test: see the sizing
+  // block in the component for why presence must not depend on content.
+  if (available < DIAGNOSTICS_MIN_HEIGHT) return 0
   return Math.min(DIAGNOSTICS_MAX_HEIGHT, available)
 }
 
@@ -2068,12 +2088,17 @@ export function EditorPanel({
     // A gesture the browser cancels never sends touchend; without this the
     // resize stays armed and the next unrelated touch drags the panel.
     window.addEventListener("touchcancel", onRelease)
+    // Alt-tab with the button still down and the mouseup may never arrive;
+    // without this the next pointer move over the page resizes a panel the
+    // user has already let go of.
+    window.addEventListener("blur", onRelease)
     return () => {
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onRelease)
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("touchend", onRelease)
       window.removeEventListener("touchcancel", onRelease)
+      window.removeEventListener("blur", onRelease)
     }
   }, [isResizingDiagnostics])
   const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
@@ -2135,13 +2160,26 @@ export function EditorPanel({
   // on whether the Auto-Fix-All banner is rendered, which is only known once
   // the diagnostics are. The refs carry the result to the drag and resize
   // handlers, which run after this render.
-  const showsFixBanner = !yamlSyntaxError && fixableDiagnostics.length > 0
+  // Panel sizing, in one place and in this order — the order is the point.
+  //
+  //   available < 72                  -> no panel at all
+  //   72 <= available < 72 + banner   -> panel at the bare floor, NO banner
+  //   available >= 72 + banner        -> panel and banner
+  //
+  // Whether the PANEL exists depends only on the pane's height, never on what
+  // the spec happens to contain. Tying the two together (as the first version
+  // of this did) meant that in a narrow band of pane heights, typing an
+  // unrecognised type made the whole panel vanish and the editor jump taller,
+  // and fixing it popped the panel back — the mid-edit resize this sizing
+  // exists to avoid. The banner is what yields; each issue row keeps its own
+  // action button, so the fix is still one click away without it.
+  const hasFixBanner = !yamlSyntaxError && fixableDiagnostics.length > 0
+  const diagnosticsCeiling = diagnosticsMaxHeight(measuredPaneHeight)
+  const showsFixBanner =
+    hasFixBanner && diagnosticsCeiling >= DIAGNOSTICS_MIN_HEIGHT + DIAGNOSTICS_BANNER_HEIGHT
   const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
-  // The floor is one issue row PLUS the banner strip above it, so the row is
-  // never the thing that gets clipped. The panel's own height is unchanged by
-  // the banner — the strip comes out of the body's share of it.
+  // The floor is one whole issue row, plus the strip above it when it shows.
   const diagnosticsMin = DIAGNOSTICS_MIN_HEIGHT + bannerHeight
-  const diagnosticsCeiling = diagnosticsMaxHeight(measuredPaneHeight, diagnosticsMin)
   const diagnosticsHeight = clampDiagnosticsHeight(
     wantedDiagnosticsHeight,
     diagnosticsCeiling,
@@ -2480,11 +2518,13 @@ export function EditorPanel({
           </span>
         </div>
 
-        {/* Auto-Fix-All banner. Deliberately OUTSIDE the body's height budget:
-            rendered inside it, above the rows, it ate the whole one-row floor
-            and the first issue row was clipped — the floor's whole promise.
-            `shrink-0` so it is never squeezed; DIAGNOSTICS_RESERVED_HEIGHT
-            accounts for it so the editor keeps its own floor too. */}
+        {/* Auto-Fix-All strip. OUTSIDE the scrollable body — rendered inside
+            it, above the rows, it ate the whole one-row floor and clipped the
+            first issue row, the floor's whole promise. And paid for out of the
+            PANEL's height rather than added to it, so the panel's total height
+            does not change when the strip appears or disappears mid-edit;
+            adding it on top resized the editor as the user typed and
+            desynchronised the highlight overlay from the textarea's scroll. */}
         {bodyVisible && showsFixBanner && (
           <div
             data-testid="diagnostics-fix-banner"

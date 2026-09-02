@@ -42,7 +42,18 @@ export function unquoteGitPath(raw) {
       continue
     }
     const next = body[++i]
-    if (next === 't') {
+    // git's full C-escape set for a path, not just the common three: a BEL in
+    // a filename comes through as `\a`, and decoding it to a literal "a"
+    // silently renames the file into a DIFFERENT one's coverage entry.
+    if (next === 'a') {
+      bytes.push(0x07)
+    } else if (next === 'b') {
+      bytes.push(0x08)
+    } else if (next === 'f') {
+      bytes.push(0x0c)
+    } else if (next === 'v') {
+      bytes.push(0x0b)
+    } else if (next === 't') {
       bytes.push(0x09)
     } else if (next === 'n') {
       bytes.push(0x0a)

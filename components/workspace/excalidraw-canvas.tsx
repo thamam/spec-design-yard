@@ -21,6 +21,18 @@ const getDeterministicSeed = (id: string) => {
   return (Math.abs(hash) % 100000) + 1
 }
 
+// A coordinate no real diagram uses, and past which arithmetic stops being
+// safe: 1e308 is finite, but the dx between +1e308 and -1e308 is -Infinity, so
+// an arrow's width and points come out infinite and poison getCommonBounds
+// exactly as a NaN would. Anything beyond this is treated as unusable and
+// falls back to the computed layout.
+const MAX_COORD = 1e7
+
+/** A coordinate the layout can actually use. */
+function isUsableCoordinate(v: any): boolean {
+  return Number.isFinite(v) && Math.abs(v) <= MAX_COORD
+}
+
 const COLOR_MAP: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
   indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
   purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
@@ -120,13 +132,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
 
   components.forEach((comp: any) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
-    // Number.isFinite, not `typeof === 'number'`: YAML spells NaN and the
-    // infinities as `.nan` / `.inf`, and both pass a typeof check. They flow
-    // straight into element geometry, poison getCommonBounds, and leave
-    // scrollToContent writing a non-finite scroll/zoom — a blank canvas with
-    // no error. A non-finite coordinate falls back to the computed layout,
-    // exactly as a missing one already does.
-    if (Number.isFinite(comp.x) && Number.isFinite(comp.y)) {
+    // Not `typeof === 'number'`: YAML spells NaN and the infinities as
+    // `.nan` / `.inf`, and both pass a typeof check. They flow straight into
+    // element geometry, poison getCommonBounds, and leave scrollToContent
+    // writing a non-finite scroll/zoom — a blank canvas with no error. Nor is
+    // Number.isFinite enough on its own: see MAX_COORD. Either way the
+    // coordinate falls back to the computed layout, as a missing one does.
+    if (isUsableCoordinate(comp.x) && isUsableCoordinate(comp.y)) {
       positions[comp.id] = {
         x: comp.x,
         y: comp.y,

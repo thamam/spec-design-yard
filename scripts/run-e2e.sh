@@ -143,8 +143,11 @@ EDITOR_CLIENT="$TMP/editor-ergonomics-repo"
 # A second project folder, for the beat that switches into one for real.
 EDITOR_CLIENT_B="$TMP/editor-ergonomics-repo-b"
 mkdir -p "$EDITOR_CLIENT" "$EDITOR_CLIENT_B"
+# The project-switch beat rewrites this server's active project and recents,
+# so this scenario needs the config-writes opt-in as well.
 SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)"
-              "SPEC_YARD_E2E_CLIENT_B=$(cd "$EDITOR_CLIENT_B" && pwd -P)")
+              "SPEC_YARD_E2E_CLIENT_B=$(cd "$EDITOR_CLIENT_B" && pwd -P)"
+              "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
   "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
 

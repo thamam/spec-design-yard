@@ -83,6 +83,15 @@ export interface DetectIndentOptions {
    * where `main` offered none.
    */
   blankLine?: "literal" | "zero"
+  /**
+   * Decide the indent and `opensBlock` from the text BEFORE the cursor only.
+   *
+   * Enter passes this: the text after the caret moves to the new line, so it
+   * cannot be what decides whether the line being split opens a block. With
+   * `  metadata:|owner: Tomer` the whole line does not end in a colon, but the
+   * half the user is leaving behind does, and `owner:` should land nested.
+   */
+  upToCursor?: boolean
 }
 
 export function detectIndentContext(
@@ -93,7 +102,10 @@ export function detectIndentContext(
   const lineStart = specText.lastIndexOf("\n", cursorPosition - 1) + 1
   const lineEndIdx = specText.indexOf("\n", cursorPosition)
   const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
-  const currentLine = specText.substring(lineStart, lineEnd)
+  const fullLine = specText.substring(lineStart, lineEnd)
+  const currentLine = options.upToCursor
+    ? fullLine.slice(0, Math.max(0, cursorPosition - lineStart))
+    : fullLine
 
   // A whitespace-only line (mid-edit blank inside a block) has no non-space
   // char for /\S/ to find. Fall back to the line's own length rather than 0

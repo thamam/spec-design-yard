@@ -10,11 +10,21 @@ the end.
 Run it via `npm run test:e2e editor-ergonomics` (which supplies an isolated
 server via SPEC_YARD_PROJECT_DIR), or point SPEC_YARD_URL at a dev server
 started with a throwaway SPEC_YARD_CONFIG_DIR / SPEC_YARD_PROJECT_DIR.
+
+Safety: the project-switch beat rewrites the server's active project and
+recents, so this scenario refuses to run (exit 2) unless
+SPEC_YARD_E2E_CONFIG_WRITES_OK=1 is set. `npm run test:e2e` sets it, having
+started the server on a throwaway SPEC_YARD_CONFIG_DIR; nothing else should.
 """
 import os
 import sys
 import time
-from e2e_guard import SEED_MARKER, require_project_dir, require_safe_to_seed
+from e2e_guard import (
+    SEED_MARKER,
+    require_config_writes_allowed,
+    require_project_dir,
+    require_safe_to_seed,
+)
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3112")
@@ -744,9 +754,14 @@ with sync_playwright() as p:
       x: 4600
       y: 3400
 """
-    # Guard BEFORE the seed write. CLIENT_REPO_B is named by an env var and is
-    # not yet the folder the server serves, so no server-side check can see
-    # this write — it has to be refused here, on the file's own evidence.
+    # Two guards, both BEFORE anything is written. The picker switch below
+    # rewrites activeProject and the recents list in the server's config dir,
+    # which is a config mutation like first-run's and standalone's — so it
+    # needs the same explicit harness opt-in. And CLIENT_REPO_B is named by an
+    # env var and is not yet the folder the server serves, so no server-side
+    # check can see the seed write; it has to be refused here, on the file's
+    # own evidence.
+    require_config_writes_allowed(scenario="editor-ergonomics/project-B")
     require_safe_to_seed(CLIENT_REPO_B, scenario="editor-ergonomics/project-B")
     os.makedirs(CLIENT_REPO_B, exist_ok=True)
     with open(os.path.join(CLIENT_REPO_B, "main.spec.yaml"), "w") as fh:

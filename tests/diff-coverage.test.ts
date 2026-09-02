@@ -227,6 +227,15 @@ describe('parseDiffLines — git C-quoted paths', () => {
     expect(unquoteGitPath('"b/lib/日本語\\tx.ts"')).toBe('b/lib/日本語\tx.ts')
   })
 
+  it('decodes the rest of git\'s C escapes: bell, backspace, formfeed, vtab', () => {
+    // Missing, `\a` decoded to a literal "a" — silently renaming the file
+    // into a DIFFERENT file's coverage entry rather than failing.
+    expect(unquoteGitPath('"b/lib/a\\ab.ts"')).toBe('b/lib/a\u0007b.ts')
+    expect(unquoteGitPath('"b/lib/a\\bb.ts"')).toBe('b/lib/a\bb.ts')
+    expect(unquoteGitPath('"b/lib/a\\fb.ts"')).toBe('b/lib/a\fb.ts')
+    expect(unquoteGitPath('"b/lib/a\\vb.ts"')).toBe('b/lib/a\vb.ts')
+  })
+
   it('leaves an unquoted path exactly as it is', () => {
     expect(unquoteGitPath('b/lib/plain.ts')).toBe('b/lib/plain.ts')
     expect(unquoteGitPath('/dev/null')).toBe('/dev/null')

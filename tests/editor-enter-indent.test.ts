@@ -171,20 +171,14 @@ describe('CodeTab Enter auto-indent', () => {
   })
 })
 
-describe('CodeTab Enter caret restore (setTimeout flush)', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
+describe('CodeTab Enter caret restore (layout effect)', () => {
+  // Named for the mechanism that exists. This suite used to say "setTimeout
+  // flush" and drove fake timers to flush a timer 7e92d1d deleted when the
+  // restore moved into a layout effect — the same rot FIX Z fixed in
+  // tests/keyboard-autocomplete-and-fix-all.test.tsx, missed here.
   test('Enter restores the caret to right after the inserted indent', async () => {
     render(React.createElement(Workspace))
-    vi.useRealTimers()
     await waitForWorkspaceHydration()
-    vi.useFakeTimers()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const value = 'system:\n  metadata:'
@@ -200,10 +194,6 @@ describe('CodeTab Enter caret restore (setTimeout flush)', () => {
 
     act(() => {
       fireEvent.keyDown(textarea, { key: 'Enter' })
-    })
-
-    act(() => {
-      vi.advanceTimersByTime(0)
     })
 
     const expectedCaret = 'system:\n  metadata:\n    '.length
@@ -237,5 +227,92 @@ describe('the shared detector does not change autocomplete on a blank line', () 
     const ctx = detectIndentContext(spec, spec.length)
     expect(ctx.indentLevel).toBe(4)
     expect(ctx.opensBlock).toBe(false)
+  })
+})
+
+describe('IME composition owns Enter and Tab', () => {
+  // A Japanese or Chinese user presses Enter to COMMIT an in-flight
+  // composition candidate. Intercepting it inserts an indented newline (or
+  // accepts a suggestion) and throws the composition away.
+  async function editor() {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'system:\n  metadata:' } })
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    fireEvent.select(textarea)
+    return textarea
+  }
+
+  test('Enter while composing is left to the IME', async () => {
+    const textarea = await editor()
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true })
+    expect(notPrevented).toBe(true) // nothing called preventDefault
+    expect(textarea.value).toBe('system:\n  metadata:')
+  })
+
+  test('Tab while composing is left to the IME', async () => {
+    const textarea = await editor()
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Tab', isComposing: true })
+    expect(notPrevented).toBe(true)
+    expect(textarea.value).toBe('system:\n  metadata:')
+  })
+
+  test('keyCode 229 — the legacy IME signal — is left alone too', async () => {
+    const textarea = await editor()
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Enter', keyCode: 229 })
+    expect(notPrevented).toBe(true)
+    expect(textarea.value).toBe('system:\n  metadata:')
+  })
+
+  test('a plain Enter still indents', async () => {
+    const textarea = await editor()
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(textarea.value).toBe('system:\n  metadata:\n    ')
+  })
+})
+
+describe('Enter mid-line decides the block from the text before the caret', () => {
+  // The text AFTER the caret moves to the new line, so it cannot be what
+  // decides whether the current line opens a block.
+  test('Enter after a block-opening colon nests what follows', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'system:\n  metadata:owner: Tomer'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    const caret = value.indexOf('  metadata:') + '  metadata:'.length
+    textarea.setSelectionRange(caret, caret)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    expect(textarea.value).toBe('system:\n  metadata:\n    owner: Tomer')
+  })
+
+  test('Enter at the end of a line is unchanged', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'system:\n  metadata:'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(value.length, value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    expect(textarea.value).toBe('system:\n  metadata:\n    ')
+  })
+
+  test('the detector can be asked to look only at the text before the caret', () => {
+    const line = '  metadata:owner: Tomer'
+    const spec = 'system:\n' + line
+    const caret = spec.indexOf('  metadata:') + '  metadata:'.length
+    expect(detectIndentContext(spec, caret).opensBlock).toBe(false)
+    expect(detectIndentContext(spec, caret, { upToCursor: true }).opensBlock).toBe(true)
   })
 })

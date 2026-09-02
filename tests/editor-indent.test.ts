@@ -409,3 +409,50 @@ describe('a no-op indent must not arm the pending selection', () => {
     expect(document.activeElement).not.toBe(textarea)
   })
 })
+
+describe('the Esc escape hatch is disarmed by any edit, not just a typed one', () => {
+  test('a value change from outside disarms it, so the next Tab indents', async () => {
+    // The spec says any intervening edit disarms the one-shot escape. An
+    // Auto-Fix All or a canvas drag arrives as a controlled-value change, not
+    // as a keydown or a change event from this textarea.
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    fireEvent.change(textarea, { target: { value: 'system:\n  name: hello' } })
+    textarea.focus()
+    textarea.setSelectionRange(20, 20)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    // An edit arrives from elsewhere in the app.
+    fireEvent.change(textarea, { target: { value: 'system:\n  name: hello!' } })
+    textarea.setSelectionRange(21, 21)
+    fireEvent.select(textarea)
+
+    // The escape is spent: Tab indents rather than moving focus out.
+    // fireEvent returns false when a handler called preventDefault, which is
+    // what the indent path does and the escape path deliberately does not.
+    const prevented = fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(prevented).toBe(false)
+    expect(textarea.value).toContain('  ')
+    expect(textarea.value.length).toBe('system:\n  name: hello!'.length + 2)
+  })
+
+  test('Esc then Tab with no intervening edit still releases focus', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    const value = 'system:\n  name: hello'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(value.length, value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(notPrevented).toBe(true)
+    expect(textarea.value).toBe(value)
+  })
+})

@@ -534,6 +534,46 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
     }
   })
 
+  test('coordinates far beyond any canvas fall back to the layout', () => {
+    // 1e308 and -1e308 are both finite, so the isFinite guard admits them —
+    // but the arrow between them has a dx of -Infinity, and its width and
+    // points poison getCommonBounds exactly as a NaN would.
+    const absurd = {
+      system: {
+        name: 'Absurd Fixture',
+        components: [
+          { id: 'a', type: 'Gateway', name: 'A', x: 1e308, y: 0, connections: [{ target: 'b' }] },
+          { id: 'b', type: 'Store', name: 'B', x: -1e308, y: 0 },
+        ],
+      },
+    }
+    const elements = compileSpecToExcalidrawElements(absurd)
+    expect(elements.length).toBeGreaterThan(0)
+    for (const el of elements) {
+      for (const key of ['x', 'y', 'width', 'height']) {
+        expect(Number.isFinite(el[key])).toBe(true)
+      }
+      if (Array.isArray(el.points)) {
+        for (const [px, py] of el.points) {
+          expect(Number.isFinite(px)).toBe(true)
+          expect(Number.isFinite(py)).toBe(true)
+        }
+      }
+    }
+  })
+
+  test('an ordinary large coordinate is still honoured', () => {
+    const big = {
+      system: {
+        name: 'Big Fixture',
+        components: [{ id: 'far', type: 'Stage', name: 'Far', x: 1e6, y: 1e6 }],
+      },
+    }
+    const rect = compileSpecToExcalidrawElements(big).find((el) => el.id === 'far')
+    expect(rect.x).toBe(1e6)
+    expect(rect.y).toBe(1e6)
+  })
+
   test('the normalizer defaults strokeStyle without overriding a deliberate one', () => {
     // The normalizer spreads `...el` over its defaults, so an element that
     // sets its own strokeStyle keeps it. The STRIDE threat zones are dashed on

@@ -74,8 +74,7 @@ describe('diagnostics panel resize', () => {
   })
 
   test('dragging the handle down shrinks the panel', () => {
-    // 128 − 40 = 88, but this spec has fixable diagnostics so the body also
-    // carries the Auto-Fix-All banner and the floor is 72 + 50 = 122.
+    // The panel goes 128 − 40 = 88; the body is that minus the 48px strip.
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, 640)
     expect(body().style.height).toBe('72px') // the floor: one whole issue row
@@ -162,8 +161,8 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
   })
 
   test('a short editor pane clamps the panel below the 480px constant', () => {
-    // 700px of pane − 309px reserved: 101 of fixed chrome, a 160px floor for
-    // the textarea, and 48 for the Auto-Fix-All banner strip this spec shows.
+    // 700 − 261 reserved (101 of fixed chrome + a 160px floor for the
+    // textarea) = 439 of panel; the body is that minus the 48px strip.
     // Taking the flat 480 here collapses the YAML pane.
     stubPaneHeight(700)
     const { handle, body } = renderPanel()
@@ -200,8 +199,8 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
   })
 
   test('a pane exactly at the floor keeps a real one-row panel', () => {
-    // 381 − 309 = 72 exactly: the boundary the collapse rule must not eat,
-    // for a spec that shows the banner strip.
+    // 381 − 261 = 120 of panel = 72 of body + the 48px strip: the first pane
+    // height that affords both.
     stubPaneHeight(381)
     const { handle, body } = renderPanel()
     dragMouse(handle(), 600, -5000)
@@ -218,8 +217,8 @@ describe('diagnostics maximum height respects the pane it lives in', () => {
   })
 
   test('a mid-height pane clamps the initial height to what the pane leaves', () => {
-    // 388 − 309 reserved = 79, below the 128px default and above the 72px
-    // floor: neither boundary can produce this number by accident.
+    // 388 − 261 = 127 of panel, one short of the 128 default; the body is
+    // that minus the 48px strip. Neither boundary produces 79 by accident.
     stubPaneHeight(388)
     const { body } = renderPanel()
     expect(body().style.height).toBe('79px')
@@ -287,8 +286,8 @@ describe('a pane too short for the panel collapses it, rather than clipping it',
   })
 
   test('at a 388px pane the body mounts above the floor and can collapse', () => {
-    // 388 − 309 reserved = 79 ≥ 72, so the panel is affordable and behaves
-    // exactly as before.
+    // 388 − 261 = 127 of panel, comfortably above the floor, so the panel is
+    // affordable and behaves exactly as before.
     stubPaneHeight(388)
     const { body } = renderPanel()
     expect(body()).toBeInTheDocument()
@@ -362,17 +361,62 @@ describe('the floor makes room for the Auto-Fix-All banner', () => {
     expect(body().style.height).toBe('72px')
   })
 
-  test('a pane that fits the bare floor but not the banner floor collapses', () => {
-    // 333 − 261 = 72: enough for a clean spec's panel, not for one carrying
-    // the banner. The two fixtures must disagree at this height.
+  test('a pane that fits the row but not the strip drops the STRIP, not the panel', () => {
+    // 333 − 261 = 72: one whole issue row, 48 short of also carrying the
+    // strip. Whether the PANEL exists must depend only on the pane's height —
+    // tying it to the spec's content meant that in this band typing an
+    // unrecognised type made the panel vanish and the editor jump taller.
     stubPaneHeight(333)
     renderCleanPanel()
     expect(screen.getByTestId('diagnostics-body').style.height).toBe('72px')
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
     cleanup()
 
     stubPaneHeight(333)
     renderPanel()
-    expect(screen.queryByTestId('diagnostics-body')).not.toBeInTheDocument()
+    // Same pane, a spec WITH fixable issues: still a panel, still a whole row.
+    expect(screen.getByTestId('diagnostics-body')).toBeInTheDocument()
+    expect(screen.getByTestId('diagnostics-body').style.height).toBe('72px')
+    // The strip is what yields — and every issue row keeps its own action
+    // button, so the fix is still one click away without it.
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /add description/i }).length).toBeGreaterThan(0)
+  })
+
+  test('the panel appears at the same pane height whatever the spec contains', () => {
+    // The invariant this buys: presence is a function of pane height alone.
+    for (const height of [332, 333, 350, 380, 381, 400]) {
+      stubPaneHeight(height)
+      renderCleanPanel()
+      const cleanMounted = screen.queryByTestId('diagnostics-body') !== null
+      cleanup()
+
+      stubPaneHeight(height)
+      renderPanel()
+      const noisyMounted = screen.queryByTestId('diagnostics-body') !== null
+      cleanup()
+
+      expect({ height, cleanMounted, noisyMounted }).toEqual({
+        height,
+        cleanMounted: height >= 333,
+        noisyMounted: height >= 333,
+      })
+    }
+  })
+
+  test('the strip comes back once the pane can pay for it', () => {
+    // 381 − 261 = 120 = 72 + 48: the first pane height that affords both.
+    stubPaneHeight(381)
+    const { body } = renderPanel()
+    expect(screen.getByTestId('diagnostics-fix-banner')).toBeInTheDocument()
+    expect(body().style.height).toBe('72px') // 120 panel − 48 strip
+  })
+
+  test('one pixel short of the strip, the row still gets the whole panel', () => {
+    stubPaneHeight(380)
+    const { body } = renderPanel()
+    expect(screen.queryByTestId('diagnostics-fix-banner')).not.toBeInTheDocument()
+    expect(body().style.height).toBe('119px') // 380 − 261, all of it the body
   })
 })
 
@@ -392,10 +436,27 @@ describe('a window resize does not destroy the dragged height', () => {
 
     stubPaneHeight(400)
     fireEvent(window, new Event('resize'))
-    expect(body().style.height).toBe('91px') // panel 139 (400−261) − 48
+    expect(body().style.height).toBe('91px') // panel 139 (400 − 261) − 48
 
     stubPaneHeight(1200)
     fireEvent(window, new Event('resize'))
     expect(body().style.height).toBe('380px') // the ask survived the squeeze
+  })
+})
+
+describe('a lost mouseup does not leave the resize armed', () => {
+  test('a window blur mid-drag disarms it', () => {
+    // Alt-tab away with the button down and the browser may never deliver the
+    // mouseup; without a blur release the next pointer move over the page
+    // keeps resizing a panel the user let go of.
+    const { handle, body } = renderPanel()
+    fireEvent.mouseDown(handle(), { clientY: 600 })
+    fireEvent.mouseMove(window, { clientY: 500 })
+    expect(body().style.height).toBe('180px') // 228 panel − 48 strip
+
+    fireEvent(window, new Event('blur'))
+
+    fireEvent.mouseMove(window, { clientY: 200 })
+    expect(body().style.height).toBe('180px')
   })
 })
