@@ -606,14 +606,29 @@ with sync_playwright() as p:
     time.sleep(0.4)
 
     floor_box = body.bounding_box()
-    banner_box = banner.bounding_box()
     first_row_box = body.locator("> div").first.bounding_box()
-    check("at the floor the banner is still on screen, above the body",
-          banner_box is not None and banner_box["y"] + banner_box["height"] <= floor_box["y"] + 1,
-          "banner=%s body=%s" % (banner_box, floor_box))
+    # At the floor the panel is one whole issue row and nothing else: the
+    # strip is gated on the panel's own height, so it hides rather than
+    # growing a panel the user dragged small.
+    check("at the floor the strip is gone, not squeezing the row",
+          banner.count() == 0)
     check("at the floor the first issue row is fully inside the body",
           fully_inside(first_row_box, floor_box),
           "row=%s body=%s" % (first_row_box, floor_box))
+
+    # Drag back up past the threshold: the strip returns, above the body.
+    hb = handle.bounding_box()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] - 120, steps=10)
+    page.mouse.up()
+    time.sleep(0.4)
+    grown_box = body.bounding_box()
+    banner_box = banner.bounding_box() if banner.count() else None
+    check("dragging back up past the threshold brings the strip back",
+          banner_box is not None
+          and banner_box["y"] + banner_box["height"] <= grown_box["y"] + 1,
+          "banner=%s body=%s" % (banner_box, grown_box))
     shot(page, "11b-diagnostics-minimum-height")
 
     # ---------- B1c: the touch drag, in a real browser ----------
