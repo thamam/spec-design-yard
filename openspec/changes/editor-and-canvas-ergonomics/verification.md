@@ -1,15 +1,16 @@
 # Verification — editor-and-canvas-ergonomics
 
-Verified on branch `feat/backlog-sweep` at `2a7bce6`, against base
-`origin/main` @ `3bd0211`. This supersedes the `f8f8ee7` record: a
-cross-model review of the merged diff found nine defects the per-lane
-reviews missed, and this table is the re-run after all nine landed.
+Verified on branch `feat/backlog-sweep` at `4bdf54b`, against base
+`origin/main` @ `3bd0211`. Two hardening rounds followed the first green
+gate at `f8f8ee7`: a cross-model review found nine defects (round 1), and a
+second review of the merged diff returned BLOCK with seven more (round 2).
+This table is the re-run after all sixteen landed.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 617 tests, 0 failures** (at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **73 files, 634 tests, 0 failures** (round 1 at `2a7bce6`: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
@@ -38,20 +39,30 @@ errors.
   still accepts. Covered by "Tab routing when the suggestion popup is open" in
   `tests/editor-indent.test.ts`, whose fixture sits at a 4-space indent so
   component-field autocomplete is genuinely live.
-- *Line endings* — the textarea's offsets index an LF-normalised view of the
-  text; the spec text is the file's own, CRLF included. Every handler that
-  splices at an offset (Tab, Shift+Tab, Enter, suggestion accept) converts
-  first, via `domOffsetToRawOffset` / `rawOffsetToDomOffset` in
-  `lib/editor-indent.ts`. CRLF is preserved rather than normalised away —
-  reading `textarea.value` would have been simpler but would push an LF-only
-  string through autosave, rewriting the user's file just as silently as the
-  bug did. Enter inserts the file's own EOL. Unit
-  `tests/editor-crlf-offsets.test.tsx`, whose first test asserts that jsdom
-  really does report the LF-normalised view, so the fixture cannot rot into a
-  no-op. No e2e beat: the browser normalises a typed or filled value to LF
-  before anything observable happens, so an honest e2e would need a CRLF
-  fixture written to disk and carried in by hydration — recorded as carried
-  forward in `.orchestrator/integration/status`.
+- *Line endings* — normalised to LF **once**, at the single seam foreign spec
+  text enters app state: `normalizeLineEndings` (`lib/spec-model.ts`) applied
+  in the hydration effect of `workspace-layout.tsx`, before `lastLoadedSpecRef`
+  is set. From there textarea offsets, the indent handlers, `reconcileSpec` and
+  undo/redo all share one coordinate space. design.md Decision 8 records the
+  decision, the rejected alternative, and the deliberate user-visible
+  consequence (a CRLF-authored spec shows a whole-file diff on first save —
+  not a regression, `main` already does this on the first keystroke).
+  **This reverses round 1's approach**, which translated between the two
+  coordinate spaces to preserve CRLF: `reconcileSpec` is the only spec
+  serialisation exit and `yaml`'s `doc.toString()` emits LF only, so every
+  quick fix, Auto-Fix All, inspector edit and canvas drag already rewrote a
+  CRLF file wholesale — preservation was faithful to a property nothing else
+  kept. `domOffsetToRawOffset`, `rawOffsetToDomOffset` and `dominantEol` are
+  deleted, as is `tests/editor-crlf-offsets.test.tsx`.
+  Covered by `tests/line-ending-normalization.test.tsx` (file mode and
+  standalone mode), which asserts on what was **persisted** — the PUT body or
+  the localStorage entry — because a textarea normalises its own `value`, so a
+  DOM-level assertion passes with or without the fix. Plus a real-browser e2e
+  beat: CRLF bytes written to `main.spec.yaml` before the first load, Tab at
+  the end of a line, then assertions that the saved file is LF-only and the
+  indent landed at the end. The fixture must be seeded before any session
+  exists — writing it behind a live session trips the app's external-change
+  guard (a 409 and a refusal to overwrite, which is correct).
 - *Enter key behaviour* — `detectIndentContext` extracted from
   `lib/autocomplete.ts` and shared with autocomplete, unit
   `tests/editor-enter-indent.test.ts`, e2e beat "Enter after a block-opening
@@ -168,6 +179,19 @@ Two further holes in the gate closed in round 2:
 
 ## What is not covered by the coverage number
 
+**Carried forward, not covered by this change.** FIX 4's safety — that an
+emptied scene never round-trips as component deletions — rests on
+`@excalidraw/excalidraw` 0.18.1's `replaceAllElements` being a hard replace
+(removed elements dropped, not soft-deleted). The deletion branch in
+`lib/canvas-diff.ts` has no `compiledIds` guard, so a future release inside
+the `^0.18.1` range that soft-deleted on replace could emit deletes into the
+YAML if a non-empty `elements` prop had already been restored. The FIX 4 test
+asserts against a spy, never a real Excalidraw. Also carried forward: the
+suggestion popup opens on an empty prefix at column 0, and accepting there
+splices a key ahead of the indentation and yields YAML the parser rejects —
+pre-existing on `main`, deliberately not asserted by any test (see the comment
+in `tests/editor-indent.test.ts`).
+
 `bin/spec-yard` and `scripts/*.py` cannot appear in a v8 coverage map. They are
 exercised by the e2e suite, not by the gate. The gate also enforces **line**
 coverage: an added line carrying no statement start is not a checkable point.
@@ -207,9 +231,37 @@ Cross-model, non-Claude reviewers throughout (Claude implemented every lane):
   per-fix red/green evidence, in three groups (behaviour-red then green;
   green-on-base regression guards; changes with no unit-level red), is in
   `.orchestrator/integration/status`.
+- **Merged diff, round 2** — a second Codex review returned BLOCK with seven
+  findings, each verified by the orchestrator before being actioned: the
+  coverage gate silently skipping git C-quoted paths; the gate's own verdict
+  path being untestable and self-passing; ordinary typing rewriting a CRLF
+  spec to LF (which reopened the round-1 line-ending decision and reversed
+  it — Decision 8); a new test enshrining YAML the parser rejects; a 39px
+  panel sliver that was neither one row nor collapsed; the metadata registry
+  drift above; and three documents describing a pointer-capture drag that was
+  never implemented.
+- **Record correction (round 2)** — an independent red/green replay against
+  `3657f52` found round 1's evidence overstated. "an updateScene failure is
+  logged instead of tearing the canvas down" **passes on the pre-fix code**
+  (the try/catch already existed; the rewrite only dropped a condition and
+  re-indented, which is why the coverage gate wanted the line covered), as do
+  two fixture self-checks; all are Group 2 guards, not evidence for a fix. And
+  `tests/diagnostics-panel-resize.test.tsx` lost "a pane so short the reserve
+  exceeds it never clamps below the minimum" — removed-superseded by FIX 7 and
+  then FIX E — which round 1 did not record at all. The corrected
+  classification is in `.orchestrator/integration/status`; the commit messages
+  stand as written.
 
-Two reviewer findings were **rejected** after verification: a claim that the
-metadata highlighter ignores a separate schema registry (no such registry
-exists; `METADATA_KEYS` is the single source and the highlighter imports it),
-and a claim that `"use client"` in the new overlay is a stray directive (four
-existing components already carry it).
+One reviewer finding was **rejected** after verification: a claim that
+`"use client"` in the new overlay is a stray directive (four existing
+components already carry it).
+
+A second rejection was **wrong and has been reversed**. Round 1 dismissed a
+metadata-registry finding with "no such registry exists; `METADATA_KEYS` is the
+single source and the highlighter imports it". That was false: `lib/linter.ts`
+carried its own sixteen-key allow-list — `rate_limit` among them — while
+`METADATA_KEYS` held five, so a valid `latency: 50` linted clean and rendered
+plain. Round 2 consolidated them into `ALLOWED_METADATA_KEYS` (FIX F). The
+lesson for the record: that rejection was written from the importing file
+without grepping the linter, and a rejection is a claim needing the same
+evidence as a fix.

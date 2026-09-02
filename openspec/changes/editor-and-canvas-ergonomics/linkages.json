@@ -183,5 +183,76 @@
         ]
       }
     ]
+  },
+  "hardening_round2": {
+    "round": "integration-hardening round 2 (.orchestrator/integration/FIXES-round2.md + FIXES-round2-addendum.md)",
+    "note": "Seven findings from a second Codex review of the merged diff, plus a record-keeping correction. FIX C added a new requirement (spec-editor/Line endings) and a new decision (Decision 8); everything else defends a requirement this change already carried.",
+    "links": [
+      {
+        "fix": "FIX A — the coverage gate silently skips git C-quoted paths",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a gate that goes quiet on a file enforces nothing",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX B — the gate's own verdict path is untestable and self-passing",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate's decision must itself be covered",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX C — line endings normalise to LF once, at the load seam (reverses round 1's CRLF preservation)",
+        "requirement": "spec-editor/Line endings (ADDED in round 2), spec-editor/Tab key behaviour, spec-editor/Enter key behaviour",
+        "design": "Decision 8: Line endings normalise to LF once, where spec text enters app state",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX D — a test enshrined YAML the parser rejects",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown, before the autocomplete branch",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX E — a 39px sliver is neither one row nor collapsed",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel resizes via a mouse-and-touch drag handle; the pane ceiling resolves the floor conflict in the editor's favour",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX F — metadata registries drift, and verification.md said they don't",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: Syntax colour via a highlight overlay — the overlay's vocabulary must be the linter's, not a copy",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX G — 'pointer events with capture' is not what shipped (docs only)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: retitled and reworded to the mouse-and-touch mechanism that exists; the jsdom note is kept",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX H — the red/green record had three wrong entries and one omission",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence for them has to be classified honestly",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
   }
 }
