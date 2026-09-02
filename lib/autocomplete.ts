@@ -68,7 +68,28 @@ export interface IndentContext {
  * design.md Decision 2. The backward-scan classification has non-obvious
  * cases (list items at indent >= 6 are connections); do not reimplement it.
  */
-export function detectIndentContext(specText: string, cursorPosition: number): IndentContext {
+export interface DetectIndentOptions {
+  /**
+   * What a whitespace-only line reports as its indent.
+   *
+   * "literal" (default) — its own length. Right for Enter: the user is sitting
+   * inside that indent and the next line should continue it, not drop to
+   * column 0.
+   *
+   * "zero" — 0, which is what `origin/main`'s inline autocomplete detector
+   * did. Autocomplete passes this: the extraction was meant to share one
+   * implementation, not to change what the popup offers, and reporting the
+   * literal indent made `system:\n    ` offer component-field completions
+   * where `main` offered none.
+   */
+  blankLine?: "literal" | "zero"
+}
+
+export function detectIndentContext(
+  specText: string,
+  cursorPosition: number,
+  options: DetectIndentOptions = {}
+): IndentContext {
   const lineStart = specText.lastIndexOf("\n", cursorPosition - 1) + 1
   const lineEndIdx = specText.indexOf("\n", cursorPosition)
   const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
@@ -79,7 +100,9 @@ export function detectIndentContext(specText: string, cursorPosition: number): I
   // — the user is sitting inside that indent and Enter should continue it,
   // not drop them to column 0.
   let indentLevel = currentLine.search(/\S/)
-  if (indentLevel === -1) indentLevel = currentLine.length
+  if (indentLevel === -1) {
+    indentLevel = options.blankLine === "zero" ? 0 : currentLine.length
+  }
 
   const linesBefore = specText.substring(0, lineStart).split("\n")
   let parentBlock: IndentContext["parentBlock"] = ""
@@ -236,7 +259,10 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   }
 
   // Detect indentation and parent block context
-  const { indentLevel, parentBlock } = detectIndentContext(specText, cursorPosition)
+  // "zero": preserve main's autocomplete behaviour on a whitespace-only line.
+  const { indentLevel, parentBlock } = detectIndentContext(specText, cursorPosition, {
+    blankLine: "zero",
+  })
 
   const currentWordMatch = textBeforeCursor.match(/^\s*([a-zA-Z0-9_\-]*)$/)
   if (currentWordMatch) {

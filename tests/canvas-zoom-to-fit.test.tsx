@@ -40,6 +40,7 @@ vi.mock('@excalidraw/excalidraw', () => {
 
 import Workspace from '../components/Workspace'
 import { parseSpec } from '../lib/spec-model'
+import { installWorkspaceFetch } from './workspace-fetch-double'
 import {
   ExcalidrawCanvas,
   compileSpecToExcalidrawElements,
@@ -596,6 +597,118 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
     } finally {
       vi.useRealTimers()
       vi.clearAllMocks()
+    }
+  })
+})
+
+describe('the production loadedSpecId → specIdentity wiring', () => {
+  // Every other fit test hands ExcalidrawCanvas a FABRICATED specIdentity, so
+  // deleting the derivation in workspace-layout.tsx broke nothing. This drives
+  // the real thing: WorkspaceLayout renders, the canvas mounts on the template
+  // spec and fits it, and hydration then lands a different spec whose
+  // components sit far away. Only the identity bump makes the canvas re-fit.
+  beforeEach(() => {
+    captured.api = null
+    captured.scene = []
+    localStorage.clear()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    localStorage.clear()
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const FAR_SPEC = `system:
+  name: Far Away System
+  components:
+    - id: far_gate
+      type: Gateway
+      name: far-gate
+      x: 4200
+      y: 3100
+    - id: far_store
+      type: Store
+      name: far-store
+      x: 4600
+      y: 3400
+`
+
+  /**
+   * A fetch double whose /api/store/spec/main answer is released by hand, so
+   * hydration can be made to land AFTER the canvas has mounted and run its
+   * first fit. With the ordinary double the spec is already there by the time
+   * the canvas mounts and there is only ever one fit to count.
+   */
+  function deferredSpecFetch(yamlContent: string) {
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: any, init?: any) => {
+        const url = String(input)
+        const reply = (body: any, status = 200) => ({
+          ok: status < 300,
+          status,
+          json: async () => body,
+        })
+        if (init?.method === 'PUT') return reply({ ok: true, rev: 'r1' })
+        if (url.startsWith('/api/store/spec/main')) {
+          await gate
+          return reply({
+            id: 'main',
+            title: 'Far Away System',
+            yamlContent,
+            updatedAt: '2026-09-01T00:00:00.000Z',
+          })
+        }
+        if (url.startsWith('/api/store/meta/')) return reply({ found: false }, 404)
+        if (url.startsWith('/api/project')) return reply({ mode: 'standalone', recents: [] })
+        return reply({}, 404)
+      })
+    )
+    return { release: () => release?.() }
+  }
+
+  test('a spec that hydrates after the first fit gets a fit of its own', async () => {
+    const { release } = deferredSpecFetch(FAR_SPEC)
+
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+    await flushInitialFit()
+    const fitsBeforeHydration = captured.api.scrollToContent.mock.calls.length
+
+    // Now let the spec arrive. Hydration bumps loadedSpecId, which is the
+    // ONLY thing that can make the already-mounted canvas fit a second time.
+    release()
+    // Two passes: the first lets the awaited fetch resolve and the hydration
+    // state land, the second lets the 300ms fit the identity bump scheduled
+    // actually fire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    // Hydration really did land, so a missing second fit would mean the
+    // identity never advanced — not that the spec never arrived.
+    expect(
+      ((screen.queryByTestId('spec-textarea') as HTMLTextAreaElement).value || '')
+    ).toContain('Far Away System')
+    expect(captured.api.scrollToContent.mock.calls.length).toBeGreaterThan(
+      fitsBeforeHydration
+    )
+    const [elements] = captured.api.scrollToContent.mock.calls.at(-1)
+    // The fit that matters frames the LOADED spec, not the template the
+    // canvas mounted on.
+    expect(elements.some((el: any) => el.id === 'far_gate')).toBe(true)
+    for (const el of elements) {
+      expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
     }
   })
 })

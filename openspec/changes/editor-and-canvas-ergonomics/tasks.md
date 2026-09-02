@@ -51,7 +51,7 @@ modifies.
     and a metadata key; type text and assert overlay stays in sync while
     scrolled.
 
-- [ ] **Task 4: Resizable diagnostics panel**
+- [x] **Task 4: Resizable diagnostics panel**
   - Drag handle on the panel's top edge (above the header at
     `data-testid="diagnostics-header"`); a mouse-and-touch drag sets a clamped
     height that replaces the `max-h-32` cap on `data-testid="diagnostics-body"`.
@@ -64,7 +64,7 @@ modifies.
     previously clipped action buttons (e.g. ADD DESCRIPTION) become
     visible and clickable.
 
-- [ ] **Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit**
+- [x] **Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit**
   - Rename the `canvas-panel.tsx:167-181` button to "Zoom to fit" with a
     fit icon; route it through a `zoomToFit()` callback exposed by
     `excalidraw-canvas.tsx` instead of `window.excalidrawAPI` (the window
@@ -88,7 +88,7 @@ modifies.
     type `!` (Shift+1) in the YAML textarea, assert the canvas viewport did
     not move.
 
-- [ ] **Task 6: Quality gate**
+- [x] **Task 6: Quality gate**
   - Full `npm test` green; `npm run build` clean; full-system e2e run per
     `scripts/run-e2e.sh` green.
   - Diff coverage report shows 100% on added/modified lines.

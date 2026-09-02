@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
-import { detectIndentContext } from '../lib/autocomplete'
+import { detectIndentContext, getAutocompleteSuggestions } from '../lib/autocomplete'
 import Workspace from '../components/Workspace'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
 
@@ -209,5 +209,33 @@ describe('CodeTab Enter caret restore (setTimeout flush)', () => {
     const expectedCaret = 'system:\n  metadata:\n    '.length
     expect(textarea.selectionStart).toBe(expectedCaret)
     expect(textarea.selectionEnd).toBe(expectedCaret)
+  })
+})
+
+describe('the shared detector does not change autocomplete on a blank line', () => {
+  // The detector was EXTRACTED from lib/autocomplete.ts so Enter could reuse
+  // it — not reimplemented. Enter needs a whitespace-only line to report its
+  // literal indent (so the next line continues the block); main's inline
+  // autocomplete detector reported 0. Sharing the literal behaviour silently
+  // changed what the popup offers.
+  test('autocomplete offers nothing at the end of a whitespace-only line', () => {
+    const spec = 'system:\n    '
+    const result = getAutocompleteSuggestions(spec, spec.length)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('the detector still reports the literal indent for Enter', () => {
+    const spec = 'system:\n    '
+    expect(detectIndentContext(spec, spec.length).indentLevel).toBe(4)
+    expect(detectIndentContext(spec, spec.length, { blankLine: 'literal' }).indentLevel).toBe(4)
+    expect(detectIndentContext(spec, spec.length, { blankLine: 'zero' }).indentLevel).toBe(0)
+  })
+
+  test('Enter on a whitespace-only line inside a block keeps that indent', () => {
+    const spec = 'system:\n  metadata:\n    '
+    const ctx = detectIndentContext(spec, spec.length)
+    expect(ctx.indentLevel).toBe(4)
+    expect(ctx.opensBlock).toBe(false)
   })
 })
