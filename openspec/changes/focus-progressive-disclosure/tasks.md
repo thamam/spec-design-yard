@@ -71,7 +71,7 @@ checked off.
     field.
   - No CodeTab rewrite; no third-party editor.
 
-- [ ] **Task 5: E2E scenario `focus-disclosure`**
+- [x] **Task 5: E2E scenario `focus-disclosure`**
   - Add `scripts/e2e-focus-disclosure.py` and wire it in
     `scripts/run-e2e.sh` (own port `BASE_PORT+4`, own throwaway
     project + `SPEC_YARD_CONFIG_DIR`; fail-closed via `e2e_guard`).
@@ -84,7 +84,7 @@ checked off.
     browser relative to its value). Record that choice in
     `verification.md`.
 
-- [ ] **Task 6: Quality gate**
+- [x] **Task 6: Quality gate**
   - Full `npm test` green; `npm run test:coverage-gate` 100% on
     added/modified lines; `npm run build` clean; e2e
     `focus-disclosure` green (and the existing suite not regressed).

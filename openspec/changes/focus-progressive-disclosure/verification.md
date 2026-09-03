@@ -1,50 +1,59 @@
 # Verification — focus-progressive-disclosure
 
 Verified on branch `cursor/focus-disclosure-autocomplete-9416` against
-`origin/main` @ `ef5922f`. Quality-gate numbers are filled after the
-gated run (Task 6).
+`origin/main` @ `ef5922f`. Gated commit is the one that last ran the
+full gate (see Evidence).
 
 ## What was already true
 
 - **Canvas / tree → Focus auto-switch.**
   `editor-panel.tsx` already calls `setActiveTab("focus")` whenever
-  `selectedUnit` is set. Canvas selection and the metrics/tree directory
-  set `selectedUnit`. Left alone, as required.
+  `selectedUnit` is set. Canvas selection (`canvas-panel.tsx`) and the
+  metrics/tree directory set `selectedUnit`. Left alone, as required.
 - **Same-line enum / key completions** were already scoped:
   `type:`, `status:`, `color:`, `target:`, metadata keys, connection
   keys, component fields. Same-line `description:` / `owner:` values
-  already returned no suggestions. The real eager cases were an empty
-  key query on a blank indented line (the popup after Enter, which
-  stole Tab-indent) and prefix-matching a metadata key inside a
-  `description: |` block scalar.
+  already returned no suggestions.
 
-## What landed
+## What landed (verified against the code, not the hunch)
 
-- Focus progressive disclosure (Details, Connections, compiled spec,
-  compact connection rows, chips, session-local `useState`).
-- Autocomplete quieting: no popup on empty key queries or free-text
-  value contexts. Enum completions unchanged.
-- New unit tests in `tests/focus-disclosure.test.tsx` and
-  `tests/autocomplete.test.ts`. Existing Focus tests adapted to expand
-  Details / Edit / Add where a field moved behind a disclosure.
-- E2E scenario `focus-disclosure` (`scripts/e2e-focus-disclosure.py`).
-  Autocomplete quieting is unit-tested only — asserting the Code-tab
-  popup in a real browser is flaky relative to its value (positioning
-  depends on caret, overlay, and a race with `onSelect`).
-- Living specs updated: `openspec/specs/focus-inspector/spec.md` (new)
-  and the new requirement on `openspec/specs/spec-editor/spec.md`.
-  Change directory is **not** archived (left to the merge).
+The popup was **not** already quiet enough. Two real eager cases:
+
+1. An empty key query on a blank indented line (the line Enter just
+   created) returned every key in that block, so the next Tab accepted
+   `connections:` / `id:` instead of indenting.
+2. Typing a word inside a `description: |` block scalar that prefixed a
+   metadata key (`owner`) offered `owner:`.
+
+Those are now closed. Enum completions on `type:` / `status:` /
+`color:` / `target:` (including empty query after the key) and typed
+key prefixes are unchanged.
+
+Focus progressive disclosure shipped as specified: name + type + chips
++ diagnostics + Duplicate always visible; Connections open with compact
+rows; Details / compiled spec / ID rename collapsed; session-local
+`useState`; real buttons with `aria-expanded`.
+
+Autocomplete quieting is **unit-tested only**. The Code-tab popup is
+flaky to assert in a real browser (caret + overlay + `onSelect` race)
+relative to the value of those cases, which `tests/autocomplete.test.ts`
+covers deterministically.
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `npm test` | pending Task 6 |
-| `npm run test:coverage-gate -- origin/main` | pending Task 6 |
-| `npm run build` | pending Task 6 |
-| `npm run test:e2e focus-disclosure` | pending Task 6 |
+| `npx vitest run --coverage` | **75 files, 736 tests, 0 failures** |
+| `npm run test:coverage-gate -- origin/main` | **exit 0** — every added/modified executable line covered |
+| `npm run build` | **Compiled successfully**, exit 0 |
+| `npm run test:e2e focus-disclosure` | **PASS** — 24/24 checks, 0 console/page errors. Real `next dev` on port 3113, real Chromium, throwaway project + `SPEC_YARD_CONFIG_DIR` |
+| Existing e2e scenarios (same harness) | **PASS** in the first full-suite run: `file-mode`, `first-run`, `standalone`, `editor-ergonomics`. A later combined 5-scenario run hit EADDRINUSE on leftover `next` children from earlier runs in this VM — not a product failure. Isolated `focus-disclosure` and the four existing scenarios were each green when their ports were free. |
 
-Canvas/tree → Focus was verified by reading
-`editor-panel.tsx` (the `useEffect` on `selectedUnit`) and
-`canvas-panel.tsx` (the two `setActiveTab("focus")` call sites). No
-code change on that path.
+Incidental: `tests/store-api-route.test.ts` was failing in this
+environment because two writes in one millisecond kept the same
+`mtimeMs`, so the 409 path never fired. The test now forces a later
+mtime after the external edit. Not part of the Focus behaviour.
+
+Living specs updated in this branch (`openspec/specs/focus-inspector/`,
+`openspec/specs/spec-editor/`). Change directory is **not** archived
+(left to the merge).
