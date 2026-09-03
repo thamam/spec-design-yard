@@ -1,7 +1,7 @@
 # Verification — editor-and-canvas-ergonomics
 
 Verified on branch `feat/backlog-sweep` against base `origin/main` @
-`3bd0211`. The gated commit is the one on the `HEAD=` line of
+`bfafa5c` (`3bd0211` until PR #15 merged on 2026-09-03; see 'PR stage'). The gated commit is the one on the `HEAD=` line of
 `.orchestrator/integration/status`, filled in below from that line and from
 nothing else. Four rounds running, this paragraph named a commit the gate had
 not run against — three times by reasoning about which it must have been, and
@@ -9,8 +9,9 @@ once by inventing a second run the file cannot hold (`lane-verify.sh`
 truncates `status` on every run, so it records exactly one).
 
 <!-- GATED COMMIT: copy the HEAD= line from status verbatim, nothing more. -->
-**Gate: `HEAD=e0862281a65e856e3f7bdca0f5a879c7fd218db2`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
-STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0.
+**Gate: `HEAD=8b37fa9a110f09601b0506868defc1df1b9fcb3e`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
+STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0. 74 files / 718 tests, base `origin/main`
+@ `bfafa5c` (after PR #15 merged in).
 This file's own commit is one later and changes only the lines above. It was
 not gated locally (`status` holds exactly one run, the one named); CI on PR #14
 gates every pushed commit, this one included.
