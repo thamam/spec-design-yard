@@ -6,6 +6,9 @@ import React from 'react'
 // file's imports) close over a mutable object we can also read from tests.
 const captured = vi.hoisted(() => ({
   props: null as any,
+  // Set by a test to fire during the stub's commit, standing in for the real
+  // Excalidraw calling `onChange` from `componentDidUpdate`.
+  onCommitUpdate: null as null | ((props: any) => void),
 }))
 
 // The adapter dynamically `import("@excalidraw/excalidraw")`s the real
@@ -14,6 +17,7 @@ const captured = vi.hoisted(() => ({
 vi.mock('@excalidraw/excalidraw', () => {
   const Excalidraw = (props: any) => {
     captured.props = props
+    const mounted = React.useRef(false)
     React.useEffect(() => {
       props.excalidrawAPI?.({
         updateScene: vi.fn(),
@@ -21,6 +25,20 @@ vi.mock('@excalidraw/excalidraw', () => {
       })
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+    // The real Excalidraw is a class component that reports scene changes from
+    // `componentDidUpdate` — during the commit, before any parent passive
+    // effect runs. A layout effect is the hook equivalent of that ordering.
+    React.useLayoutEffect(() => {
+      if (!mounted.current) {
+        mounted.current = true
+        return
+      }
+      const fire = captured.onCommitUpdate
+      if (fire) {
+        captured.onCommitUpdate = null
+        fire(props)
+      }
+    })
     return null
   }
   return { Excalidraw, WelcomeScreen: undefined, default: Excalidraw }
@@ -60,6 +78,7 @@ function moveInboxRect(scene: any[], x: number, y: number) {
 describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () => {
   beforeEach(() => {
     captured.props = null
+    captured.onCommitUpdate = null
     vi.useFakeTimers()
   })
 
@@ -140,6 +159,40 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     // The click never reached the staging branch that clears the gesture flag,
     // so without retiring it on compile the stale y:100 scene is written back
     // over the y:300 the user just typed - the flicker, by way of a stray click.
+    expect(onCanvasChange).not.toHaveBeenCalled()
+  })
+
+  test('a stale gesture cannot outlive its compile, even reported during the commit', async () => {
+    const { onCanvasChange, rerenderWith } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+
+    // A click that only selects: the gesture flag goes up, nothing moves.
+    act(() => {
+      captured.props.onChange(compiled, { cursorButton: 'down' })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+
+    // The user types y: 300. Excalidraw reports the still-old scene from its
+    // own update lifecycle, so this lands mid-commit — before any passive
+    // effect of the adapter's could have retired the flag. Retiring the
+    // gesture in a `useEffect` is therefore too late to help.
+    captured.onCommitUpdate = (props: any) => {
+      props.onChange(compiled, {})
+    }
+    await rerenderWith({
+      system: {
+        name: 'Test System',
+        components: [{ id: 'inbox', name: 'Inbox', type: 'Stage', x: 100, y: 300 }],
+      },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(captured.onCommitUpdate).toBeNull() // the commit hook really did fire
     expect(onCanvasChange).not.toHaveBeenCalled()
   })
 

@@ -622,16 +622,23 @@ export function ExcalidrawCanvas({
   // the scene still catching up with the spec, and treating those as drags
   // overwrote whatever the user was typing.
   const gestureSeenRef = useRef(false)
+  // Which compile the outstanding gesture was made against. A gesture only ever
+  // speaks for the scene it happened on: once the compiler has run again, the
+  // scene is the side that has to catch up, so anything still outstanding is
+  // lag rather than a drag. Gestures that move nothing -- a click that only
+  // selects, a draw handled by the add path -- never reach the staging branch
+  // that lowers the flag, so without this they latch on and the next spec edit
+  // is read as a drag: the flicker, back by way of a stray click.
+  //
+  // This is compared synchronously instead of being cleared in an effect
+  // because Excalidraw reports scene changes from its own update lifecycle,
+  // during the commit -- before any passive effect of ours could have retired
+  // the flag. Lowering it on pointer release instead would be worse still: a
+  // release can arrive before the final coordinates are committed, which would
+  // drop real drags.
+  const gestureCompileRef = useRef<any>(null)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
-    // A fresh compile retires any gesture still on the books. Gestures that
-    // move nothing -- a click that only selects, a draw handled by the add path
-    // -- never reach the staging branch that clears the flag, so without this
-    // it latches on and the next spec edit is read as a drag: the flicker,
-    // back again by way of a stray click. Clearing here rather than on pointer
-    // release is deliberate; a release can be reported before Excalidraw has
-    // committed the final coordinates, and clearing then would drop real drags.
-    gestureSeenRef.current = false
   }, [elements])
   const lastSelectedUnitRef = useRef<string | null>(null)
 
@@ -726,7 +733,9 @@ export function ExcalidrawCanvas({
       // move and the nudge would silently fail to persist. Captured on the way
       // down, because the canvas handles the key before it can bubble.
       onKeyDownCapture={(e) => {
-        if (e.key.startsWith("Arrow")) gestureSeenRef.current = true
+        if (!e.key.startsWith("Arrow")) return
+        gestureSeenRef.current = true
+        gestureCompileRef.current = elements
       }}
     >
       <ExcalidrawComponent
@@ -777,6 +786,7 @@ export function ExcalidrawCanvas({
             appState?.resizingElement
           ) {
             gestureSeenRef.current = true
+            gestureCompileRef.current = elements
           }
 
           const { changes, pendingElements: movedRects, nextState } = diffScene({
@@ -784,13 +794,14 @@ export function ExcalidrawCanvas({
             compiledElements: elements,
             appState,
             parsedSpec,
-            gestureSeen: gestureSeenRef.current,
+            gestureSeen: gestureSeenRef.current && gestureCompileRef.current === elements,
             state: diffStateRef.current,
           })
           diffStateRef.current = nextState
           changes.forEach((change) => onCanvasChange(change))
           if (movedRects) {
             gestureSeenRef.current = false
+            gestureCompileRef.current = null
             setPendingElements(movedRects)
           }
         }}
