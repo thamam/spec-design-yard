@@ -3,9 +3,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Interactive Simulation Configuration & Performance Tuning', () => {
+  seedDemoSpecBeforeEach()
   test('allows editing component latency and throughput in FocusTab and updates YAML correctly as integers', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()
@@ -14,7 +15,7 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
 
-    const digestBtn = screen.getByRole('button', { name: /digest_stage/i })
+    const digestBtn = screen.getByRole('button', { name: /^digest_stage/i })
     expect(digestBtn).toBeInTheDocument()
     fireEvent.click(digestBtn)
 
@@ -60,7 +61,7 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabButton)
 
-    const digestBtn = screen.getByRole('button', { name: /digest_stage/i })
+    const digestBtn = screen.getByRole('button', { name: /^digest_stage/i })
     fireEvent.click(digestBtn)
 
     const focusTabButton = screen.getByRole('tab', { name: /Focus/i })

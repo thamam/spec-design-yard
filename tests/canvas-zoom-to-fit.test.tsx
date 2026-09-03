@@ -41,6 +41,7 @@ vi.mock('@excalidraw/excalidraw', () => {
 import Workspace from '../components/Workspace'
 import { parseSpec } from '../lib/spec-model'
 import { installWorkspaceFetch } from './workspace-fetch-double'
+import { seedDemoSpec } from './demo-spec'
 import {
   ExcalidrawCanvas,
   compileSpecToExcalidrawElements,
@@ -66,6 +67,7 @@ async function flushInitialFit() {
 }
 
 async function mountWorkspace() {
+  seedDemoSpec()
   render(<Workspace />)
   await flushUntilCanvasMounted()
   await flushInitialFit()
@@ -77,6 +79,7 @@ describe('zoom to fit — three routes, one implementation', () => {
     captured.api = null
     captured.scene = []
     vi.useFakeTimers()
+    seedDemoSpec()
   })
 
   afterEach(() => {
@@ -739,6 +742,7 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
     try {
       captured.api = null
       captured.scene = []
+      seedDemoSpec()
       render(<Workspace />)
       await flushUntilCanvasMounted()
       await flushInitialFit()

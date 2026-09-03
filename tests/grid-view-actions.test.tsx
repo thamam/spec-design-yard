@@ -3,9 +3,10 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
+  seedDemoSpecBeforeEach()
   test('supports deleting a component directly from its card in Grid View', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()

@@ -1,5 +1,8 @@
-import { expect } from 'vitest'
+import { beforeEach, expect } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
+import { seedDemoSpec } from './demo-spec'
+
+export { seedDemoSpec }
 
 /**
  * Workspace hydration is async (it may pull the canonical spec from the
@@ -17,5 +20,13 @@ export async function waitForWorkspaceInteractive() {
   await waitForWorkspaceHydration()
   await waitFor(() => {
     expect((screen.getByTestId('spec-textarea') as HTMLTextAreaElement).disabled).toBe(false)
+  })
+}
+
+/** Tests written against the External Brain demo must seed it — production
+ *  no longer surprise-loads that spec when the store API is unreachable. */
+export function seedDemoSpecBeforeEach() {
+  beforeEach(() => {
+    seedDemoSpec()
   })
 }

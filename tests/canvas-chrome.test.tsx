@@ -10,7 +10,7 @@ describe('Canvas chrome honesty', () => {
     render(<CanvasPanel parsedSpec={emptySpec} isHydrated={false} />)
     expect(screen.getByLabelText('Loading canvas')).toBeInTheDocument()
     expect(screen.getByTestId('canvas-skeleton-pulse')).toBeInTheDocument()
-    expect(document.querySelector('svg path')).toBeNull()
+    expect(screen.getByLabelText('Loading canvas').querySelector('svg')).toBeNull()
   })
 
   test('Preview is disabled with a not-available title and still occupies the toolbar', () => {

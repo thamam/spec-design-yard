@@ -34,6 +34,7 @@ vi.mock('@excalidraw/excalidraw', () => {
 import Workspace from '../components/Workspace'
 import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
 import { parseSpec } from '../lib/spec-model'
+import { seedDemoSpec } from './demo-spec'
 
 /** Flush hydration + the next/dynamic import until the stub has captured Excalidraw's props. */
 async function flushUntilCanvasMounted() {
@@ -50,6 +51,7 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
   beforeEach(() => {
     captured.props = null
     vi.useFakeTimers()
+    seedDemoSpec()
   })
 
   afterEach(() => {

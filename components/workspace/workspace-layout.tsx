@@ -169,9 +169,9 @@ export function WorkspaceLayout() {
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      const isInputOrTextarea = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-      const isSpecTextarea = target && target.getAttribute("data-focus-field") === "spec-textarea"
+      const target = e.target as HTMLElement | null
+      const isInputOrTextarea = !!(target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"))
+      const isSpecTextarea = !!(target && typeof target.getAttribute === "function" && target.getAttribute("data-focus-field") === "spec-textarea")
 
       if (isInputOrTextarea && !isSpecTextarea) {
         return

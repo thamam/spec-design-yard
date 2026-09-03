@@ -340,7 +340,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     fireEvent.click(metricsTabBtn)
     
     // Select inbox component via clicking its button in the directory
-    const inboxBtn = screen.getByRole('button', { name: /inbox/i })
+    const inboxBtn = screen.getByRole('button', { name: /^inbox/i })
     fireEvent.click(inboxBtn)
     
     // Now switch to Focus Tab
