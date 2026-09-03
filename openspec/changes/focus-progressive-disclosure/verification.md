@@ -3,7 +3,8 @@
 Verified on branch `cursor/focus-disclosure-autocomplete-9416` against
 `origin/main` @ `ef5922f`. Local gate was `464649c`. This note exists so
 GitHub Actions receives a non-empty `pull_request` synchronize (empty
-commit `28f7c6c` did not queue Tests).
+commit `28f7c6c` did not queue Tests). Unique SHA for a new `opened`
+event — #20/#21 synchronize never created an Actions suite.
 
 ## What was already true
 
