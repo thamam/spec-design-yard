@@ -1,8 +1,7 @@
 # Verification — focus-progressive-disclosure
 
 Verified on branch `cursor/focus-disclosure-autocomplete-9416` against
-`origin/main` @ `ef5922f`. Gated commit is the one that last ran the
-full gate (see Evidence).
+`origin/main` @ `ef5922f`. **Gate: `HEAD=464649cebcdfc9951d2d16114d683fddb27a4a79`**.
 
 ## What was already true
 
