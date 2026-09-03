@@ -12,9 +12,9 @@ truncates `status` on every run, so it records exactly one).
 **Gate: `HEAD=8b37fa9a110f09601b0506868defc1df1b9fcb3e`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
 STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0. 74 files / 718 tests, base `origin/main`
 @ `bfafa5c` (after PR #15 merged in).
-This file's own commit is one later and changes only the lines above. It was
-not gated locally (`status` holds exactly one run, the one named); CI on PR #14
-gates every pushed commit, this one included.
+The commits after it change only this file's record (the lines above and the
+evidence table). They were not gated locally (`status` holds exactly one run,
+the one named); CI on PR #14 gates every pushed commit, these included.
 
 Eight hardening rounds followed the first green gate at `f8f8ee7`: nine
 defects (round 1), seven (round 2), seven (round 3), nine (round 4), eleven
@@ -42,7 +42,7 @@ quoted mapping key (`- "id": inbox`) from opening its block, fixed in round 8.
 
 | Check | Result |
 |---|---|
-| `npx vitest run --coverage` | **73 files, 697 tests, 0 failures** (round 7: 73 / 691; round 6: 73 / 681; round 5: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
+| `npx vitest run --coverage` | **74 files, 718 tests, 0 failures** (PR stage, with main's `canvas-position-flicker` suite merged in and FIX GGG's tests; round 8: 73 / 697; round 7: 73 / 691; round 6: 73 / 681; round 5: 73 / 674; round 4: 73 / 658; round 3: 73 / 646; round 2: 73 / 634; round 1: 73 / 617; at `f8f8ee7`: 72 / 596; baseline at `3bd0211`: 64 / 488) |
 | `npm run test:coverage-gate -- origin/main` | **exit 0** — every added or modified executable line covered |
 | `npm run build` | **Compiled successfully**, exit 0 |
 | `npm run test:e2e` | **4/4 scenarios PASS** — `file-mode`, `first-run`, `standalone`, `editor-ergonomics` |
