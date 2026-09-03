@@ -49,7 +49,10 @@ import { ExcalidrawCanvas, compileSpecToExcalidrawElements } from '../components
 const parsedSpec = {
   system: {
     name: 'Test System',
-    components: [{ id: 'inbox', name: 'Inbox', type: 'Stage', x: 100, y: 100 }],
+    components: [
+      { id: 'inbox', name: 'Inbox', type: 'Stage', x: 100, y: 100 },
+      { id: 'outbox', name: 'Outbox', type: 'Stage', x: 400, y: 100 },
+    ],
   },
 }
 
@@ -62,14 +65,29 @@ function drive(elements: any[], appState: any) {
   })
 }
 
+async function elapse(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms)
+  })
+}
+
 async function mountCanvas() {
   const onCanvasChange = vi.fn()
   render(<ExcalidrawCanvas parsedSpec={parsedSpec} onCanvasChange={onCanvasChange} />)
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(0)
-  })
+  await elapse(0)
   expect(captured.props).not.toBeNull()
-  return { onCanvasChange }
+  const scene = compileSpecToExcalidrawElements(parsedSpec)
+  const rect = (id: string) => scene.find((el: any) => el.id === id && el.type === 'rectangle')
+  return { onCanvasChange, scene, rect }
+}
+
+/** A real drag: pointer down, the rect moves in place, pointer up. */
+function dragBy(scene: any[], el: any, dx: number, dy: number) {
+  drive(scene, { cursorButton: 'down' })
+  drive(scene, { cursorButton: 'down', selectedElementsAreBeingDragged: true })
+  el.x += dx
+  el.y += dy
+  drive(scene, { cursorButton: 'up' })
 }
 
 describe('a staged move must not be re-staged by its own onChange echo', () => {
@@ -85,35 +103,30 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     vi.clearAllMocks()
   })
 
-  test('pressing the pointer again inside the writeback debounce does not loop React to death', async () => {
-    const { onCanvasChange } = await mountCanvas()
-    const scene = compileSpecToExcalidrawElements(parsedSpec)
-    const inbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+  test('a click inside the writeback debounce does not loop React to death', async () => {
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
     expect(inbox).toBeTruthy()
 
-    // A real drag: pointer down, the rect moves in place, pointer up. The move
-    // is staged behind the 450ms debounce; the scene is now ahead of the spec.
-    drive(scene, { cursorButton: 'down' })
-    inbox.x += 40
-    inbox.y += 25
-    drive(scene, { cursorButton: 'up' })
+    // The move is staged behind the 450ms debounce; the scene is now ahead
+    // of the spec.
+    dragBy(scene, inbox, 40, 25)
     expect(onCanvasChange).not.toHaveBeenCalled()
 
-    // Inside the debounce the user presses the pointer again (a click, the
-    // start of the next drag — anything). The gesture gate re-arms, the scene
-    // still differs from the compile, and the same move is staged once more.
-    // With Excalidraw echoing every commit, staging a fresh object each time
-    // was setState → re-render → onChange → setState until React threw
-    // "Maximum update depth exceeded".
+    // Inside the debounce the user clicks the canvas. The gesture gate
+    // re-arms on the pointer-down, the scene still differs from the compile,
+    // and the same move is staged once more. With Excalidraw echoing every
+    // commit, staging a fresh object each time was setState → re-render →
+    // onChange → setState until React threw "Maximum update depth exceeded".
+    await elapse(200)
     const before = captured.onChangeCalls
     expect(() => drive(scene, { cursorButton: 'down' })).not.toThrow()
     // One report plus at most a couple of echoes — not fifty.
     expect(captured.onChangeCalls - before).toBeLessThan(6)
+    drive(scene, { cursorButton: 'up' })
 
     // The staged move still lands, exactly once, when the debounce elapses.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(450)
-    })
+    await elapse(250)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
     const rects = onCanvasChange.mock.calls[0][0]
     expect(Array.isArray(rects)).toBe(true)
@@ -123,33 +136,75 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
   })
 
   test('a move that changes while the pointer is down is re-staged and the debounce restarts', async () => {
-    const { onCanvasChange } = await mountCanvas()
-    const scene = compileSpecToExcalidrawElements(parsedSpec)
-    const inbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
 
-    drive(scene, { cursorButton: 'down' })
-    inbox.x += 40
-    drive(scene, { cursorButton: 'up' })
+    dragBy(scene, inbox, 40, 0)
 
     // 300ms in, the user grabs it again and moves it further.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
-    drive(scene, { cursorButton: 'down' })
-    inbox.x += 40
-    drive(scene, { cursorButton: 'down', selectedElementsAreBeingDragged: true })
-    drive(scene, { cursorButton: 'up' })
+    await elapse(300)
+    dragBy(scene, inbox, 40, 0)
 
     // The first debounce would have fired at 450ms; the re-stage restarted it.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200)
-    })
+    await elapse(200)
     expect(onCanvasChange).not.toHaveBeenCalled()
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
+    await elapse(300)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
     expect(onCanvasChange.mock.calls[0][0][0].x).toBe(inbox.x)
+  })
+
+  test('a drag that starts inside the debounce holds the writeback until it ends', async () => {
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
+
+    dragBy(scene, inbox, 40, 0)
+
+    // 300ms later the user grabs the rect again, from where the first drag
+    // left it, and keeps dragging past the first debounce's deadline. That
+    // pointer-down stages nothing new (same move), so the first timer keeps
+    // running — it must not fire under the live drag: the writeback would
+    // recompile the spec, resnap the scene under the cursor, and retire this
+    // drag as stale.
+    await elapse(300)
+    drive(scene, { cursorButton: 'down' })
+    drive(scene, { cursorButton: 'down', selectedElementsAreBeingDragged: true })
+    await elapse(200) // past the first deadline at 450ms
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(600) // still dragging
+    expect(onCanvasChange).not.toHaveBeenCalled()
+
+    // Release: the final position is a new move, staged behind a fresh
+    // debounce, and it is the only writeback that lands.
+    inbox.x += 40
+    drive(scene, { cursorButton: 'up' })
+    await elapse(200)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(250)
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0][0].x).toBe(inbox.x)
+    expect(inbox.x).toBe(180)
+  })
+
+  test('the same move reported with its rects in another order is not restaged', async () => {
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
+    const outbox = rect('outbox')
+
+    // Move both (multi-select drag).
+    drive(scene, { cursorButton: 'down' })
+    inbox.x += 30
+    outbox.x += 30
+    drive(scene, { cursorButton: 'up' })
+
+    // A pointer-down inside the debounce reports the scene with the two rects
+    // swapped. Same move: the debounce must not restart.
+    await elapse(300)
+    const swapped = [...scene].reverse()
+    drive(swapped, { cursorButton: 'down' })
+    drive(swapped, { cursorButton: 'up' })
+    await elapse(150)
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0].map((r: any) => r.id).sort()).toEqual(['inbox', 'outbox'])
   })
 })
