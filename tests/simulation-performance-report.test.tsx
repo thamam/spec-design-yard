@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation Performance Report & Diagnostic Analysis', () => {
   test('displays performance diagnostic report when simulation completes', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

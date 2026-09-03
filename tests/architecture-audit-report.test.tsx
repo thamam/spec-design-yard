@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('System Architecture Visual Report Card / Blueprint Audit', () => {
   let writeTextMock = vi.fn().mockImplementation(() => Promise.resolve())
@@ -30,6 +31,7 @@ describe('System Architecture Visual Report Card / Blueprint Audit', () => {
 
   test('renders the Export Markdown Report button in the Metrics Tab and triggers clipboard copy and download', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

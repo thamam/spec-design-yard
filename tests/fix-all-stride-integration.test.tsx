@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Regression guard for the editor/canvas quick-fix divergence: the editor's
 // "Auto-Fix All" once filtered on strict Set membership and silently skipped
@@ -45,6 +46,7 @@ const STRIDE_SPEC = `system:
 describe('Editor Auto-Fix All includes STRIDE fixes', () => {
   test('clicking Auto-Fix All on a spec with STRIDE diagnostics rewrites the YAML with the secure labels', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
     fireEvent.change(textarea, { target: { value: STRIDE_SPEC } })
