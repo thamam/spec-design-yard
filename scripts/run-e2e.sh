@@ -19,10 +19,23 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_PORT="${SPEC_YARD_E2E_PORT:-3109}"
 
-if [ "$BASE_PORT" = "3000" ]; then
-  echo "refusing to run on port 3000 — that is the conventional dev-server port" >&2
-  exit 2
-fi
+# Every scenario runs on BASE_PORT + 0..3, so guarding only BASE_PORT let
+# SPEC_YARD_E2E_PORT=2997 put editor-ergonomics on 3000 — the maintainer's dev
+# server. Check the whole derived range, before anything starts.
+#
+# 3000 ONLY. An earlier version of this guard also refused 3110 and 3112,
+# which are ports the ORCHESTRATOR told its worker sessions to avoid on one
+# particular machine — they are this harness's own defaults (3109 + 1 and
+# 3109 + 3), so forbidding them here made the default invocation exit 2 and
+# broke CI. A machine-specific avoidance list does not belong in the shared
+# harness; the one genuinely global hazard is the dev server on 3000.
+for offset in 0 1 2 3; do
+  derived=$((BASE_PORT + offset))
+  if [ "$derived" = "3000" ]; then
+    echo "refusing port 3000 (BASE_PORT $BASE_PORT + $offset): that is the dev server" >&2
+    exit 2
+  fi
+done
 
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
 python3 -c "import playwright" 2>/dev/null || {
@@ -76,11 +89,25 @@ stop_server() {
 FAILED=()
 PASSED=()
 
+SCENARIOS_RUN=0
+
 run_scenario() {
   local name="$1" port="$2" script="$3"; shift 3
+  # Bind the call sites to KNOWN_SCENARIOS: a hand-kept list beside the calls
+  # with nothing checking it is the paired-registry shape that has bitten this
+  # repo before. A scenario missing from the list would silently become
+  # unselectable by name; this makes that a hard failure at run time.
+  case " $KNOWN_SCENARIOS " in
+    *" $name "*) ;;
+    *)
+      echo "scenario '$name' is not in KNOWN_SCENARIOS — add it there too" >&2
+      exit 2
+      ;;
+  esac
   if [ -n "${ONLY:-}" ] && [ "$ONLY" != "$name" ]; then
     return 0
   fi
+  SCENARIOS_RUN=$((SCENARIOS_RUN + 1))
   echo
   echo "==> $name (port $port)"
   # Never adopt (and never later kill) a server this script did not start.
@@ -108,7 +135,34 @@ run_scenario() {
   stop_server "$port"
 }
 
+# The preflight guards are the only thing between a hand-run scenario and
+# somebody's real project, so they are unit-tested before any server starts.
+if ! python3 "$REPO/scripts/test_e2e_guard.py" >/dev/null 2>&1; then
+  echo "e2e preflight guard tests FAILED — refusing to run any scenario" >&2
+  python3 "$REPO/scripts/test_e2e_guard.py" >&2
+  exit 2
+fi
+
 ONLY="${1:-}"
+
+# A selector that matches nothing used to run nothing and print "all e2e
+# scenarios passed": a typo in the scenario name turned the whole suite into a
+# no-op that reported success. Validate it before any server starts.
+# The one source for which scenarios exist. run_scenario asserts its own name
+# is in here, so a scenario added below without being listed fails loudly
+# instead of becoming unselectable by name.
+KNOWN_SCENARIOS="file-mode first-run standalone editor-ergonomics"
+if [ -n "$ONLY" ]; then
+  MATCHED=0
+  for known in $KNOWN_SCENARIOS; do
+    if [ "$ONLY" = "$known" ]; then MATCHED=1; break; fi
+  done
+  if [ "$MATCHED" -ne 1 ]; then
+    echo "unknown e2e scenario: $ONLY" >&2
+    echo "known scenarios: $KNOWN_SCENARIOS" >&2
+    exit 2
+  fi
+fi
 
 # --- 1. file mode: launched straight into a project via the env var ---
 CLIENT="$TMP/client-repo"
@@ -118,12 +172,38 @@ run_scenario "file-mode" "$BASE_PORT" "scripts/e2e-file-mode.py" \
   "SPEC_YARD_PROJECT_DIR=$CLIENT"
 
 # --- 2. first run: nothing configured; the whole GUI story ---
-SCENARIO_ENV=("SPEC_YARD_E2E_A=$TMP/project-a" "SPEC_YARD_E2E_B=$TMP/project-b")
+# SPEC_YARD_E2E_CONFIG_WRITES_OK is the opt-in these two scenarios demand
+# before they will touch server-side config. Only this harness may set it: it
+# is what says "the config dir this server is using is throwaway", which
+# /api/project cannot tell you (an unconfigured real install looks the same).
+SCENARIO_ENV=("SPEC_YARD_E2E_A=$TMP/project-a" "SPEC_YARD_E2E_B=$TMP/project-b"
+              "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "first-run" "$((BASE_PORT + 1))" "scripts/e2e-first-run.py"
 
 # --- 3. standalone: the browser-storage opt-out ---
-SCENARIO_ENV=()
+SCENARIO_ENV=("SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "standalone" "$((BASE_PORT + 2))" "scripts/e2e-standalone-mode.py"
+
+# --- 4. editor ergonomics: extension point for Lanes A and B ---
+EDITOR_CLIENT="$TMP/editor-ergonomics-repo"
+# A second project folder, for the beat that switches into one for real.
+EDITOR_CLIENT_B="$TMP/editor-ergonomics-repo-b"
+mkdir -p "$EDITOR_CLIENT" "$EDITOR_CLIENT_B"
+# The project-switch beat rewrites this server's active project and recents,
+# so this scenario needs the config-writes opt-in as well.
+SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)"
+              "SPEC_YARD_E2E_CLIENT_B=$(cd "$EDITOR_CLIENT_B" && pwd -P)"
+              "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
+run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
+  "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
+
+# The KNOWN_SCENARIOS check binds the CALLS to the list; this binds the list
+# to the calls. A name listed with no run_scenario call would otherwise be
+# selectable, run nothing, and print "all e2e scenarios passed".
+if [ -n "$ONLY" ] && [ "$SCENARIOS_RUN" -eq 0 ]; then
+  echo "scenario '$ONLY' is listed but never invoked — no run_scenario call for it" >&2
+  exit 2
+fi
 
 echo
 for name in ${PASSED[@]+"${PASSED[@]}"}; do echo "PASS  $name"; done

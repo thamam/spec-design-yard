@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import time
+from e2e_guard import require_fresh_dir, require_project_dir
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3109")
@@ -24,6 +25,12 @@ def check(name, cond, detail=""):
 
 def shot(page, name):
     page.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=False)
+
+require_project_dir(BASE, CLIENT_REPO, scenario="file-mode")
+# Identity is not disposability: require_project_dir proves the server serves
+# this folder, not that the folder is ours to overwrite. The blank-slate check
+# below records a failure and carries on to the fill.
+require_fresh_dir(CLIENT_REPO, scenario="file-mode")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

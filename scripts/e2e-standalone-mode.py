@@ -7,12 +7,19 @@ is available to play with, and that nothing errors.
 
 Run it via `npm run test:e2e` (which supplies an isolated server), or point
 SPEC_YARD_URL at a dev server started with a throwaway SPEC_YARD_CONFIG_DIR.
+
+Safety: this scenario mutates server-side configuration, so it refuses to run
+(exit 2) unless SPEC_YARD_E2E_CONFIG_WRITES_OK=1 is set. `npm run test:e2e`
+sets it, having started the server on a throwaway SPEC_YARD_CONFIG_DIR;
+nothing else should.
 """
 import json
 import os
 import sys
 import time
 import urllib.request
+
+from e2e_guard import require_config_writes_allowed, require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -25,6 +32,13 @@ def check(name, cond, detail=""):
     print(f"[{status}] {name}" + (f" — {detail}" if detail and not cond else ""))
     if not cond:
         failures.append(name)
+
+# Guard BEFORE the PUT below, not after it. The old order validated the state
+# this scenario had just created: pointed at a real project-mode server the PUT
+# flipped the live session and persisted standalone into config.json before any
+# guard ran. A fresh throwaway server is unconfigured.
+require_config_writes_allowed(scenario="standalone")
+require_mode(BASE, "unconfigured", scenario="standalone")
 
 # Opt out the way the picker does — standalone is a choice the user makes.
 opt_out = urllib.request.Request(
@@ -44,6 +58,9 @@ with urllib.request.urlopen(BASE + "/api/store/spec/main") as resp:
 compact = body.replace(" ", "")
 check("store API answers enabled:false with no project", '"enabled":false' in compact, body)
 check("store API reports the opt-out as standalone", '"mode":"standalone"' in compact, body)
+
+# The contract check, not a safety guard: the opt-out above must have taken.
+require_mode(BASE, "standalone", scenario="standalone")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

@@ -1,5 +1,5 @@
-import { describe, test, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import { reconcileSpec } from '../lib/reconciler'
 import { lintSpec } from '../lib/linter'
@@ -98,17 +98,29 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     await waitForWorkspaceHydration()
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
 
-    // Case A: No navigation, press Enter. It should NOT apply autocomplete.
-    fireEvent.change(textarea, { target: { value: 'system:\n  components:\n    - id: node_x\n      type: S' } })
+    // No navigation, press Enter. It should NOT apply autocomplete; it falls
+    // through to auto-indent instead (per editor-and-canvas-ergonomics spec).
+    const initialValue = 'system:\n  components:\n    - id: node_x\n      type: S'
+    fireEvent.change(textarea, { target: { value: initialValue } })
     textarea.focus()
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     fireEvent.select(textarea)
 
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    // Value remains unchanged (Enter was not hijacked to replace "S" with "Store" or "Stage")
     expect(textarea.value).toContain('type: S')
+    expect(textarea.value).toBe(initialValue + '\n      ')
+  })
 
-    // Case B: Navigated, press Enter. It SHOULD apply autocomplete.
+  test('textarea in CodeTab applies the highlighted suggestion on Enter once navigated', async () => {
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+
+    fireEvent.change(textarea, { target: { value: 'system:\n  components:\n    - id: node_x\n      type: S' } })
+    textarea.focus()
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+    fireEvent.select(textarea)
+
     fireEvent.keyDown(textarea, { key: 'ArrowDown' }) // selects Stage
     fireEvent.keyDown(textarea, { key: 'Enter' }) // applies Stage
     expect(textarea.value).toContain('type: Stage')
@@ -141,5 +153,39 @@ describe('Keyboard Autocomplete and Quick-Fix-All Feature', () => {
     // node_a is deleted, so only node_b remains. Its metadata shouldn't be affected.
     expect(parsed.system.components.length).toBe(1)
     expect(parsed.system.components[0].id).toBe('node_b')
+  })
+})
+
+describe('CodeTab autocomplete-accept caret restore (layout effect)', () => {
+  // Named for the mechanism that exists. This suite used to say "setTimeout
+  // flush" and drove fake timers to flush a timer that 7e92d1d deleted when
+  // the restore moved into a layout effect — it passed for the wrong reason.
+  //
+  // Red/green record: the assertion itself was already GREEN against
+  // origin/main, where a document.getElementById path restored the same
+  // caret. It is a regression guard on the ref-based path, not evidence.
+  test('Tab-accepting a suggestion restores focus and caret via the textarea ref', async () => {
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = 'system:\n  components:\n    - id: node_x\n      type: S'
+    act(() => {
+      fireEvent.change(textarea, { target: { value } })
+    })
+    textarea.focus()
+    textarea.setSelectionRange(value.length, value.length)
+    act(() => {
+      fireEvent.select(textarea)
+    })
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: 'Tab' }) // accepts "Store" (first suggestion)
+    })
+
+    expect(textarea.value).toContain('type: Store')
+    const expectedCaret = value.length - 1 + 'Store'.length
+    expect(textarea.selectionStart).toBe(expectedCaret)
+    expect(textarea.selectionEnd).toBe(expectedCaret)
   })
 })

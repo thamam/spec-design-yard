@@ -1,4 +1,5 @@
 import { normalizeConnections, type DroppedConnection } from "./spec-model"
+import { ALLOWED_METADATA_KEYS } from "./autocomplete"
 
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
 const SENSITIVE_METADATA_REGEX = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
@@ -284,12 +285,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
           code: "invalid-metadata-object",
         })
       } else {
-        const allowedMetaKeys = new Set([
-          "owner", "description", "status", "version", "color",
-          "rate_limit", "rate_limiting", "rateLimit", "rateLimiting", "rate-limit", "rate-limiting",
-          "throttled", "throttling", "buffer",
-          "latency", "throughput"
-        ])
+        // One registry, shared with the highlighter — see ALLOWED_METADATA_KEYS.
+        const allowedMetaKeys = new Set(ALLOWED_METADATA_KEYS)
         const sortedAllowedKeys = Array.from(allowedMetaKeys).sort().join(", ")
         Object.keys(meta).forEach((k) => {
           if (!allowedMetaKeys.has(k)) {

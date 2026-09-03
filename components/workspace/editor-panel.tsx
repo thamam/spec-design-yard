@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import {
   CodeIcon,
   FocusIcon,
@@ -18,7 +18,9 @@ import {
 import yaml from "yaml"
 import { lintSpec, droppedConnectionDiagnostics, type Diagnostic } from "../../lib/linter"
 import { reconcileSpec, type FixType } from "../../lib/reconciler"
-import { getAutocompleteSuggestions } from "../../lib/autocomplete"
+import { getAutocompleteSuggestions, detectIndentContext } from "../../lib/autocomplete"
+import { applyIndent } from "../../lib/editor-indent"
+import { YamlHighlightOverlay } from "./yaml-highlight-overlay"
 import { isFixable, fixTypeForCode, FIXABLE_DIAGNOSTIC_CODES } from "../../lib/quick-fixes"
 import { normalizeConnections, parseSpec, type DroppedConnection } from "../../lib/spec-model"
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
@@ -41,6 +43,11 @@ interface EditorPanelProps {
   isHydrated?: boolean
 }
 
+// The pane measurement has to happen before paint, but this page is
+// server-rendered and useLayoutEffect warns there — so fall back to useEffect
+// on the server, where there is no layout to measure anyway.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
+
 /* ── Code Tab ── */
 interface CodeTabProps {
   value: string
@@ -53,19 +60,87 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
   const [hasNavigated, setHasNavigated] = useState(false)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const [releaseFocusOnTab, setReleaseFocusOnTab] = useState(false)
+  // The Esc escape is armed for the NEXT Tab only, and any intervening edit
+  // disarms it — including one the user did not type: Auto-Fix All, a canvas
+  // drag, a quick fix. Keying on `value` covers those; the keydown and change
+  // handlers cover the rest.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  // Where the caret/selection must land once the edited value has been
+  // committed to the DOM. A setTimeout(0) was not good enough: in a real
+  // browser React commits the new value asynchronously, so the timer fired
+  // against the OLD value, its range was clamped to the old length, and the
+  // commit then dropped the caret at the end — a multi-line Tab lost the
+  // selection over the block it had just indented. jsdom's fake timers hid it;
+  // scripts/e2e-editor-ergonomics.py asserts the real selection bounds.
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+  /**
+   * Hand the edited text to the parent and say where the selection must end
+   * up once that edit commits.
+   *
+   * When the text is UNCHANGED there is nothing for React to commit, so the
+   * layout effect never runs and an armed ref would stay armed until some
+   * later, unrelated commit fired it — stealing focus back into the textarea
+   * and re-selecting a block the user had moved on from. So a no-op applies
+   * the range synchronously and arms nothing.
+   */
+  const commitWithSelection = (
+    nextValue: string,
+    selection: { start: number; end: number },
+    target: HTMLTextAreaElement | null
+  ) => {
+    if (nextValue === value) {
+      // Nothing to commit, so nothing will ever consume a pending range —
+      // apply it now, or it would sit armed until an unrelated edit fired it.
+      target?.setSelectionRange(selection.start, selection.end)
+      setCursorPos(selection.start)
+      return
     }
-  }, [])
+    // Arm BEFORE onChange: the commit onChange triggers is the one the layout
+    // effect must see the ref on.
+    pendingSelectionRef.current = selection
+    onChange(nextValue)
+  }
+
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    // Not on the first render: mounting is not an edit.
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    setReleaseFocusOnTab(false)
+  }, [value])
+
+  const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    const overlay = overlayRef.current
+    if (overlay) {
+      overlay.scrollTop = e.currentTarget.scrollTop
+      overlay.scrollLeft = e.currentTarget.scrollLeft
+    }
+  }
+
+  // No dependency list: this must run after EVERY commit, because the commit
+  // that carries the new value is the one that moved the caret.
+  useIsomorphicLayoutEffect(() => {
+    const pending = pendingSelectionRef.current
+    if (!pending) return
+    pendingSelectionRef.current = null
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.focus()
+    textarea.setSelectionRange(pending.start, pending.end)
+    setCursorPos(pending.start)
+  })
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
     setSuppressAutocomplete(false)
+    setReleaseFocusOnTab(false)
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -93,22 +168,86 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     if (!autocomplete) return
     const [start, end] = autocomplete.replaceRange
     const newValue = value.substring(0, start) + sug + value.substring(end)
-    onChange(newValue)
+    const newCursorPos = start + sug.length
+    // Commit regardless of the ref; only the caret restore needs the element.
+    // Returning early here would have dropped the whole edit if the ref were
+    // ever null — currently unreachable, but the wrong thing to lose.
+    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, textareaRef.current)
+  }
 
-    // Return focus to textarea and adjust cursor position
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      const textarea = document.getElementById("spec-textarea") as HTMLTextAreaElement
-      if (textarea) {
-        textarea.focus()
-        const newCursorPos = start + sug.length
-        textarea.setSelectionRange(newCursorPos, newCursorPos)
-        setCursorPos(newCursorPos)
-      }
-    }, 0)
+  const handleIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    const { text, selStart, selEnd } = applyIndent(value, target.selectionStart, target.selectionEnd, {
+      outdent: e.shiftKey,
+    })
+    commitWithSelection(text, { start: selStart, end: selEnd }, target)
+  }
+
+  const handleEnterIndent = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault()
+    const target = e.currentTarget
+    // upToCursor: the text after the caret is about to move to the new line,
+    // so only the half being left behind can decide the block.
+    const { indentLevel, opensBlock } = detectIndentContext(value, target.selectionStart, {
+      upToCursor: true,
+    })
+    const newIndent = " ".repeat(indentLevel + (opensBlock ? 2 : 0))
+    // Spec text is LF-only by the time it reaches state (spec-model's
+    // normalizeLineEndings at the load seam), so the textarea's offsets index
+    // exactly this string and a bare LF is the right break.
+    const insertion = "\n" + newIndent
+    const newValue = value.slice(0, target.selectionStart) + insertion + value.slice(target.selectionEnd)
+    const newCursorPos = target.selectionStart + insertion.length
+    commitWithSelection(newValue, { start: newCursorPos, end: newCursorPos }, target)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // An IME owns its own Enter and Tab: they commit or cycle a composition
+    // candidate. Intercepting them throws the composition away and inserts an
+    // indented newline instead. keyCode 229 is the legacy signal browsers
+    // still send for a composing key.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+
+    // WCAG 2.1.2 keyboard-trap escape hatch: Esc arms a one-shot release so
+    // the very next Tab moves focus out via the browser default, regardless
+    // of whether the suggestion popup was open.
+    if (e.key === "Escape") {
+      e.preventDefault()
+      setSuppressAutocomplete(true)
+      setReleaseFocusOnTab(true)
+      return
+    }
+
+    if (releaseFocusOnTab) {
+      // A modifier pressed on its own dispatches a keydown of its own, and
+      // Shift+Tab — the backwards escape — always begins with one. Spending
+      // the latch on that keydown sent the Tab that followed to handleIndent,
+      // so Esc then Shift+Tab outdented instead of moving focus. A modifier
+      // alone is not a keystroke the user meant; anything else still is.
+      if (!MODIFIER_KEYS.has(e.key)) {
+        setReleaseFocusOnTab(false)
+        if (e.key === "Tab") {
+          return
+        }
+      }
+    }
+
+    // Indent gestures outrank the suggestion popup. A Tab over a selection
+    // that spans lines, and every Shift+Tab, can only mean indent/outdent —
+    // the popup used to claim both and splice its suggestion at the selection
+    // start instead. A collapsed caret with the popup open still accepts.
+    if (e.key === "Tab") {
+      const target = e.currentTarget
+      const spansLines =
+        target.selectionStart !== target.selectionEnd &&
+        target.value.slice(target.selectionStart, target.selectionEnd).includes("\n")
+      if (e.shiftKey || spansLines) {
+        handleIndent(e)
+        return
+      }
+    }
+
     if (autocomplete && autocomplete.suggestions.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault()
@@ -131,17 +270,22 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
           if (selectedSug) {
             handleApplySuggestion(selectedSug)
           }
+        } else {
+          handleEnterIndent(e)
         }
-      } else if (e.key === "Escape") {
-        e.preventDefault()
-        setSuppressAutocomplete(true)
       }
+    } else if (e.key === "Tab") {
+      handleIndent(e)
+    } else if (e.key === "Enter") {
+      handleEnterIndent(e)
     }
   }
 
   return (
     <div className="flex-1 flex overflow-hidden font-mono text-[13px] leading-relaxed relative bg-zinc-950/80">
+      <YamlHighlightOverlay ref={overlayRef} value={value} />
       <textarea
+        ref={textareaRef}
         data-testid="spec-textarea"
         data-focus-field="spec-textarea"
         id="spec-textarea"
@@ -149,8 +293,11 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
         onChange={handleTextareaChange}
         onSelect={handleTextareaSelect}
         onKeyDown={handleKeyDown}
+        onScroll={handleTextareaScroll}
         disabled={disabled}
-        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-zinc-300 font-mono resize-none leading-6 overflow-y-auto${disabled ? " opacity-40 cursor-wait" : ""}`}
+        // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
+        // so both layers agree on content width when a scrollbar appears.
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 
@@ -1772,6 +1919,60 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Security", icon: <Shield size={12} /> },
 ]
 
+// Diagnostics panel sizing. The panel is the last flex child of a
+// `flex flex-col h-full` section whose active tab panel above it is
+// `flex-1 min-h-0`, so it simply takes the height it asks for — which is why
+// an unclamped ask can eat the YAML textarea whole on a short pane.
+const DIAGNOSTICS_DEFAULT_HEIGHT = 128 // what the old `max-h-32` cap allowed
+const DIAGNOSTICS_MIN_HEIGHT = 72 // one issue row plus its action button
+// The Auto-Fix-All strip's BUDGET, not a measurement: its real box is ~45px,
+// so reserving 48 leaves the panel a couple of pixels shorter than asked,
+// never taller. It is chrome above the scrollable body, paid for out of the
+// panel's own height rather than added to it — see the JSX comment on the
+// strip for why both halves of that matter.
+const DIAGNOSTICS_BANNER_HEIGHT = 48
+const DIAGNOSTICS_MAX_HEIGHT = 480 // the ceiling on a tall viewport
+// Everything in the pane that is not diagnostics body: the fixed chrome (tab
+// bar 36 + breadcrumb 28 + resize handle 5 + panel header 32 = 101) plus a
+// ~160px floor for the spec textarea, so the editor stays usable.
+const DIAGNOSTICS_RESERVED_HEIGHT = 261
+
+/**
+ * The panel's ceiling for a pane of `paneHeight`. A measurement of 0 — jsdom,
+ * or a first render before layout — falls back to the flat constant so the
+ * behaviour stays deterministic.
+ *
+ * On a pane too short to pay both floors they cannot both be honoured, and
+ * holding the panel's 72px left the textarea a 27px box carrying 40px of its
+ * own padding — not one visible editing line. The editor wins that contest.
+ *
+ * The panel is then either at least one issue row or collapsed, never in
+ * between: anything under DIAGNOSTICS_MIN_HEIGHT is a clipped sliver of the
+ * first row, which is neither usable nor an honest collapse. 72px remains the
+ * floor of a drag on any pane that can afford it.
+ */
+function diagnosticsMaxHeight(paneHeight: number) {
+  if (!(paneHeight > 0)) return DIAGNOSTICS_MAX_HEIGHT
+  const available = paneHeight - DIAGNOSTICS_RESERVED_HEIGHT
+  // One whole issue row or nothing — a sliver of a row is neither usable nor
+  // an honest collapse. The banner is NOT part of this test: see the sizing
+  // block in the component for why presence must not depend on content.
+  if (available < DIAGNOSTICS_MIN_HEIGHT) return 0
+  return Math.min(DIAGNOSTICS_MAX_HEIGHT, available)
+}
+
+function clampDiagnosticsHeight(
+  height: number,
+  maxHeight = DIAGNOSTICS_MAX_HEIGHT,
+  minHeight = DIAGNOSTICS_MIN_HEIGHT
+) {
+  return Math.min(Math.max(height, minHeight), maxHeight)
+}
+
+// Keys whose own keydown precedes the keystroke the user means (Shift before
+// Shift+Tab); the Esc escape latch must survive them.
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"])
+
 export function EditorPanel({
   specText: propSpecText,
   setSpecText: propSetSpecText,
@@ -1828,6 +2029,88 @@ export function EditorPanel({
 
   const [yamlSyntaxError, setYamlSyntaxError] = useState<string | null>(null)
   const [showDiagnostics, setShowDiagnostics] = useState(true)
+  // A ceiling of 0 means the pane cannot pay the panel's one-row floor. The
+  // body must then be UNMOUNTED, not merely zero-height: under border-box a
+  // height-0 body still paints its border-t and p-3 as an empty strip, under a
+  // header offering to "Collapse" what is already invisible.
+  // The height the USER asked for, never overwritten by a window resize: the
+  // rendered height is derived from it against the current ceiling. Storing
+  // only the clamped value meant shrinking the window until the panel hit its
+  // floor and then enlarging again gave back the floor, not the dragged height.
+  const diagnosticsHeightRef = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [wantedDiagnosticsHeight, setWantedDiagnosticsHeight] = useState(DIAGNOSTICS_DEFAULT_HEIGHT)
+  const [measuredPaneHeight, setMeasuredPaneHeight] = useState(0)
+  const [isResizingDiagnostics, setIsResizingDiagnostics] = useState(false)
+  const diagnosticsDragStartY = useRef(0)
+  const diagnosticsDragStartHeight = useRef(DIAGNOSTICS_DEFAULT_HEIGHT)
+  // Written during render (below, once the diagnostics are known) so the drag
+  // and resize handlers, which run after it, see the current bounds.
+  const diagnosticsMaxRef = useRef(DIAGNOSTICS_MAX_HEIGHT)
+  // The pane the panel lives in — measured, so the ceiling tracks a 900px
+  // laptop or a short split instead of assuming a tall viewport.
+  const editorPaneRef = useRef<HTMLElement>(null)
+
+  // Drag-to-resize, adapted from the pane splitter in workspace-layout.tsx:
+  // clientX becomes clientY, and the delta sign is inverted because the handle
+  // sits on the panel's TOP edge — dragging up has to make the panel taller.
+  const startDiagnosticsResize = (clientY: number) => {
+    diagnosticsDragStartY.current = clientY
+    diagnosticsDragStartHeight.current = diagnosticsHeightRef.current
+    setIsResizingDiagnostics(true)
+  }
+
+  // Measure only. The ceiling and the rendered height are derived from this
+  // during render, so a resize can never destroy the user's wanted height.
+  // Layout phase, so no over-tall frame is ever painted; jsdom and any
+  // pre-layout render measure 0 and keep the constant default.
+  useIsomorphicLayoutEffect(() => {
+    const measure = () =>
+      setMeasuredPaneHeight(editorPaneRef.current?.getBoundingClientRect().height ?? 0)
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
+
+  useEffect(() => {
+    if (!isResizingDiagnostics) return
+
+    const resizeTo = (clientY: number) => {
+      const delta = clientY - diagnosticsDragStartY.current
+      setWantedDiagnosticsHeight(
+        clampDiagnosticsHeight(
+          diagnosticsDragStartHeight.current - delta,
+          diagnosticsMaxRef.current,
+          DIAGNOSTICS_MIN_HEIGHT
+        )
+      )
+    }
+    const onMouseMove = (e: MouseEvent) => resizeTo(e.clientY)
+    const onTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      if (touch) resizeTo(touch.clientY)
+    }
+    const onRelease = () => setIsResizingDiagnostics(false)
+
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onRelease)
+    window.addEventListener("touchmove", onTouchMove)
+    window.addEventListener("touchend", onRelease)
+    // A gesture the browser cancels never sends touchend; without this the
+    // resize stays armed and the next unrelated touch drags the panel.
+    window.addEventListener("touchcancel", onRelease)
+    // Alt-tab with the button still down and the mouseup may never arrive;
+    // without this the next pointer move over the page resizes a panel the
+    // user has already let go of.
+    window.addEventListener("blur", onRelease)
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onRelease)
+      window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("touchend", onRelease)
+      window.removeEventListener("touchcancel", onRelease)
+      window.removeEventListener("blur", onRelease)
+    }
+  }, [isResizingDiagnostics])
   const [droppedConnections, setDroppedConnections] = useState<DroppedConnection[]>([])
   const lastParsedTextRef = useRef<string>("")
 
@@ -1882,6 +2165,50 @@ export function EditorPanel({
     })
   }, [diagnostics])
 
+  // ── Diagnostics panel sizing, derived ──
+  // Computed here rather than with the state above because the floor depends
+  // on whether the Auto-Fix-All banner is rendered, which is only known once
+  // the diagnostics are. The refs carry the result to the drag and resize
+  // handlers, which run after this render.
+  // Panel sizing, in one place and in this order — the order is the point.
+  //
+  //   available < 72                  -> no panel at all
+  //   72 <= available < 72 + banner   -> panel at the bare floor, NO banner
+  //   available >= 72 + banner        -> panel and banner
+  //
+  // Whether the PANEL exists depends only on the pane's height, never on what
+  // the spec happens to contain. Tying the two together (as the first version
+  // of this did) meant that in a narrow band of pane heights, typing an
+  // unrecognised type made the whole panel vanish and the editor jump taller,
+  // and fixing it popped the panel back — the mid-edit resize this sizing
+  // exists to avoid. The banner is what yields; each issue row keeps its own
+  // action button, so the fix is still one click away without it.
+  const hasFixBanner = !yamlSyntaxError && fixableDiagnostics.length > 0
+  const diagnosticsCeiling = diagnosticsMaxHeight(measuredPaneHeight)
+  // The panel's height first, WITHOUT reserving anything for the strip...
+  const diagnosticsHeight = clampDiagnosticsHeight(
+    wantedDiagnosticsHeight,
+    diagnosticsCeiling,
+    DIAGNOSTICS_MIN_HEIGHT
+  )
+  // ...then the strip, gated on that height rather than on the ceiling. Gating
+  // on the ceiling meant a panel the user had DRAGGED below 72 + strip still
+  // grew to fit one when a fixable issue appeared — the editor lost 30px and
+  // the overlay shifted mid-edit, which is the whole thing this arrangement
+  // exists to prevent. Below the threshold the strip is simply absent; each
+  // issue row keeps its own action button, and dragging up past it brings the
+  // strip back — and while it is hidden a compact stand-in in the header
+  // keeps the bulk fix reachable, since handleFixAll has no other route.
+  const showsFixBanner =
+    hasFixBanner && diagnosticsHeight >= DIAGNOSTICS_MIN_HEIGHT + DIAGNOSTICS_BANNER_HEIGHT
+  const bannerHeight = showsFixBanner ? DIAGNOSTICS_BANNER_HEIGHT : 0
+  const diagnosticsBodyHeight = Math.max(0, diagnosticsHeight - bannerHeight)
+  diagnosticsMaxRef.current = diagnosticsCeiling
+  diagnosticsHeightRef.current = diagnosticsHeight
+  /** The pane can afford the panel AND the user has not collapsed it. */
+  const diagnosticsFits = diagnosticsCeiling > 0
+  const bodyVisible = showDiagnostics && diagnosticsFits
+
   const handleFixAll = () => {
     const fixes = fixableDiagnostics.map((d) => {
       const fixType = fixTypeForCode(d.code!) ?? d.code!
@@ -1930,6 +2257,7 @@ export function EditorPanel({
 
   return (
     <section
+      ref={editorPaneRef}
       data-testid="editor-panel"
       className="flex flex-col h-full"
       style={{ background: "var(--surface)" }}
@@ -2123,9 +2451,59 @@ export function EditorPanel({
           borderColor: "var(--border)",
         }}
       >
+        {/* Resize handle. Deliberately its own strip ABOVE the header: the
+            collapse toggle is the entire header div's onClick, so a handle
+            placed inside it would collapse the panel on mouseup. */}
+        {bodyVisible && (
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize diagnostics panel"
+            data-testid="diagnostics-resize-handle"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              startDiagnosticsResize(e.clientY)
+            }}
+            onTouchStart={(e) => {
+              const touch = e.touches[0]
+              if (touch) startDiagnosticsResize(touch.clientY)
+            }}
+            className="relative flex items-center justify-center h-[5px] shrink-0 group cursor-row-resize select-none z-10"
+            style={{ background: "var(--border)" }}
+          >
+            {/* Visual track + dots */}
+            <div
+              className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors duration-150"
+              style={{
+                background: isResizingDiagnostics ? "var(--accent)" : "var(--border-subtle)",
+              }}
+            />
+            <div
+              className="relative flex gap-[3px] z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              aria-hidden="true"
+            >
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="block w-[3px] h-[3px] rounded-full"
+                  style={{
+                    background: isResizingDiagnostics ? "var(--accent)" : "var(--foreground-muted)",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Panel header */}
         <div
-          onClick={() => setShowDiagnostics((s) => !s)}
+          data-testid="diagnostics-header"
+          onClick={() => {
+            // Nothing to toggle when the pane cannot show the panel at all.
+            if (!diagnosticsFits) return
+            setShowDiagnostics((s) => !s)
+          }}
+          title={diagnosticsFits ? undefined : "The editor pane is too short to show diagnostics"}
           className="flex items-center justify-between px-3 h-8 cursor-pointer hover:bg-zinc-900/30 transition-colors"
         >
           <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase">
@@ -2151,16 +2529,64 @@ export function EditorPanel({
               <span className="text-[10px] text-zinc-500 font-medium">all checks passing</span>
             )}
           </div>
-          <span className="text-zinc-500 text-[11px] font-medium">
-            {showDiagnostics ? "Collapse" : "Expand"}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* handleFixAll is wired to exactly ONE element. When the panel is
+                too short to carry the strip, that button disappears and the
+                bulk fix has no route in the UI at all — each row keeps its own
+                action, but "fix everything" does not. This compact stand-in
+                keeps it reachable. */}
+            {bodyVisible && !showsFixBanner && hasFixBanner && (
+              <button
+                type="button"
+                data-testid="diagnostics-fix-all-compact"
+                onClick={(e) => {
+                  e.stopPropagation() // the header itself toggles collapse
+                  handleFixAll()
+                }}
+                className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow transition-colors active:scale-95"
+              >
+                Auto-Fix All ({fixableDiagnostics.length})
+              </button>
+            )}
+            <span className="text-zinc-500 text-[11px] font-medium">
+              {bodyVisible ? "Collapse" : "Expand"}
+            </span>
+          </div>
         </div>
 
-        {/* Panel body */}
-        {showDiagnostics && (
+        {/* Auto-Fix-All strip. OUTSIDE the scrollable body — rendered inside
+            it, above the rows, it ate the whole one-row floor and clipped the
+            first issue row, the floor's whole promise. And paid for out of the
+            PANEL's height rather than added to it, so the panel's total height
+            never changes when the strip appears or disappears: adding it on
+            top resized the editor as the user typed and desynchronised the
+            highlight overlay from the textarea's scroll. The strip shows only
+            when the panel is already tall enough to carry it AND a whole issue
+            row, so it can never push the panel taller. */}
+        {bodyVisible && showsFixBanner && (
           <div
-            className="border-t overflow-y-auto max-h-32 p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
-            style={{ borderColor: "var(--border)" }}
+            data-testid="diagnostics-fix-banner"
+            className="shrink-0 flex items-center justify-between bg-indigo-500/10 border-t border-indigo-500/25 p-2.5 font-sans select-none"
+          >
+            <div className="text-indigo-300 text-xs">
+              Found <span className="font-bold">{fixableDiagnostics.length}</span> auto-fixable issue{fixableDiagnostics.length > 1 ? 's' : ''}!
+            </div>
+            <button
+              type="button"
+              onClick={handleFixAll}
+              className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow transition-colors active:scale-95 shrink-0"
+            >
+              Auto-Fix All
+            </button>
+          </div>
+        )}
+
+        {/* Panel body */}
+        {bodyVisible && (
+          <div
+            data-testid="diagnostics-body"
+            className="border-t overflow-y-auto p-3 bg-zinc-950/60 font-mono text-[11px] leading-relaxed space-y-1.5"
+            style={{ borderColor: "var(--border)", height: diagnosticsBodyHeight }}
           >
             {yamlSyntaxError && (
               <div className="text-red-400 flex items-start gap-1.5">
@@ -2176,21 +2602,6 @@ export function EditorPanel({
               <div className="text-emerald-400 flex items-center gap-1.5 py-0.5">
                 <span className="text-emerald-500">✓</span>
                 <span>No issues found. Your specification is syntactically sound and logically consistent!</span>
-              </div>
-            )}
-
-            {!yamlSyntaxError && fixableDiagnostics.length > 0 && (
-              <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/25 rounded-lg p-2.5 mb-3 font-sans select-none">
-                <div className="text-indigo-300 text-xs">
-                  Found <span className="font-bold">{fixableDiagnostics.length}</span> auto-fixable issue{fixableDiagnostics.length > 1 ? 's' : ''}!
-                </div>
-                <button
-                  type="button"
-                  onClick={handleFixAll}
-                  className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow transition-colors active:scale-95 shrink-0"
-                >
-                  Auto-Fix All
-                </button>
               </div>
             )}
 

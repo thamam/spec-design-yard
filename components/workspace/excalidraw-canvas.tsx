@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react"
+import { ScanSearch } from "lucide-react"
 import { CanvasChange } from "../../lib/reconciler"
 import { lintSpec } from "../../lib/linter"
 import {
@@ -18,6 +19,18 @@ const getDeterministicSeed = (id: string) => {
     hash = id.charCodeAt(i) + ((hash << 5) - hash)
   }
   return (Math.abs(hash) % 100000) + 1
+}
+
+// A coordinate no real diagram uses, and past which arithmetic stops being
+// safe: 1e308 is finite, but the dx between +1e308 and -1e308 is -Infinity, so
+// an arrow's width and points come out infinite and poison getCommonBounds
+// exactly as a NaN would. Anything beyond this is treated as unusable and
+// falls back to the computed layout.
+const MAX_COORD = 1e7
+
+/** A coordinate the layout can actually use. */
+function isUsableCoordinate(v: any): boolean {
+  return Number.isFinite(v) && Math.abs(v) <= MAX_COORD
 }
 
 const COLOR_MAP: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
@@ -136,8 +149,14 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     const auto = isBrick
       ? { x: 100 + slot * 260, y: 380 }
       : { x: 60 + slot * 250, y: 160 }
-    const hasX = typeof comp.x === 'number' && Number.isFinite(comp.x)
-    const hasY = typeof comp.y === 'number' && Number.isFinite(comp.y)
+    // Not `typeof === 'number'`: YAML spells NaN and the infinities as
+    // `.nan` / `.inf`, and both pass a typeof check. They flow straight into
+    // element geometry, poison getCommonBounds, and leave scrollToContent
+    // writing a non-finite scroll/zoom — a blank canvas with no error. Nor is
+    // Number.isFinite enough on its own: see MAX_COORD. Either way that axis
+    // falls back to its auto slot, as a missing one does.
+    const hasX = isUsableCoordinate(comp.x)
+    const hasY = isUsableCoordinate(comp.y)
 
     positions[comp.id] = {
       x: hasX ? comp.x : auto.x,
@@ -548,6 +567,16 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
   }))
 }
 
+// The fit is proven; only its naming, reachability and lifetime were broken.
+// Every route to it — footer button, toolbar button, Shift+1, and the
+// once-per-loaded-spec automatic fit — passes exactly these options.
+const FIT_TO_VIEWPORT = { fitToViewport: true, viewportZoomFactor: 0.85 }
+
+// `specIdentity` is legitimately undefined on a canvas rendered without the
+// prop, so "no fit has run yet" needs a value no identity can collide with.
+const NO_FIT_YET = Symbol("no-fit-yet")
+type FitIdentity = string | undefined | typeof NO_FIT_YET
+
 export function ExcalidrawCanvas({
   parsedSpec,
   selectedUnit,
@@ -557,6 +586,8 @@ export function ExcalidrawCanvas({
   pathTarget,
   hiddenTypes = [],
   showSecurityOverlay,
+  specIdentity,
+  onZoomToFitReady,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -566,10 +597,15 @@ export function ExcalidrawCanvas({
   pathTarget?: string
   hiddenTypes?: string[]
   showSecurityOverlay?: boolean
+  /** Identity of the spec/project currently loaded — the automatic fit's latch key. */
+  specIdentity?: string
+  /** Hands the parent this canvas's zoomToFit(), and null when it unmounts. */
+  onZoomToFitReady?: (fit: (() => void) | null) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ExcalidrawComponent, setExcalidrawComponent] = useState<React.ComponentType<any> | null>(null)
   const [WelcomeScreenComponent, setWelcomeScreenComponent] = useState<React.ComponentType<any> | null>(null)
+  const [FooterComponent, setFooterComponent] = useState<React.ComponentType<any> | null>(null)
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null)
   const [loadError, setLoadError] = useState(false)
 
@@ -580,6 +616,29 @@ export function ExcalidrawCanvas({
     }
   }, [])
 
+  // The single fit implementation every route calls.
+  const zoomToFit = useCallback(() => {
+    if (!excalidrawAPI) return
+    try {
+      const sceneElements = excalidrawAPI.getSceneElements()
+      // Nothing to frame is a no-op, not a fit: getCommonBounds([]) is
+      // non-finite, so fitting an empty scene sets a non-finite scroll and
+      // zoom and blanks the canvas. The automatic path guards this too.
+      if (!sceneElements || sceneElements.length === 0) return
+      excalidrawAPI.scrollToContent(sceneElements, FIT_TO_VIEWPORT)
+    } catch (e) {
+      console.error("Failed to zoom to fit: ", e)
+    }
+  }, [excalidrawAPI])
+
+  // Hand the callback to the parent by prop. window.excalidrawAPI stays for
+  // its existing consumers but gains no new callers, and the null on unmount
+  // stops a stale canvas being fitted from a view it no longer renders in.
+  useEffect(() => {
+    onZoomToFitReady?.(zoomToFit)
+    return () => onZoomToFitReady?.(null)
+  }, [onZoomToFitReady, zoomToFit])
+
   useEffect(() => {
     // Dynamically import Excalidraw only on the client
     import("@excalidraw/excalidraw")
@@ -587,6 +646,11 @@ export function ExcalidrawCanvas({
         const Comp = mod.Excalidraw ?? mod.default
         setExcalidrawComponent(() => Comp)
         setWelcomeScreenComponent(() => mod.WelcomeScreen)
+        // Footer is Excalidraw's public footer extension point. It tunnels
+        // into .footer-center, so the button lands in the same footer strip as
+        // the − 100% + zoom widget, not next to it: that widget's region has
+        // no public API. Design Decision 7 records the trade.
+        setFooterComponent(() => mod.Footer)
       })
       .catch(() => setLoadError(true))
   }, [])
@@ -710,30 +774,111 @@ export function ExcalidrawCanvas({
     return () => clearTimeout(timer)
   }, [pendingMove, onCanvasChange, elements])
 
-  // Automatically scroll and fit canvas components to viewport on initial load
-  const hasInitialScrolled = useRef(false)
+  // One automatic fit per loaded spec. The latch is keyed on the loaded spec's
+  // identity, so a different spec or project loading into an already-mounted
+  // canvas re-fits, and ordinary edits do not.
+  //
+  // The latch records that an identity has been HANDLED, which is not the same
+  // as fitted. An empty spec has nothing to frame, but loading one is still
+  // that identity's load: leaving it unhandled meant the first component the
+  // user added — an ordinary edit under the same identity — read as a fresh
+  // load and threw away their pan.
+  //
+  // For a spec that does have content the latch advances only once
+  // scrollToContent has actually run. Advancing it at scheduling time lost the
+  // fit outright: `elements` changing inside the 300ms window re-ran the
+  // effect, the cleanup cancelled the timer, and the guard already read as
+  // handled — which is exactly what workspace hydration does on first load,
+  // the case the fit exists for.
+  const latestElementsRef = useRef(elements)
+  latestElementsRef.current = elements
+  const latestSpecIdentityRef = useRef<FitIdentity>(specIdentity)
+  latestSpecIdentityRef.current = specIdentity
+  const handledSpecIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
+  const scheduledFitIdentityRef = useRef<FitIdentity>(NO_FIT_YET)
+  const fitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (excalidrawAPI && elements.length > 0 && !hasInitialScrolled.current) {
-      hasInitialScrolled.current = true
-      const timer = setTimeout(() => {
-        try {
-          excalidrawAPI.scrollToContent(elements, { fitToViewport: true, viewportZoomFactor: 0.85 })
-        } catch (e) {
-          console.error("Failed to scroll to content: ", e)
-        }
-      }, 300)
-      return () => clearTimeout(timer)
+    if (!excalidrawAPI) return
+    // A fit still in flight for a *different* identity is stale, and cancelling
+    // it has to happen before every early return below — the empty-spec branch
+    // used to return with the previous identity's timer still armed. It then
+    // fired, framed a spec that was no longer loaded, and rewound the handled
+    // latch to it, so that spec's next ordinary edit read as a fresh load.
+    if (fitTimerRef.current !== null && scheduledFitIdentityRef.current !== specIdentity) {
+      clearTimeout(fitTimerRef.current)
+      fitTimerRef.current = null
+      scheduledFitIdentityRef.current = NO_FIT_YET
     }
-  }, [excalidrawAPI, elements])
-
-  // Sync elements dynamically on the fly without remounting Excalidraw
-  useEffect(() => {
-    if (excalidrawAPI && elements.length > 0) {
-      try {
-        excalidrawAPI.updateScene({ elements: sceneElements })
-      } catch (e) {
-        console.error("Failed to update Excalidraw scene: ", e)
+    if (handledSpecIdentityRef.current === specIdentity) return
+    if (elements.length === 0) {
+      // Nothing to fit to — but this identity is now handled, so the first
+      // element added to it is an edit, not a load.
+      //
+      // Cancel ANY pending fit first, this identity's included: the cancel
+      // block above only clears a timer for a different identity, so a spec
+      // emptied inside its own 300ms window left its timer armed and it then
+      // called scrollToContent([]) — getCommonBounds([]) is non-finite, which
+      // is the blank canvas.
+      if (fitTimerRef.current !== null) {
+        clearTimeout(fitTimerRef.current)
+        fitTimerRef.current = null
+        scheduledFitIdentityRef.current = NO_FIT_YET
       }
+      handledSpecIdentityRef.current = specIdentity
+      return
+    }
+    // A fit for this same spec is already in flight — let it land rather than
+    // cancelling and re-queueing it on every elements churn.
+    if (fitTimerRef.current !== null && scheduledFitIdentityRef.current === specIdentity) return
+    // No clearTimeout here: the cancel block above already cleared any timer
+    // for another identity, and the guard on the line above returned on a
+    // timer for this one, so the ref is always null by now.
+    scheduledFitIdentityRef.current = specIdentity
+    fitTimerRef.current = setTimeout(() => {
+      fitTimerRef.current = null
+      /* v8 ignore next 3 -- React flushes passive effects through a scheduler
+         task, so a fit timer already due when the identity render commits can
+         run before the cancelling effect does. This check is what saves that
+         ordering; jsdom cannot reproduce it, which is why it is unhittable
+         here rather than unreachable in production. */
+      if (latestSpecIdentityRef.current !== specIdentity) return
+      // Belt and braces on the cancel above: fitting an empty scene sets a
+      // non-finite scroll and zoom, so never call it with nothing to frame.
+      if (latestElementsRef.current.length === 0) return
+      // Handled before the attempt, not after it succeeds: this identity has
+      // had its one automatic fit either way. Advancing only on success left
+      // a throwing fit unhandled, so the user's next ordinary edit scheduled
+      // another one and reset the viewport they had just panned.
+      handledSpecIdentityRef.current = specIdentity
+      try {
+        excalidrawAPI.scrollToContent(latestElementsRef.current, FIT_TO_VIEWPORT)
+      } catch (e) {
+        console.error("Failed to scroll to content: ", e)
+      }
+    }, 300)
+  }, [excalidrawAPI, elements, specIdentity])
+
+  // The pending fit is cancelled on unmount only — never on a re-render, which
+  // is what used to swallow it.
+  useEffect(
+    () => () => {
+      if (fitTimerRef.current !== null) clearTimeout(fitTimerRef.current)
+    },
+    []
+  )
+
+  // Sync elements dynamically on the fly without remounting Excalidraw —
+  // including the empty case. Skipping it left the previous spec's diagram
+  // drawn under a newly loaded empty one. Nothing was being guarded: the scene
+  // starts empty via initialData, so the pre-compilation first paint is a
+  // no-op, and diffScene ignores an empty `updatedElements` list, so an empty
+  // scene cannot round-trip back into the spec as a deletion.
+  useEffect(() => {
+    if (!excalidrawAPI) return
+    try {
+      excalidrawAPI.updateScene({ elements: sceneElements })
+    } catch (e) {
+      console.error("Failed to update Excalidraw scene: ", e)
     }
   }, [excalidrawAPI, sceneElements])
 
@@ -828,6 +973,32 @@ export function ExcalidrawCanvas({
         }}
       >
         {WelcomeScreenComponent && <WelcomeScreenComponent />}
+        {FooterComponent && (
+          <FooterComponent>
+            <button
+              type="button"
+              onClick={zoomToFit}
+              aria-label="Zoom to fit"
+              title="Zoom to fit (Shift+1)"
+              data-testid="canvas-footer-zoom-to-fit"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                marginLeft: 8,
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                background: "var(--island-bg-color, #232329)",
+                color: "var(--color-on-surface, #ced4da)",
+              }}
+            >
+              <ScanSearch size={16} />
+            </button>
+          </FooterComponent>
+        )}
       </ExcalidrawComponent>
     </div>
   )

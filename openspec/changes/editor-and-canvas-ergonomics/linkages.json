@@ -1,0 +1,732 @@
+{
+  "change": "editor-and-canvas-ergonomics",
+  "links": [
+    {
+      "requirement": "spec-editor/Tab key behaviour",
+      "design": "Decision 1: Tab/Shift+Tab handled inside `handleKeyDown`, before the autocomplete branch",
+      "tasks": [
+        "Task 1: Tab / Shift+Tab indentation"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Enter key behaviour",
+      "design": "Decision 2: Enter auto-indent reuses the detector extracted from `lib/autocomplete.ts`",
+      "tasks": [
+        "Task 2: Enter auto-indent (detector extraction first)"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Syntax colouring",
+      "design": "Decision 3: Syntax colour via a highlight overlay, not an editor swap",
+      "tasks": [
+        "Task 3: Syntax colour overlay"
+      ]
+    },
+    {
+      "requirement": "spec-editor/YAML write discipline",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 6: Quality gate"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Test coverage for editor behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 1: Tab / Shift+Tab indentation",
+        "Task 2: Enter auto-indent (detector extraction first)",
+        "Task 3: Syntax colour overlay",
+        "Task 6: Quality gate"
+      ]
+    },
+    {
+      "requirement": "diagnostics-panel/Resizable panel height",
+      "design": "Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct — see the note on Decision 4 and pointer events under jsdom 24",
+      "tasks": [
+        "Task 4: Resizable diagnostics panel"
+      ]
+    },
+    {
+      "requirement": "diagnostics-panel/Collapse toggle",
+      "design": "Decision 4: Diagnostics panel resizes via a mouse-and-touch drag handle; drag and click stay distinct",
+      "tasks": [
+        "Task 4: Resizable diagnostics panel"
+      ]
+    },
+    {
+      "requirement": "diagnostics-panel/Test coverage for panel behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 4: Resizable diagnostics panel",
+        "Task 6: Quality gate"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Zoom-to-fit affordance",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec; amended by Decision 7 — the toolbar control is kept, not replaced",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Fit on content load",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Fit control in Excalidraw's own footer",
+      "design": "Decision 7: The fit control lives in Excalidraw's own `Footer`, not floating over the canvas (incl. 'Placement within the footer: centre, not adjacent to the zoom widget')",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Zoom-to-fit keyboard shortcut",
+      "design": "Decision 5: Zoom-to-fit becomes a named control + shortcut, API travels by prop, and the fit latch keys on the loaded spec",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Element normalization invariant",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+      ]
+    },
+    {
+      "requirement": "diagram-canvas/Test coverage for canvas behaviours",
+      "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+      "tasks": [
+        "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+        "Task 6: Quality gate"
+      ]
+    }
+  ],
+  "hardening": {
+    "round": "integration-hardening (.orchestrator/integration/FIXES.md)",
+    "note": "Nine defects found by a cross-model review of the merged diff. No new requirement was added: each fix defends a requirement this change already carries. Red/green evidence per fix is in .orchestrator/integration/status.",
+    "links": [
+      {
+        "fix": "FIX 1 — CRLF specs corrupted by Tab and Enter, then autosaved",
+        "requirement": "spec-editor/Tab key behaviour, spec-editor/Enter key behaviour",
+        "design": "Decision 1 (Tab/Shift+Tab inside handleKeyDown) and Decision 2 (Enter reuses the extracted detector) — both assumed one coordinate space; offsets are now translated, and CRLF is preserved rather than normalised away",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX 2 — non-finite coordinates reach Excalidraw",
+        "requirement": "diagram-canvas/Element normalization invariant",
+        "design": "Decision 6: Invariants carried as requirements — the invariant's 'never non-finite' clause now covers x/y, not only angle",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 3 — autocomplete outranks multi-line indent",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown, before the autocomplete branch — the ordering the decision names is now actually enforced for multi-line selections and Shift+Tab",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX 4 — an emptied spec leaves the old diagram on screen",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec — the scene must follow the loaded spec too, including when it is empty",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 5 — a stale fit timer resurrects the previous identity",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX 6 — the coverage-policy guard cannot detect the drift it claims to",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate that enforces them must be able to fail",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX 7 — the panel clamp cannot honour both floors on a short pane",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel resizes via a drag handle; the pane ceiling now resolves the floor conflict in the editor's favour",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX 8 — two e2e assertions that cannot fail",
+        "requirement": "diagram-canvas/Test coverage for canvas behaviours, spec-editor/YAML write discipline",
+        "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX 9 — the honest red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements, not implementation notes",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round2": {
+    "round": "integration-hardening round 2 (.orchestrator/integration/FIXES-round2.md + FIXES-round2-addendum.md)",
+    "note": "Seven findings from a second Codex review of the merged diff, plus a record-keeping correction. FIX C added a new requirement (spec-editor/Line endings) and a new decision (Decision 8); everything else defends a requirement this change already carried.",
+    "links": [
+      {
+        "fix": "FIX A — the coverage gate silently skips git C-quoted paths",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a gate that goes quiet on a file enforces nothing",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX B — the gate's own verdict path is untestable and self-passing",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate's decision must itself be covered",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX C — line endings normalise to LF once, at the load seam (reverses round 1's CRLF preservation)",
+        "requirement": "spec-editor/Line endings (ADDED in round 2), spec-editor/Tab key behaviour, spec-editor/Enter key behaviour",
+        "design": "Decision 8: Line endings normalise to LF once, where spec text enters app state",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX D — a test enshrined YAML the parser rejects",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown, before the autocomplete branch",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX E — a 39px sliver is neither one row nor collapsed",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel resizes via a mouse-and-touch drag handle; the pane ceiling resolves the floor conflict in the editor's favour",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX F — metadata registries drift, and verification.md said they don't",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: Syntax colour via a highlight overlay — the overlay's vocabulary must be the linter's, not a copy",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX G — 'pointer events with capture' is not what shipped (docs only)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: retitled and reworded to the mouse-and-touch mechanism that exists; the jsdom note is kept",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX H — the red/green record had three wrong entries and one omission",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence for them has to be classified honestly",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round3": {
+    "round": "integration-hardening round 3 (.orchestrator/integration/FIXES-round3.md + FIXES-round3-addendum.md)",
+    "note": "Seven findings from a third Codex review, plus FIX Q's corrections to the round-2 record. FIX M turned out to be a behaviour defect (the caret restore raced React's commit), not only the test gap it was filed as.",
+    "links": [
+      {
+        "fix": "FIX J — the e2e scenarios could autosave over a real project",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — an e2e that can damage the machine it runs on is not a gate",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX K — a short pane rendered a padded sliver labelled Collapse",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel is at least one issue row or collapsed, never in between",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX L — the gate's base default and real closures were still ignored",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gate's own decision must be covered end to end",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX M — no selection assertion after a multi-line Tab; the caret restore raced React's commit",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown — the requirement's 'preserve the selection' clause needed a real-browser assertion to be true",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX N — the spec over-stated the normalizer invariant (docs + one test)",
+        "requirement": "diagram-canvas/Element normalization invariant",
+        "design": "Decision 6: Invariants carried as requirements — an invariant stated wider than the code is not an invariant",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX O — a dead clearTimeout left by round 1's cancel block",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: the fit latch keys on the loaded spec",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX P — unquoteGitPath truncated literal non-ASCII characters",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a gate that fails closed on an unfindable path enforces nothing useful",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX Q — five corrections to the round-2 red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence for them has to be classified honestly and cited durably",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round4": {
+    "round": "integration-hardening round 4 (.orchestrator/integration/FIXES-round4.md + FIXES-round4-addendum.md)",
+    "note": "Nine findings from a fourth review, plus FIX Z (a test whose scaffolding rotted inside the FIX M commit) and FIX AA (nine corrections to the round-3 record). FIX R is a regression this work introduced in round-3 FIX M, recorded as such.",
+    "links": [
+      {
+        "fix": "FIX R — a no-op indent left the pending-selection ref armed (regression from round-3 FIX M)",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Tab/Shift+Tab handled inside handleKeyDown — the restore must not outlive the edit it belongs to",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX S — three e2e scenarios wrote before their guards",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a gate that can damage a real project is not a gate",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX T — a spec emptied under the same identity still fired the fit",
+        "requirement": "diagram-canvas/Fit on content load, diagram-canvas/Element normalization invariant",
+        "design": "Decision 5: the fit latch keys on the loaded spec; Decision 6: the fit never sets a non-finite scroll or zoom",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX U — the one-row floor forgot the Auto-Fix-All banner",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel is at least one issue row or collapsed — the banner must not be what fills that row",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX V — nothing tested the production loadedSpecId → specIdentity wiring",
+        "requirement": "diagram-canvas/Fit on content load, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 5: the fit latch keys on the loaded spec",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX W — a window resize destroyed the dragged height",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: panel height is session-local; a resize is not the user changing their mind",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX X — the extracted detector changed autocomplete on blank lines",
+        "requirement": "spec-editor/Enter key behaviour, spec-editor/Syntax colouring",
+        "design": "Decision 2: Enter auto-indent REUSES the detector extracted from lib/autocomplete.ts — extraction, not reimplementation",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX Y — tasks 4, 5 and 6 were unchecked while verification.md reported them done",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel",
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX Z — a test suite still drove fake timers for a deleted setTimeout",
+        "requirement": "spec-editor/Test coverage for editor behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a test passing for the wrong reason guards nothing",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX AA — nine corrections to the round-3 red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence has to be classified honestly",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round5": {
+    "round": "integration-hardening round 5 (.orchestrator/integration/FIXES-round5.md + FIXES-round5-addendum.md)",
+    "note": "Eight findings from a fifth review plus three from an independent proof. Intended as the last code round before the PR. FIX JJ is a regression FIX U introduced in round 4, recorded as such.",
+    "links": [
+      {
+        "fix": "FIX BB — Enter during IME composition was intercepted",
+        "requirement": "spec-editor/Enter key behaviour, spec-editor/Tab key behaviour",
+        "design": "Decision 1/2: the editor's key handling — a key that belongs to an in-flight composition is not the editor's to claim",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX CC — Enter mid-line decided the block from the whole line",
+        "requirement": "spec-editor/Enter key behaviour",
+        "design": "Decision 2: Enter auto-indent reuses the extracted detector — which must be asked about the half of the line being left behind",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX DD — finite but absurd coordinates produced infinite geometry",
+        "requirement": "diagram-canvas/Element normalization invariant",
+        "design": "Decision 6: the fit never sets a non-finite scroll or zoom — finiteness of the input is not sufficient for finiteness of the derived geometry",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX EE — the ergonomics scenario switched projects without the config-writes opt-in",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a scenario that rewrites server config needs the same opt-in as the others",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX FF — four of git's C escapes were missing from the path decoder",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a path decoded to the wrong name is attributed to the wrong file's coverage",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX GG — a window blur mid-drag left the resize armed",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the drag arms on the handle and releases on the gesture ending, however it ends",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX HH — the Esc escape hatch survived edits the user did not type",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "Decision 1: Esc arms a one-shot release that any intervening edit disarms",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "FIX II — never-red assertions confirmed as Group 2 / new-surface",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence classified honestly",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX JJ — the panel's existence depended on the spec's content (regression from round-4 FIX U)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel is at least one issue row or collapsed — and which it is depends on the pane, never on what the spec contains",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX KK — the other half of FIX Z, and contradictory comments left by FIX U",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a test passing for the wrong reason, and a comment describing a rejected design, both guard nothing",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX LL — eight corrections to the round-4 red/green record",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence has to be classified honestly and cited durably",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round6": {
+    "round": "integration-hardening round 6 (.orchestrator/integration/FIXES-round6.md + FIXES-round6-addendum.md)",
+    "note": "Six findings from a sixth review plus two from an independent proof. FIX RR and FIX SS repair defects this work introduced in rounds 4 and 5. FIX PP overturns the second of round 1's two rejections; both are now overturned.",
+    "links": [
+      {
+        "fix": "FIX MM — the manual fit routes had no empty-scene guard",
+        "requirement": "diagram-canvas/Zoom-to-fit affordance, diagram-canvas/Element normalization invariant",
+        "design": "Decision 5: one fit implementation every route calls — the guard belongs in it, not only in the automatic caller; Decision 6: the fit never sets a non-finite scroll or zoom",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX NN — a throwing fit left its identity unhandled and re-fitted on the next edit",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 5: one fit per loaded spec — attempted is the latch's meaning, not succeeded",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "FIX OO — an unknown e2e scenario selector exited green",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a suite that runs nothing must not report success",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX PP — the new overlay added a \"use client\" directive the project context forbids",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: syntax colour via an overlay — which lives under the Pages Router, where the directive is inert and _bmad-output/project-context.md says not to add more",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX QQ — invalid-YAML fallback and touch resize were not covered in a real browser",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — every user-visible behaviour covered in real Chromium, or the gap recorded",
+        "tasks": [
+          "Task 3: Syntax colour overlay",
+          "Task 4: Resizable diagnostics panel",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX RR — the strip still grew a panel dragged below its threshold (regression from round-4 FIX U)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: the panel's height is the user's, and nothing the spec contains may change it",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX SS — round-5 FIX HH shipped with a test that was green on the pre-fix code",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a test that never went red is not evidence",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX TT — six corrections to the round-5 record, including a third commit attribution error",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — evidence classified honestly and the gated commit copied, not inferred",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round7": {
+    "round": "integration-hardening round 7 (.orchestrator/integration/FIXES-round7.md + FIXES-round7-addendum.md)",
+    "note": "Seven findings from a seventh review plus four from an independent proof. FIX ZZ repairs a corner round-6 FIX RR introduced. Intended as the last behaviour change before the PR.",
+    "links": [
+      {
+        "fix": "FIX UU — two freshness checks recorded a failure and let the run overwrite a project",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — identity is not disposability",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX VV — block-scalar openers, a # inside a key, and quoted list scalars",
+        "requirement": "spec-editor/Enter key behaviour",
+        "design": "Decision 2: Enter auto-indent reuses the extracted detector — which has to read YAML as YAML defines it",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX WW — the empty-scene test's Shift+1 never reached its handler",
+        "requirement": "diagram-canvas/Zoom-to-fit keyboard shortcut, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a dispatch the handler ignores tests nothing",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit",
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX XX — the overlay alignment beat never wrapped a line",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: the overlay must wrap exactly as the textarea does, or every highlight below a wrap is displaced",
+        "tasks": [
+          "Task 3: Syntax colour overlay"
+        ]
+      },
+      {
+        "fix": "FIX ZZ — hiding the strip removed the only Auto-Fix-All (regression from round-6 FIX RR)",
+        "requirement": "diagnostics-panel/Resizable panel height",
+        "design": "Decision 4: shrinking the panel may cost chrome, never the action itself",
+        "tasks": [
+          "Task 4: Resizable diagnostics panel"
+        ]
+      },
+      {
+        "fix": "FIX AAA — the touch beat lost its at-the-floor precondition",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — an assertion satisfied by headroom rather than by the behaviour",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX BBB — KNOWN_SCENARIOS duplicated the call sites with nothing binding them",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the paired-registry shape FIX F fixed once already",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX YY — five corrections to the round-6 record, including a fourth commit attribution error",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the gated commit is copied from status, never inferred",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "hardening_round8": {
+    "round": "integration-hardening round 8, the final pass (.orchestrator/integration/FIXES-round8-final.md)",
+    "note": "Five findings: the four fixes linked below plus one record-only item (the brief's 'Record only' section, a listed follow-up, no code). None reachable in normal use, which is the exit condition: no further review round follows. FIX CCC repairs a regression round-7 FIX VV introduced.",
+    "links": [
+      {
+        "fix": "FIX CCC — a quoted mapping key stopped opening a block (regression from round-7 FIX VV)",
+        "requirement": "spec-editor/Enter key behaviour",
+        "design": "Decision 2: Enter auto-indent reuses the extracted detector — which has to read YAML as YAML defines it, quoted keys included",
+        "tasks": [
+          "Task 2: Enter auto-indent (detector extraction first)"
+        ]
+      },
+      {
+        "fix": "FIX DDD — the coverage gate skipped continuation lines of an uncovered statement",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the documented limit is now the narrow one that actually remains",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX EEE — derived e2e ports could land on 3000 or 3110",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — a harness that can reach the maintainer's dev server is not isolated",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "FIX FFF — a scenario listed with no call site ran nothing and reported success",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements — the paired registry bound in both directions",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  },
+  "pr_stage": {
+    "round": "PR stage: bot reviews on PR #14, the merge of origin/main (PR #15), and a fresh-context pre-merge adversary pass (verification.md, 'PR stage')",
+    "note": "One code fix (FIX GGG, user-facing, red-first), one merge reconciliation, one harness dead-guard removal, one e2e check given teeth, one adversary MEDIUM refuted by measurement, one cosmetic follow-up.",
+    "links": [
+      {
+        "fix": "FIX GGG — a bare modifier keydown spent the Esc escape latch, so Esc then Shift+Tab outdented instead of escaping backwards",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "No design decision: a behaviour fix inside the Tab key requirement (the escape hatch's own rule, WCAG 2.1.2)",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "Merge of origin/main (PR #15): per-axis coordinate fallback combined with the finite-and-bounded check; the identity latch keeps its empty-scene behaviour over main's sceneElements copies",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 7: footer fit control (unchanged); the per-axis rule is main's, adopted as merged",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "The overlay wrap beat asserts scrollbar-gutter parity (textarea clientWidth == overlay clientWidth) instead of an always-true disjunct",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: Syntax colour via a highlight overlay, not an editor swap",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "run-e2e.sh: the second port-3000 guard was shadowed by the derived-range loop and is removed",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
+  }
+}

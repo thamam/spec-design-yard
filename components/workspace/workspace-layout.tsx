@@ -8,7 +8,7 @@ import { db, type SyncState } from "../../lib/db"
 import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
-import { parseSpec, type DroppedConnection } from "../../lib/spec-model"
+import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
 
 const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
@@ -122,6 +122,40 @@ export function WorkspaceLayout() {
     resetHistory,
   } = useUndoRedo(INITIAL_SPEC)
 
+  // The canvas hands its zoomToFit() up here by prop (not through
+  // window.excalidrawAPI) so the global shortcut and the canvas controls all
+  // call one implementation. It is null whenever no canvas is mounted.
+  const zoomToFitRef = useRef<(() => void) | null>(null)
+  const registerZoomToFit = useCallback((fit: (() => void) | null) => {
+    zoomToFitRef.current = fit
+  }, [])
+
+  // Zoom to fit — Shift+1 — on its own listener, in the CAPTURE phase.
+  // Excalidraw binds Shift+1 to its own zoomToFit action and handles it after
+  // the target, so a bubble-phase listener loses the race whenever focus is
+  // inside the canvas: Excalidraw fits with its own options instead of the
+  // shared implementation, exactly when the shortcut matters most. Claiming
+  // the key on the way down, then stopping it, keeps all three routes on one
+  // fit and stops Excalidraw's action double-applying.
+  //
+  // Split out of the undo/redo handler below rather than folded into it: that
+  // one deliberately runs in the bubble phase and passes Shift+1 through to
+  // the spec textarea, where "!" is a legal YAML character.
+  useEffect(() => {
+    const handleZoomShortcut = (e: KeyboardEvent) => {
+      if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || e.code !== "Digit1") return
+      const target = e.target as HTMLElement
+      // Typing "!" into any field — the spec textarea included — must never
+      // yank the canvas, so the shortcut yields rather than preventing.
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return
+      e.preventDefault()
+      e.stopPropagation()
+      zoomToFitRef.current?.()
+    }
+    window.addEventListener("keydown", handleZoomShortcut, true)
+    return () => window.removeEventListener("keydown", handleZoomShortcut, true)
+  }, [])
+
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -168,6 +202,12 @@ export function WorkspaceLayout() {
 
   const lastLoadedSpecRef = useRef<string | null>(null)
 
+  // Bumped once per spec/project LOAD, never per edit. The canvas uses it to
+  // decide when a fresh zoom-to-fit is owed: hydration replaces the spec after
+  // the canvas has already mounted and fitted the pre-hydration template, so
+  // without this the user is left looking at the wrong framing.
+  const [loadedSpecId, setLoadedSpecId] = useState(0)
+
   // Hydrate the saved spec on mount. When the app runs against a project dir
   // (SPEC_YARD_PROJECT_DIR), the repo file is canonical: pull server state
   // into the store first so a stale localStorage cache never wins, and only
@@ -185,7 +225,13 @@ export function WorkspaceLayout() {
       // noise, not as a welcome. Only a deliberate browser-storage opt-out
       // keeps the demo, as something to play with.
       const unconfigured = db.getSyncState().status === "unconfigured"
-      const loaded =
+      // The one seam foreign spec text crosses into app state: a project file
+      // or a localStorage cache may carry CRLF, the templates never do.
+      // Normalise here and the whole app downstream — textarea offsets, the
+      // indent handlers, reconcileSpec, undo/redo — works in one coordinate
+      // space. Before `lastLoadedSpecRef`, not after: comparing normalised
+      // state against a raw ref would fire an autosave on every load.
+      const loaded = normalizeLineEndings(
         savedDoc && savedDoc.yamlContent
           ? savedDoc.yamlContent
           : fileMode
@@ -193,8 +239,10 @@ export function WorkspaceLayout() {
           : unconfigured
           ? UNCONFIGURED_SPEC
           : INITIAL_SPEC
+      )
       lastLoadedSpecRef.current = loaded
       resetHistory(loaded)
+      setLoadedSpecId((n) => n + 1)
       setIsHydrated(true)
     }
     hydrate()
@@ -381,6 +429,8 @@ export function WorkspaceLayout() {
           className="flex flex-col min-w-0 overflow-hidden"
         >
           <CanvasPanel
+            onZoomToFitReady={registerZoomToFit}
+            specIdentity={`spec-${loadedSpecId}`}
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
             setSelectedUnit={setSelectedUnit}

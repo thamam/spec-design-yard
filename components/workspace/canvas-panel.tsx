@@ -8,13 +8,13 @@ import {
   MaximizeIcon,
   MinimizeIcon,
   MousePointerIcon,
-  RefreshCwIcon,
+  ScanSearch,
   SparklesIcon,
   Copy,
   Trash2,
   ShieldAlert,
 } from "lucide-react"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
 import { Diagnostic } from "../../lib/linter"
 import { isFixable } from "../../lib/quick-fixes"
@@ -77,6 +77,8 @@ export function CanvasPanel({
   setActiveTab,
   diagnostics = [],
   activeTab,
+  onZoomToFitReady,
+  specIdentity,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -87,11 +89,23 @@ export function CanvasPanel({
   setActiveTab?: (tab: "code" | "tree" | "focus" | "metrics") => void
   diagnostics?: Diagnostic[]
   activeTab?: string
+  /** Forwarded up so the global Shift+1 handler can reach the same fit. */
+  onZoomToFitReady?: (fit: (() => void) | null) => void
+  /** Identity of the loaded spec/project — the automatic fit's latch key. */
+  specIdentity?: string
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
   const [hiddenTypes, setHiddenTypes] = useState<string[]>([])
   const [showSecurityOverlay, setShowSecurityOverlay] = useState(false)
+
+  // The canvas hands its zoomToFit() up by prop; window.excalidrawAPI keeps
+  // its existing consumers but gains no new ones.
+  const zoomToFitRef = useRef<(() => void) | null>(null)
+  const handleZoomToFitReady = useCallback((fit: (() => void) | null) => {
+    zoomToFitRef.current = fit
+    onZoomToFitReady?.(fit)
+  }, [onZoomToFitReady])
 
   // Auto-enable security overlay when on Security Tab
   useEffect(() => {
@@ -165,19 +179,10 @@ export function CanvasPanel({
         <div className="flex items-center gap-1">
           <CanvasToolButton icon={<EyeIcon size={12} />} label="Preview" onClick={() => {}} />
           <CanvasToolButton
-            icon={<RefreshCwIcon size={12} />}
-            label="Reset view"
-            onClick={() => {
-              if (typeof window !== "undefined" && (window as any).excalidrawAPI) {
-                try {
-                  const api = (window as any).excalidrawAPI
-                  const els = api.getSceneElements()
-                  api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85 })
-                } catch (err) {
-                  console.error("Failed to reset view:", err)
-                }
-              }
-            }}
+            icon={<ScanSearch size={12} />}
+            label="Zoom to fit"
+            testId="canvas-zoom-to-fit"
+            onClick={() => zoomToFitRef.current?.()}
           />
           <CanvasToolButton
             icon={<SparklesIcon size={12} />}
@@ -236,6 +241,8 @@ export function CanvasPanel({
             pathTarget={pathTarget}
             hiddenTypes={hiddenTypes}
             showSecurityOverlay={showSecurityOverlay}
+            specIdentity={specIdentity}
+            onZoomToFitReady={handleZoomToFitReady}
           />
         )}
         {view === "grid" && (
@@ -861,17 +868,20 @@ function CanvasToolButton({
   label,
   onClick,
   active,
+  testId,
 }: {
   icon: React.ReactNode
   label: string
   onClick: () => void
   active?: boolean
+  testId?: string
 }) {
   return (
     <button
       onClick={onClick}
       title={label}
       aria-label={label}
+      data-testid={testId}
       className="flex items-center justify-center w-7 h-7 rounded transition-colors"
       style={{
         color: active ? "var(--accent)" : "var(--foreground-muted)",

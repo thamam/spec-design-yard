@@ -7,7 +7,7 @@ Single-page Next.js app: a visual IDE for editing a YAML "system spec" (componen
 - `npm run dev` — dev server
 - `npm run install-cli` — one-time setup: symlinks `bin/spec-yard` into `~/.local/bin`; afterwards `spec-yard [client-repo]` launches file-backed mode from anywhere
 - `npm test` — vitest run (jsdom, `globals: true`, setup in `tests/setup.ts`)
-- `npm run test:e2e` — real-browser scenarios (`scripts/run-e2e.sh`; add a scenario name to run just one: `file-mode`, `first-run`, `standalone`). Needs `playwright` + `playwright install chromium`. Each scenario gets its own dev server on 3109-3111, its own project folders, and its own `SPEC_YARD_CONFIG_DIR` under a temp root — never point it at your own registry or at port 3000. Failing scenarios leave their screenshots in `.e2e-failures/`.
+- `npm run test:e2e` — real-browser scenarios (`scripts/run-e2e.sh`; add a scenario name to run just one: `file-mode`, `first-run`, `standalone`, `editor-ergonomics`). Needs `playwright` + `playwright install chromium`. Each scenario gets its own dev server on 3109-3112, its own project folders, and its own `SPEC_YARD_CONFIG_DIR` under a temp root — never point it at your own registry or at port 3000. Failing scenarios leave their screenshots in `.e2e-failures/`.
 - `npm run build` — production build; must stay clean
 - `npm run lint` — **do not rely on it**: no ESLint config exists, it prompts interactively
 
@@ -48,7 +48,7 @@ A local codegraph index is initialized in `.codegraph/` (config: `codegraph.json
 - No `next.config.*`, no ESLint/Prettier configs — match existing style manually
 - `components/Workspace.tsx` (PascalCase) is a legacy re-export stub — new components go in `components/workspace/`, kebab-case
 - `_bmad-output/project-context.md` is the detailed agent rulebook (43 rules: dep pins, Excalidraw sync guards, undo semantics, NaN/ghost-component traps) — read it before non-trivial canvas/reconciler work
-- CI (`.github/workflows/screenshot-validation.yml`) does pixel validation only; it does **not** run tests — run `npm test` yourself, and `npm run test:e2e` after anything touching persistence, hydration, or the project picker (mocked fetches have missed real first-run regressions)
+- CI runs two workflows on every PR. `.github/workflows/tests.yml` runs vitest with coverage, the diff-scoped coverage gate (`npm run test:coverage-gate`, which requires 100% coverage of the lines a branch adds or modifies), `npm run build`, and the full e2e suite. `.github/workflows/screenshot-validation.yml` does pixel validation only. Still run `npm test` yourself before pushing, and `npm run test:e2e` after anything touching persistence, hydration, or the project picker (mocked fetches have missed real first-run regressions)
 
 ## Repo overlays (not app code)
 

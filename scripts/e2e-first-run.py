@@ -12,10 +12,16 @@ run overwrites your real ~/.specyard registry):
     SPEC_YARD_CONFIG_DIR=/tmp/specyard-firstrun-config npx next dev -p 3110
 
 Screenshots land in /tmp/specyard-firstrun-shots/.
+
+Safety: this scenario mutates server-side configuration, so it refuses to run
+(exit 2) unless SPEC_YARD_E2E_CONFIG_WRITES_OK=1 is set. `npm run test:e2e`
+sets it, having started the server on a throwaway SPEC_YARD_CONFIG_DIR;
+nothing else should.
 """
 import os
 import sys
 import time
+from e2e_guard import require_config_writes_allowed, require_fresh_dir, require_mode
 from playwright.sync_api import sync_playwright
 
 BASE = os.environ.get("SPEC_YARD_URL", "http://localhost:3110")
@@ -60,6 +66,19 @@ def spec_text(page):
     page.wait_for_selector('[data-testid="spec-textarea"]', timeout=20000)
     return page.locator('[data-testid="spec-textarea"]').input_value()
 
+
+# Two guards. Mode alone is not enough: this scenario writes config.json,
+# recentProjects and autosaves into folders it creates, and a real install that
+# has simply never been configured also answers "unconfigured". The harness
+# opt-in is the only honest signal that the config dir is throwaway.
+require_config_writes_allowed(scenario="first-run")
+require_mode(BASE, "unconfigured", scenario="first-run")
+# The scenario CREATES these two through the picker and then autosaves into
+# them. The "does not exist before the GUI creates it" checks below are
+# contract checks and record a failure without stopping, so the fill would
+# still land on whatever is already there.
+require_fresh_dir(PROJECT_A, scenario="first-run/project-A")
+require_fresh_dir(PROJECT_B, scenario="first-run/project-B")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
