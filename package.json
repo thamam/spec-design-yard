@@ -1,11 +1,12 @@
 {
   "name": "spec-design-yard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 127.0.0.1",
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -16,7 +17,7 @@
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
     "lucide-react": "^0.395.0",
-    "next": "14.2.3",
+    "next": "15.5.25",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "yaml": "^2.4.5"

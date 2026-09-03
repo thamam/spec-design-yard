@@ -16,7 +16,7 @@ You can drag the divider between the two panels to adjust your workspace split t
 
 ## 2. Left Panel: The Tabbed Editor
 
-The Editor provides four specialized interfaces for managing and examining your design:
+The Editor provides five specialized interfaces for managing and examining your design:
 
 ### A. Code Tab
 * **YAML editor:** Full-height plain-text editor for the raw spec.
@@ -36,7 +36,10 @@ When you click a component on the visual canvas or select it in the editor, the 
 * **Duplication Tool:** Create a perfect clone of the selected component with one click. The duplicator automatically assigns a new unique ID and selects the clone.
 * **Quick-Fixes:** Apply automated recommendations (e.g. resolve case mismatches, supply default descriptions, clean up redundant targets, or apply auto-layout fixes).
 
-### D. Metrics Tab (The System Simulator)
+### D. Security Tab (STRIDE)
+The Security tab filters linter diagnostics for STRIDE threat categories (`stride-spoofing`, `stride-tampering`, and the rest), shows a compliance score, and offers per-category quick-fixes plus an exportable security report. Switching to this tab also turns on the canvas security-threat overlay.
+
+### E. Metrics Tab (The System Simulator)
 Spec-Yard contains a built-in architectural simulator to model data packets streaming through your pipeline:
 * **Packet Configuration:** Adjust simulation variables like base packet speed (ms delay per hop) and packet loss percentage.
 * **Presets Selector:** Apply dynamic simulation profiles (e.g. "Optimal Processing," "High Data Loss," "System Congestion," or your own custom simulation presets).

@@ -62,7 +62,7 @@ ln -s "$REPO/node_modules" "$APP/node_modules"
 start_server() {
   # $1 = port, rest = KEY=VALUE env assignments
   local port="$1"; shift
-  ( cd "$APP" && env "$@" npx next dev -p "$port" >"$TMP/server-$port.log" 2>&1 ) &
+  ( cd "$APP" && env "$@" npx next dev -H 127.0.0.1 -p "$port" >"$TMP/server-$port.log" 2>&1 ) &
   SERVER_PID=$!
   for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null "http://localhost:$port/api/project" 2>/dev/null; then

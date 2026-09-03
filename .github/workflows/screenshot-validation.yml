@@ -37,7 +37,7 @@ jobs:
         # the default is ~/.specyard.
         env:
           SPEC_YARD_CONFIG_DIR: ${{ runner.temp }}/specyard-config
-        run: npx next start -p 3001 &
+        run: npx next start -H 127.0.0.1 -p 3001 &
 
       - name: Install Playwright browsers and dependencies
         run: npx playwright install chromium --with-deps
