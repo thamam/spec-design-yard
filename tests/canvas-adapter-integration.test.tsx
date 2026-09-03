@@ -118,6 +118,12 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     })
     // Not yet — the adapter stages the move behind a 450ms idle debounce.
     expect(onCanvasChange).not.toHaveBeenCalled()
+    // A drag ends with a release, and the writeback waits for it: while the
+    // pointer is still down the gesture is live, and landing coordinates
+    // under it would resnap the scene mid-drag.
+    act(() => {
+      captured.props.onChange(dragged, { cursorButton: 'up' })
+    })
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(450)
@@ -329,6 +335,9 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     act(() => {
       captured.props.onChange(drag1, { cursorButton: 'down' })
     })
+    act(() => {
+      captured.props.onChange(drag1, { cursorButton: 'up' })
+    })
     // Still inside the debounce window — the first drag has not flushed yet.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200)
@@ -338,6 +347,10 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     // A second drag arrives before the first one's timer fires; it must reset the debounce.
     act(() => {
       captured.props.onChange(drag2, { cursorButton: 'down' })
+    })
+    // Released: the debounce runs from here, not from under a live gesture.
+    act(() => {
+      captured.props.onChange(drag2, { cursorButton: 'up' })
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(450)

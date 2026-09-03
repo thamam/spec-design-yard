@@ -7,6 +7,7 @@ import { lintSpec } from "../../lib/linter"
 import {
   createCanvasDiffState,
   diffScene,
+  positionKey,
   pruneTracking,
   registerCompiledElements,
   resolvePendingRename,
@@ -687,7 +688,9 @@ export function ExcalidrawCanvas({
   // compile the move was measured against travels with it: if a newer one lands
   // while the payload is still waiting, these coordinates are stale and must be
   // dropped rather than delivered.
-  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any } | null>(null)
+  // `key` names the move (which rects, to where) so the same one is never
+  // staged twice — see the staging branch in onChange for why that matters.
+  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any; key: string } | null>(null)
 
   // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
   // this ref is just its storage cell.
@@ -715,6 +718,13 @@ export function ExcalidrawCanvas({
   // release can arrive before the final coordinates are committed, which would
   // drop real drags.
   const gestureCompileRef = useRef<any>(null)
+  // Whether Excalidraw's latest report had a pointer gesture in progress, and
+  // when the last one ended. The writeback timer reads both: it waits a live
+  // gesture out rather than land under it, and it lands no sooner than 450ms
+  // after the last gesture ended -- stamped at the transition, so a gesture
+  // that starts and ends between two ticks of the timer still counts.
+  const gestureLiveRef = useRef(false)
+  const gestureEndedAtRef = useRef(0)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
   }, [elements])
@@ -767,10 +777,34 @@ export function ExcalidrawCanvas({
       setPendingMove(null)
       return
     }
-    const timer = setTimeout(() => {
+    // Delivered 450ms after the canvas goes quiet -- and never while a pointer
+    // gesture is live. The stage-once rule in onChange leaves this timer
+    // running through a pointer-down that lands inside the debounce, so
+    // without the hold it could fire mid-drag: the writeback recompiles the
+    // spec, the scene is resnapped under the user's cursor, and the drag in
+    // progress is retired as stale. Wait the gesture out instead; its release
+    // either restages a real move (which restarts the debounce) or leaves
+    // this one to land -- no sooner than a full quiet period after the moment
+    // the gesture ended, never on a tick of the original phase. The end is
+    // the handler's timestamp, not what a tick happens to observe, so a
+    // gesture that starts and ends between two ticks delays the landing just
+    // the same: a release arriving ahead of the coordinates it is about to
+    // report must not have the older move land under them.
+    let timer: ReturnType<typeof setTimeout>
+    const deliver = () => {
+      if (gestureLiveRef.current) {
+        timer = setTimeout(deliver, 450)
+        return
+      }
+      const sinceGestureEnd = Date.now() - gestureEndedAtRef.current
+      if (sinceGestureEnd < 450) {
+        timer = setTimeout(deliver, 450 - sinceGestureEnd)
+        return
+      }
       onCanvasChange(pendingMove.rects)
       setPendingMove(null)
-    }, 450) // 450ms idle delay to confirm drag stop
+    }
+    timer = setTimeout(deliver, 450) // 450ms idle delay to confirm drag stop
     return () => clearTimeout(timer)
   }, [pendingMove, onCanvasChange, elements])
 
@@ -945,12 +979,16 @@ export function ExcalidrawCanvas({
           // moves are all decided by the pure scene differ.
           if (!onCanvasChange) return
 
-          if (
+          // A pointer gesture Excalidraw still reports as live: button down,
+          // dragging, drawing or resizing.
+          const gestureLive =
             appState?.cursorButton === "down" ||
-            appState?.selectedElementsAreBeingDragged ||
-            appState?.newElement ||
-            appState?.resizingElement
-          ) {
+            !!appState?.selectedElementsAreBeingDragged ||
+            !!appState?.newElement ||
+            !!appState?.resizingElement
+          if (gestureLiveRef.current && !gestureLive) gestureEndedAtRef.current = Date.now()
+          gestureLiveRef.current = gestureLive
+          if (gestureLive) {
             gestureSeenRef.current = true
             gestureCompileRef.current = elements
           }
@@ -968,7 +1006,27 @@ export function ExcalidrawCanvas({
           if (movedRects) {
             gestureSeenRef.current = false
             gestureCompileRef.current = null
-            setPendingMove({ rects: movedRects, compile: elements })
+            // Excalidraw reports from componentDidUpdate, so the re-render this
+            // setState causes comes straight back through here with the same
+            // scene -- and while the pointer is down the gate above re-arms on
+            // every report. Staging a fresh object each time closed the loop
+            // (setState -> re-render -> onChange -> setState) until React
+            // aborted it with "Maximum update depth exceeded": a click inside
+            // the 450ms debounce after a drag was enough. Stage a move only
+            // when it is not the one already staged; React bails out of an
+            // update that returns the same state object, and the echo ends
+            // there. The key is which rects went where, in id order, so the
+            // same set reported in another order is still the same move.
+            const key = JSON.stringify(
+              movedRects
+                .map((r: any) => [String(r.id), positionKey(r)])
+                .sort((a: string[], b: string[]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+            )
+            setPendingMove((prev) =>
+              prev && prev.compile === elements && prev.key === key
+                ? prev
+                : { rects: movedRects, compile: elements, key }
+            )
           }
         }}
       >
