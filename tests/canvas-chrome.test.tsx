@@ -30,6 +30,7 @@ describe('Canvas chrome honesty', () => {
   test('security overlay turns off when leaving Security unless the user pinned it', () => {
     const { rerender } = render(<CanvasPanel parsedSpec={emptySpec} activeTab="code" />)
     const overlay = screen.getByRole('button', { name: 'Security Threats Overlay' })
+    expect(overlay).toHaveAttribute('title', expect.stringMatching(/STRIDE diagram heuristics/i))
     expect(overlay.getAttribute('aria-pressed')).toBe('false')
 
     rerender(<CanvasPanel parsedSpec={emptySpec} activeTab="security" />)

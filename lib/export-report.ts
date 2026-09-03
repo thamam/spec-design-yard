@@ -121,10 +121,16 @@ export function generateArchitectureAuditReport(
   const hasInfoDisclosureThreat = diagnostics.some(d => d.code === 'stride-information-disclosure')
   const hasElevationThreat = diagnostics.some(d => d.code === 'stride-elevation-of-privilege')
   const hasDoSThreat = diagnostics.some(d => d.code === 'stride-denial-of-service')
+  const strideStatus = (vulnerable: boolean) => {
+    if (totalComponents === 0) return "⬜ NOT ANALYZED — add components to review"
+    return vulnerable ? "⚠️ VULNERABLE" : "✅ MITIGATED"
+  }
 
   return `# System Architecture Audit & Blueprint Report
 
 Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
+
+> This report is a static STRIDE review of the drawn architecture. It is not CVE, dependency, or runtime vulnerability scanning. It may include diagnostics that quote secret material from the spec.`
 
 ## 1. System Overview
 - **System Name:** ${systemName}
@@ -156,32 +162,32 @@ The system analysis evaluates six STRIDE threat boundaries across the design blu
 
 ### Spoofing (S):
 - Gateway elements must carry validation/auth labels.
-- Status: ${hasSpoofingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasSpoofingThreat)}
 - Recommendation: Ensure all outgoing connections from Gateways have security/auth labels to establish trusted identity.
 
 ### Tampering (T):
 - Connection channels must specify secure communication.
-- Status: ${hasTamperingThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasTamperingThreat)}
 - Recommendation: Apply TLS, HTTPS, or gRPC communication labels explicitly.
 
 ### Repudiation (R):
 - Key data Stores must attach to an audited event ledger or logging neighbor.
-- Status: ${hasRepudiationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasRepudiationThreat)}
 - Recommendation: Connect store nodes to auditing log / ledger bricks (e.g., audit_logger).
 
 ### Information Disclosure (I):
 - Direct Gateway-to-Store flows bypassing stages.
-- Status: ${hasInfoDisclosureThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasInfoDisclosureThreat)}
 - Recommendation: Insert a validation or auth verifier Stage component to protect raw data stores.
 
 ### Elevation of Privilege (E):
 - Administrative/privileged blocks must require verification.
-- Status: ${hasElevationThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasElevationThreat)}
 - Recommendation: Connect administrative or privileged nodes to verification modules.
 
 ### Denial of Service (DoS):
 - High-traffic bottleneck nodes (fan-in >= 3) must configure rate limits or throttling.
-- Status: ${hasDoSThreat ? "⚠️ VULNERABLE" : "✅ MITIGATED"}
+- Status: ${strideStatus(hasDoSThreat)}
 - Recommendation: Add "rate_limit: true" or "throttled: true" under metadata.`
 }
 

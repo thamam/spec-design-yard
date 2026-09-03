@@ -68,8 +68,9 @@ describe('STRIDE Security Dashboard Tab', () => {
     const fixSecretBtn = screen.getByTestId('fix-threat-btn-secrets')
     expect(fixSecretBtn).toBeInTheDocument()
 
-    // 9. Click the quick-fix and verify threat is mitigated
+    // 9. Click the quick-fix, confirm redaction, and verify threat is mitigated
     fireEvent.click(fixSecretBtn)
+    fireEvent.click(await screen.findByTestId('secret-redact-confirm-confirm'))
 
     await waitFor(() => {
       expect(screen.getByTestId('threat-status-secrets')).toHaveTextContent(/MITIGATED|SECURE/i)
@@ -100,6 +101,9 @@ describe('STRIDE Security Dashboard Tab', () => {
     expect(exportBtn).toBeInTheDocument()
 
     fireEvent.click(exportBtn)
+
+    expect(writeTextMock).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByTestId('export-report-confirm-confirm'))
 
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalled()

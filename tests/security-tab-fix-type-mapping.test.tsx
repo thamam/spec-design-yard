@@ -51,6 +51,7 @@ describe('Security tab batch fix routes codes through fixTypeForCode', () => {
     })
 
     fireEvent.click(screen.getByTestId('fix-threat-btn-secrets'))
+    fireEvent.click(await screen.findByTestId('secret-redact-confirm-confirm'))
 
     await waitFor(() => expect(reconcileSpy).toHaveBeenCalled())
     const call = reconcileSpy.mock.calls.find((c) => c[1]?.type === 'quick-fix-all')

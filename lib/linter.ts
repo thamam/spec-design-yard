@@ -1,15 +1,36 @@
 import { normalizeConnections, type DroppedConnection } from "./spec-model"
 import { ALLOWED_METADATA_KEYS } from "./autocomplete"
+import {
+  isChannelMitigationLabel,
+  isIdentityMitigationLabel,
+  looksLikeSecretValue,
+  shouldFlagSecretField,
+} from "./stride-heuristics"
 
 const PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\])$/i
-const SENSITIVE_METADATA_REGEX = /(?:^|[^a-zA-Z0-9])(secret|password|token|api_key|apikey|private_key|passwd)(?:$|[^a-zA-Z0-9])/i
-const SECRET_PLACEHOLDER_REGEX = /^(todo|tbd|placeholder|\[add description\]|\[add owner\]|none|disabled|null|false)$/i
 
 export interface Diagnostic {
   severity: "error" | "warning" | "info"
   message: string
   path?: string
   code?: string
+}
+
+function secretLeakDiagnostic(path: string, key: string): Diagnostic {
+  return {
+    severity: "warning",
+    message: `Potential hardcoded secret or token detected in metadata key "${key}". Storing raw credentials in system blueprints is an Information Disclosure vulnerability (STRIDE).`,
+    path,
+    code: "stride-secret-leak",
+  }
+}
+
+function pushSecretLeaks(diagnostics: Diagnostic[], obj: Record<string, unknown>, pathPrefix: string) {
+  Object.keys(obj).forEach((key) => {
+    if (shouldFlagSecretField(key, obj[key])) {
+      diagnostics.push(secretLeakDiagnostic(`${pathPrefix}.${key}`, key))
+    }
+  })
 }
 
 // Non-object connection entries ("- digest", "- 8080") are stripped at the
@@ -154,6 +175,8 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
             })
           }
         }
+
+        pushSecretLeaks(diagnostics, sysMeta as Record<string, unknown>, "system.metadata")
       }
     } else {
       diagnostics.push({
@@ -163,6 +186,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         code: "missing-system-metadata",
       })
     }
+  }
+
+  if (system && typeof system === "object" && !Array.isArray(system)) {
+    Object.keys(system).forEach((key) => {
+      if (key === "name" || key === "components" || key === "metadata") return
+      if (shouldFlagSecretField(key, (system as Record<string, unknown>)[key])) {
+        diagnostics.push(secretLeakDiagnostic(`system.${key}`, key))
+      }
+    })
   }
 
   const components = system.components
@@ -1006,16 +1038,14 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
 
       const type = String(comp.type || "").toLowerCase()
 
-      // 1. Spoofing Check (Gateways lacking owner or lacking secure/auth labels on outgoing connections)
+      // 1. Spoofing Check (Gateways lacking a specific identity mitigation on outbound connections)
       if (type === "gateway") {
         const conns = comp.connections || []
         let hasSecureConn = false
         if (Array.isArray(conns)) {
           conns.forEach((conn: any) => {
-            const label = String(typeof conn === 'string' ? "" : (conn?.label || "")).toLowerCase()
-            const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
-                                  !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
-            if (isSecureMatch) {
+            const label = String(typeof conn === 'string' ? "" : (conn?.label || ""))
+            if (isIdentityMitigationLabel(label)) {
               hasSecureConn = true
             }
           })
@@ -1023,22 +1053,22 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         if (!hasSecureConn) {
           diagnostics.push({
             severity: "warning",
-            message: `Gateway "${compId}" is vulnerable to Spoofing. Outbound connections must use security/auth labels to guarantee trusted incoming identity.`,
+            message: `Gateway "${compId}" is vulnerable to Spoofing. Outbound connections must use a specific identity mitigation (e.g. oauth, jwt, auth-token, mTLS) — a lone "auth" keyword is not enough.`,
             path: `system.components[${compIdx}]`,
             code: "stride-spoofing"
           })
         }
       }
 
-      // 2. Tampering Check (Unlabeled connections or raw flows)
+      // 2. Tampering Check (connections without an explicit secure-channel mitigation)
       const conns = comp.connections || []
       if (Array.isArray(conns)) {
         conns.forEach((conn: any, connIdx: number) => {
           const label = typeof conn === 'string' ? "" : (conn?.label || "")
-          if (!label || String(label).trim() === "") {
+          if (!isChannelMitigationLabel(String(label || ""))) {
             diagnostics.push({
               severity: "warning",
-              message: `Connection to "${typeof conn === 'string' ? conn : conn?.target}" is susceptible to Tampering. Consider adding a connection label specifying secure channels (TLS/gRPC/HTTPS).`,
+              message: `Connection to "${typeof conn === 'string' ? conn : conn?.target}" is susceptible to Tampering. Name a specific secure channel (TLS/gRPC/HTTPS/SSH) — a lone "auth" keyword is not enough.`,
               path: `system.components[${compIdx}].connections[${connIdx}]`,
               code: "stride-tampering"
             })
@@ -1167,28 +1197,15 @@ export function lintSpec(parsedSpec: any): Diagnostic[] {
         })
       }
 
-      // 7. Information Disclosure: Hardcoded Secret/Token Leakage Check in Component Metadata
+      // 7. Information Disclosure: hardcoded secrets in component metadata, notes, and value-shaped strings
       if (comp.metadata && typeof comp.metadata === "object" && !Array.isArray(comp.metadata)) {
-        Object.keys(comp.metadata).forEach((k) => {
-          if (SENSITIVE_METADATA_REGEX.test(k)) {
-            const val = comp.metadata[k]
-            if (val !== undefined && val !== null && typeof val !== "boolean" && typeof val !== "object") {
-              const valStr = String(val).trim()
-              if (
-                valStr !== "" &&
-                !valStr.startsWith("${") &&
-                !SECRET_PLACEHOLDER_REGEX.test(valStr)
-              ) {
-                diagnostics.push({
-                  severity: "warning",
-                  message: `Potential hardcoded secret or token detected in metadata key "${k}". Storing raw credentials in system blueprints is an Information Disclosure vulnerability (STRIDE).`,
-                  path: `system.components[${compIdx}].metadata.${k}`,
-                  code: "stride-secret-leak",
-                })
-              }
-            }
-          }
-        })
+        pushSecretLeaks(diagnostics, comp.metadata, `system.components[${compIdx}].metadata`)
+      }
+      if (typeof comp.notes === "string" && looksLikeSecretValue(comp.notes)) {
+        diagnostics.push(secretLeakDiagnostic(`system.components[${compIdx}].notes`, "notes"))
+      }
+      if (typeof comp.note === "string" && looksLikeSecretValue(comp.note)) {
+        diagnostics.push(secretLeakDiagnostic(`system.components[${compIdx}].note`, "note"))
       }
     })
   }

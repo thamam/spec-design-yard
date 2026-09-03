@@ -111,6 +111,6 @@ describe('Grid View Interactive Actions & Inline Quick-Fixes', () => {
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const parsed = yaml.parse(textarea.value)
     const inboxComp = parsed.system.components.find((c: any) => c.id === 'inbox')
-    expect(inboxComp.connections[0].label).toBe('secure encrypted TLS flow')
+    expect(inboxComp.connections[0].label).toBe('encrypted TLS auth-token flow')
   })
 })

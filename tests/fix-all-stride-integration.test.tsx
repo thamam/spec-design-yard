@@ -59,10 +59,11 @@ describe('Editor Auto-Fix All includes STRIDE fixes', () => {
 
     await waitFor(() => {
       const updated = (screen.getByTestId('spec-textarea') as HTMLTextAreaElement).value
-      // stride-spoofing relabels to "secure auth-token request"; stride-tampering
-      // to "secure encrypted TLS flow". Application order decides which wins on
-      // the shared connection — either proves the stride fix ran in the editor.
-      expect(updated).toMatch(/secure (auth-token request|encrypted TLS flow)/)
+      // stride-spoofing relabels to "authenticated TLS auth-token request";
+      // stride-tampering to "encrypted TLS auth-token flow". Application order
+      // decides which wins on the shared connection — either proves the stride
+      // fix ran in the editor.
+      expect(updated).toMatch(/authenticated TLS auth-token request|encrypted TLS auth-token flow/)
     })
   })
 })

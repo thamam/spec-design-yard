@@ -38,6 +38,7 @@ describe('Security tab category fix applies ALL fixes in the category', () => {
     })
 
     fireEvent.click(screen.getByTestId('fix-threat-btn-secrets'))
+    fireEvent.click(await screen.findByTestId('secret-redact-confirm-confirm'))
 
     await waitFor(() => {
       const updated = (screen.getByTestId('spec-textarea') as HTMLTextAreaElement).value

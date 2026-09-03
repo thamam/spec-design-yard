@@ -1,4 +1,11 @@
 import yaml from "yaml"
+import {
+  SENSITIVE_VALUE_PLACEHOLDER,
+  SPOOFING_FIX_LABEL,
+  TAMPERING_FIX_LABEL,
+  formatPreservedSecretComment,
+  isIdentityMitigationLabel,
+} from "./stride-heuristics"
 
 export type FixType =
   | "brick-to-brick"
@@ -515,7 +522,13 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         doc.setIn(parts, "architecture-team")
         modified = true
       } else if (fixType === "stride-secret-leak") {
-        doc.setIn(parts, "${SENSITIVE_VALUE_PLACEHOLDER}")
+        const current = doc.getIn(parts)
+        const original = current == null ? "" : String(current)
+        doc.setIn(parts, SENSITIVE_VALUE_PLACEHOLDER)
+        const node = doc.getIn(parts, true) as { comment?: string } | undefined
+        if (node && original && !String(original).trim().startsWith("${")) {
+          node.comment = formatPreservedSecretComment(original)
+        }
         modified = true
       } else if (fixType === "missing-component-id") {
         const compNode = doc.getIn(parts) as any
@@ -1076,15 +1089,13 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
           if (conns && conns.items) {
             conns.items.forEach((connNode: any, idx: number) => {
               if (connNode && typeof connNode.get === "function" && typeof connNode.set === "function") {
-                const label = String(connNode.get("label") || "").toLowerCase()
-                const isSecureMatch = /(?:^|[^a-zA-Z0-9])(auth|verify|secure|validate|token)(?:$|[^a-zA-Z0-9])/i.test(label) &&
-                                      !(/(?:^|[^a-zA-Z0-9])(unsecure|insecure|unauth|nonsecure)(?:$|[^a-zA-Z0-9])/i.test(label))
-                if (!isSecureMatch) {
-                  connNode.set("label", "secure auth-token request")
+                const label = String(connNode.get("label") || "")
+                if (!isIdentityMitigationLabel(label)) {
+                  connNode.set("label", SPOOFING_FIX_LABEL)
                   modified = true
                 }
               } else if (typeof connNode === "string") {
-                conns.set(idx, doc.createNode({ target: connNode, label: "secure auth-token request" }))
+                conns.set(idx, doc.createNode({ target: connNode, label: SPOOFING_FIX_LABEL }))
                 modified = true
               }
             })
@@ -1094,14 +1105,14 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
         const connNode = doc.getIn(parts) as any
         if (connNode) {
           if (typeof connNode.set === "function") {
-            connNode.set("label", "secure encrypted TLS flow")
+            connNode.set("label", TAMPERING_FIX_LABEL)
             modified = true
           } else {
             const arrayPath = parts.slice(0, -1)
             const connIdx = parts[parts.length - 1] as number
             const connsArray = doc.getIn(arrayPath) as any
             if (connsArray && typeof connsArray.set === "function") {
-              connsArray.set(connIdx, doc.createNode({ target: String(connNode), label: "secure encrypted TLS flow" }))
+              connsArray.set(connIdx, doc.createNode({ target: String(connNode), label: TAMPERING_FIX_LABEL }))
               modified = true
             }
           }

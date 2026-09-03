@@ -23,6 +23,8 @@ describe("generateArchitectureAuditReport", () => {
     const md = generateArchitectureAuditReport(parsedSpec, [], DATE)
     expect(md).toContain("# System Architecture Audit & Blueprint Report")
     expect(md).toContain(`Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${DATE}.`)
+    expect(md).toContain("This report is a static STRIDE review of the drawn architecture.")
+    expect(md).toContain("It may include diagnostics that quote secret material from the spec.")
     expect(md).toContain("## 1. System Overview")
     expect(md).toContain("## 2. Component Inventory")
     expect(md).toContain("## 3. Real-Time Linting Diagnostics")
@@ -106,6 +108,8 @@ describe("generateArchitectureAuditReport", () => {
     expect(md).toContain("- **System Name:** Unnamed System")
     expect(md).toContain("- **Coupling Rating:** Empty")
     expect(md).toContain("- **Total Components:** 0")
+    expect(md).toContain("⬜ NOT ANALYZED — add components to review")
+    expect(md).not.toContain("✅ MITIGATED")
   })
 })
 
