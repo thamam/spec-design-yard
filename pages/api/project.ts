@@ -8,7 +8,7 @@ import {
   setActiveProject,
   setStandaloneMode,
 } from "../../lib/server-project-config"
-import { isLoopbackHost } from "../../lib/server-request-guards"
+import { isJsonContentType, isLoopbackHost } from "../../lib/server-request-guards"
 
 // Project selection for the workspace — the primary way users pick where
 // their specs live (project-first; see lib/server-project-config.ts).
@@ -72,8 +72,7 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ error: "Method not allowed" })
   }
 
-  const contentType = String(req.headers["content-type"] || "")
-  if (!contentType.toLowerCase().includes("application/json")) {
+  if (!isJsonContentType(req.headers["content-type"])) {
     return res.status(415).json({ error: "PUT requires Content-Type: application/json" })
   }
 
@@ -97,7 +96,11 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
   }
 
   if (body.create === true && !fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+    } catch {
+      return res.status(400).json({ error: "Could not create directory", code: "create-failed" })
+    }
   }
 
   let stat: fs.Stats

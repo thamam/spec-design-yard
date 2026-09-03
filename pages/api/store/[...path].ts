@@ -4,7 +4,7 @@ import fs from "fs"
 import path from "path"
 import { writeFileAtomic } from "../../../lib/server-atomic-write"
 import { getProjectEpoch, getProjectStatus } from "../../../lib/server-project-config"
-import { isLoopbackHost } from "../../../lib/server-request-guards"
+import { isJsonContentType, isLoopbackHost, MAX_SPEC_YAML_BYTES } from "../../../lib/server-request-guards"
 
 // File-backed persistence for the workspace store, active only when the app is
 // launched with SPEC_YARD_PROJECT_DIR pointing at a client repo. Keys are
@@ -154,6 +154,9 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET" && req.method !== "PUT") {
     return res.status(405).json({ error: "Method not allowed" })
   }
+  if (req.method === "PUT" && !isJsonContentType(req.headers["content-type"])) {
+    return res.status(415).json({ error: "PUT requires Content-Type: application/json" })
+  }
   // Derived from the realpath we just resolved, so the whole request costs a
   // single project resolution.
   const epoch = getProjectEpoch(realRoot)
@@ -225,6 +228,9 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
     const body = req.body
     if (!body || typeof body.yamlContent !== "string") {
       return res.status(400).json({ error: "PUT spec requires { title, yamlContent }" })
+    }
+    if (Buffer.byteLength(body.yamlContent, "utf8") > MAX_SPEC_YAML_BYTES) {
+      return res.status(413).json({ error: "Spec exceeds the 1 MB size limit" })
     }
     // Optimistic concurrency. The client echoes the rev its edit was based on;
     // the index also records the file mtime from our last write, so a second

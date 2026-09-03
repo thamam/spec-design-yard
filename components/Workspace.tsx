@@ -1,2 +1,1 @@
-import { WorkspaceLayout } from './workspace/workspace-layout'
-export default WorkspaceLayout
+export { WorkspaceApp as default } from './workspace/workspace-app'

@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { EditorPanel } from '../components/workspace/editor-panel'
 
@@ -15,6 +15,16 @@ describe('EditorPanel hydration guard', () => {
     render(<EditorPanel specText={'system: {}\n'} isHydrated={false} />)
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     expect(textarea.disabled).toBe(true)
+    expect(textarea).toHaveAttribute('aria-busy', 'true')
+    expect(textarea).toHaveAttribute('aria-label', 'Loading spec')
+  })
+
+  test('Search focuses the spec textarea', () => {
+    render(<EditorPanel specText={'system: {}\n'} isHydrated />)
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    textarea.blur()
+    fireEvent.click(screen.getByRole('button', { name: 'Find in file (Ctrl or Cmd+F)' }))
+    expect(textarea).toHaveFocus()
   })
 
   test('textarea is enabled once hydrated (and by default)', () => {

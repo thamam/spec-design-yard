@@ -85,15 +85,30 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
     }
   }, [])
 
-  // Close on outside click.
+  // Close on outside click or Escape. First-run still allows dismiss — the
+  // badge reopens the prompt, and trapping the user in the panel hid the spec.
   useEffect(() => {
     if (!open) return
     const onPointerDown = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
     window.addEventListener("mousedown", onPointerDown)
-    return () => window.removeEventListener("mousedown", onPointerDown)
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
   }, [open])
+
+  useEffect(() => {
+    if (!open || info?.mode !== "unconfigured") return
+    const input = document.getElementById("project-dir-input") as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  }, [open, info])
 
   const putProject = async (payload: Record<string, unknown>, attemptedDir?: string) => {
     if (busy) return
@@ -162,7 +177,9 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
             : "Specs live in this browser only"
         }
         aria-label="Active project"
+        aria-haspopup="dialog"
         aria-expanded={open}
+        aria-controls="project-picker-panel"
         className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] cursor-pointer max-w-[220px]"
         style={{
           background: "var(--surface-overlay)",
@@ -183,8 +200,11 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
 
       {open && info !== null && (
         <div
+          id="project-picker-panel"
           data-testid="project-picker-panel"
-          className="absolute left-0 top-full mt-1.5 w-[340px] rounded-md p-3 z-50 text-[12px] shadow-lg"
+          role="dialog"
+          aria-label="Project folder"
+          className="absolute left-0 top-full mt-1.5 w-[min(340px,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-md p-3 z-50 text-[12px] shadow-lg"
           style={{
             background: "var(--surface)",
             border: "1px solid var(--border)",

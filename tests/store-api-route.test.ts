@@ -236,8 +236,12 @@ describe('store API route — adversarial hardening', () => {
     const baseRev = getRes.body.rev
     expect(typeof baseRev).toBe('string')
 
-    // External edit: rewrite the file directly (mtime changes, index doesn't)
-    fs.writeFileSync(path.join(projectDir, 'main.spec.yaml'), 'v: EXTERNAL\n')
+    // External edit: rewrite the file directly (mtime changes, index doesn't).
+    // utimes: this environment can assign the same mtimeMs to two writes in
+    // the same millisecond, which would make the conflict look like a no-op.
+    const specPath = path.join(projectDir, 'main.spec.yaml')
+    fs.writeFileSync(specPath, 'v: EXTERNAL\n')
+    fs.utimesSync(specPath, new Date(Date.now() + 1000), new Date(Date.now() + 1000))
 
     const conflictRes = mockRes()
     handler(storeReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev }), conflictRes)
@@ -339,5 +343,30 @@ describe('store API route — legacy index migration', () => {
     const putRes = mockRes()
     handler(storeReq('PUT', ['spec', 'main'], { title: 'Legacy', yamlContent: 'system: {}\n', baseRev: getRes.body.rev }), putRes)
     expect(putRes.statusCode).toBe(200)
+  })
+
+  test('PUT without a JSON content type is refused (CSRF preflight guard)', () => {
+    const res = mockRes()
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'T', yamlContent: 'x' }, { contentType: 'text/plain' }), res)
+    expect(res.statusCode).toBe(415)
+    expect(fs.readdirSync(projectDir)).toEqual([])
+  })
+
+  test('PUT with JSON smuggled in a text/plain parameter is refused', () => {
+    const res = mockRes()
+    handler(
+      storeReq('PUT', ['spec', 'main'], { title: 'T', yamlContent: 'x' }, { contentType: 'text/plain;foo=application/json' }),
+      res
+    )
+    expect(res.statusCode).toBe(415)
+    expect(fs.readdirSync(projectDir)).toEqual([])
+  })
+
+  test('PUT spec larger than 1 MB is refused', () => {
+    const yaml = 'x'.repeat(1_000_001)
+    const res = mockRes()
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'Huge', yamlContent: yaml }), res)
+    expect(res.statusCode).toBe(413)
+    expect(fs.existsSync(path.join(projectDir, 'main.spec.yaml'))).toBe(false)
   })
 })
