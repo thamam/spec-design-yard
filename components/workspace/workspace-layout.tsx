@@ -10,6 +10,7 @@ import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
 import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
 import { clampSplitPercent } from "../../lib/panel-split"
+import { formatIssueCount } from "../../lib/status-copy"
 
 const DEFAULT_SPLIT = 42 // percent
 
@@ -521,7 +522,7 @@ function StatusBar({
     : syncState.status === "unconfigured"
     ? "No project chosen — pick a folder to save to files"
     : "Browser storage only"
-  const issueLabel = issueCount === 0 ? "No issues" : `${issueCount} issues`
+  const issueLabel = formatIssueCount(issueCount)
   return (
     <footer
       className="flex items-center justify-between px-4 h-6 shrink-0 text-[11px] select-none"
