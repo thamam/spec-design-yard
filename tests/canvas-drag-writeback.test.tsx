@@ -65,12 +65,26 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
 
     const dragX = inboxRect.x + 40
     const dragY = inboxRect.y + 25
-    const dragged = compiled.map((el: any) =>
-      el.id === 'inbox' && el.type === 'rectangle' ? { ...el, x: dragX, y: dragY } : el
-    )
+
+    // Drive it the way Excalidraw really does: it takes ownership of the
+    // elements it is handed and MUTATES them in place during a drag. Building a
+    // fresh array here instead hid a bug for a long time — the adapter used to
+    // hand over its own compile baseline, so a real drag moved the baseline too
+    // and the move was invisible to the differ.
+    const scene = captured.props.initialData.elements
+    const sceneInbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    expect(sceneInbox).toBeTruthy()
+    expect(sceneInbox).not.toBe(inboxRect)
 
     act(() => {
-      captured.props.onChange(dragged, {})
+      // pointer down on the canvas: the gesture the writeback requires
+      captured.props.onChange(scene, { cursorButton: 'down' })
+    })
+    sceneInbox.x = dragX
+    sceneInbox.y = dragY
+
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'up' })
     })
 
     // The adapter stages rect moves behind a 450ms idle debounce; the YAML
@@ -95,14 +109,12 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     // Comment preservation is a product invariant of the YAML write path.
     expect(textarea.value).toContain('# Attaching Bricks')
 
-    // The adapter stages *all* rect positions on a drag (see diffScene's
-    // pendingElements), so untouched components get their current compiled
-    // positions persisted explicitly — assert they are not corrupted.
-    const digestRect = compiled.find((el: any) => el.id === 'digest_stage' && el.type === 'rectangle')
+    // A drag persists only the component that moved. Pinning the whole scene
+    // rewrote the document under the user's caret and, because auto-layout
+    // slots then shifted, made the remaining components twitch.
     const digest = updated?.system?.components?.find((c: any) => c.id === 'digest_stage')
-    expect(digestRect).toBeTruthy()
     expect(digest).toBeTruthy()
-    expect(digest!.x).toBe(Math.round(digestRect!.x))
-    expect(digest!.y).toBe(Math.round(digestRect!.y))
+    expect(digest!.x).toBeUndefined()
+    expect(digest!.y).toBeUndefined()
   })
 })

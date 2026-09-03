@@ -81,7 +81,7 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     const dragged = moveInboxRect(compiled, 140, 125)
 
     act(() => {
-      captured.props.onChange(dragged, {})
+      captured.props.onChange(dragged, { cursorButton: 'down' })
     })
     // Not yet — the adapter stages the move behind a 450ms idle debounce.
     expect(onCanvasChange).not.toHaveBeenCalled()
@@ -145,7 +145,7 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     const drag2 = moveInboxRect(compiled, 200, 175)
 
     act(() => {
-      captured.props.onChange(drag1, {})
+      captured.props.onChange(drag1, { cursorButton: 'down' })
     })
     // Still inside the debounce window — the first drag has not flushed yet.
     await act(async () => {
@@ -155,7 +155,7 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
 
     // A second drag arrives before the first one's timer fires; it must reset the debounce.
     act(() => {
-      captured.props.onChange(drag2, {})
+      captured.props.onChange(drag2, { cursorButton: 'down' })
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(450)

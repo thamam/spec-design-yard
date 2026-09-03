@@ -113,35 +113,35 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
   // Layout positions registry using Object.create(null) to prevent prototype pollution
   const positions: Record<string, { x: number; y: number }> = Object.create(null)
 
-  // 1. Assign positions to nodes based on logical layout rules
+  // 1. Assign positions to nodes based on logical layout rules.
+  // Every component consumes its lane slot, pinned or not. If the counters only
+  // advanced for unpinned components, giving one component an explicit x/y
+  // would slide every later component a slot to the left — and the coordinate
+  // writeback would then persist that slide, so a single drag made the rest of
+  // the diagram twitch on both axes.
   let coreIdx = 0
   let brickIdx = 0
 
   components.forEach((comp: any) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
-    if (typeof comp.x === 'number' && typeof comp.y === 'number') {
-      positions[comp.id] = {
-        x: comp.x,
-        y: comp.y,
-      }
-    } else {
-      const type = String(comp.type || "").toLowerCase()
-      
-      if (type === 'brick') {
-        // Lay out bricks in a row below the core loop
-        positions[comp.id] = {
-          x: 100 + brickIdx * 260,
-          y: 380,
-        }
-        brickIdx++
-      } else {
-        // Lay out core stages and stores in a horizontal sequence
-        positions[comp.id] = {
-          x: 60 + coreIdx * 250,
-          y: 160,
-        }
-        coreIdx++
-      }
+    const type = String(comp.type || "").toLowerCase()
+    const isBrick = type === 'brick'
+    // Bricks sit in a row below the core loop; stages and stores run across it.
+    const slot = isBrick ? brickIdx++ : coreIdx++
+
+    // Each axis is honoured on its own. Requiring both meant `y: 200` with no
+    // `x` was silently discarded and the component snapped back to its auto
+    // slot, so hand-placing one axis in the YAML looked like the canvas
+    // fighting the edit.
+    const auto = isBrick
+      ? { x: 100 + slot * 260, y: 380 }
+      : { x: 60 + slot * 250, y: 160 }
+    const hasX = typeof comp.x === 'number' && Number.isFinite(comp.x)
+    const hasY = typeof comp.y === 'number' && Number.isFinite(comp.y)
+
+    positions[comp.id] = {
+      x: hasX ? comp.x : auto.x,
+      y: hasY ? comp.y : auto.y,
     }
   })
 
@@ -593,12 +593,34 @@ export function ExcalidrawCanvas({
 
   const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay), [parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay])
 
+  // Excalidraw takes ownership of whatever elements it is handed and mutates
+  // them in place as the user drags. Handing it `elements` directly meant our
+  // own compile baseline moved with the gesture, so the scene and the baseline
+  // were never different during a drag and the move was never detected — while
+  // a spec edit, which does build fresh objects, looked like a drag. Give the
+  // scene its own copies so `elements` stays a faithful record of the spec.
+  const sceneElements = useMemo(
+    () =>
+      elements.map((el: any) => ({
+        ...el,
+        ...(Array.isArray(el.points) ? { points: el.points.map((p: any) => [...p]) } : {}),
+      })),
+    [elements]
+  )
+
   // Staging and debouncing coordinates updates to avoid dragging lag
   const [pendingElements, setPendingElements] = useState<any[] | null>(null)
 
   // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
   // this ref is just its storage cell.
   const diffStateRef = useRef(createCanvasDiffState())
+
+  // Set the moment Excalidraw reports a pointer gesture on the canvas, and
+  // cleared once the resulting move has been staged. Coordinates may only flow
+  // back into the YAML while this is set: every other `onChange` is either our
+  // own `updateScene` echoing back or the scene still catching up with the
+  // spec, and treating those as drags overwrote whatever the user was typing.
+  const gestureSeenRef = useRef(false)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
   }, [elements])
@@ -671,12 +693,12 @@ export function ExcalidrawCanvas({
   useEffect(() => {
     if (excalidrawAPI && elements.length > 0) {
       try {
-        excalidrawAPI.updateScene({ elements })
+        excalidrawAPI.updateScene({ elements: sceneElements })
       } catch (e) {
         console.error("Failed to update Excalidraw scene: ", e)
       }
     }
-  }, [excalidrawAPI, elements])
+  }, [excalidrawAPI, sceneElements])
 
   if (loadError) {
     return <ExcalidrawFallback reason="load-error" />
@@ -697,7 +719,7 @@ export function ExcalidrawCanvas({
           },
         }}
         initialData={{
-          elements,
+          elements: sceneElements,
           appState: {
             // No explicit viewBackgroundColor: the dark theme's inversion filter
             // would flip a dark value to light; the default resolves to dark.
@@ -729,16 +751,29 @@ export function ExcalidrawCanvas({
           // moves are all decided by the pure scene differ.
           if (!onCanvasChange) return
 
+          if (
+            appState?.cursorButton === "down" ||
+            appState?.selectedElementsAreBeingDragged ||
+            appState?.newElement ||
+            appState?.resizingElement
+          ) {
+            gestureSeenRef.current = true
+          }
+
           const { changes, pendingElements: movedRects, nextState } = diffScene({
             updatedElements,
             compiledElements: elements,
             appState,
             parsedSpec,
+            gestureSeen: gestureSeenRef.current,
             state: diffStateRef.current,
           })
           diffStateRef.current = nextState
           changes.forEach((change) => onCanvasChange(change))
-          if (movedRects) setPendingElements(movedRects)
+          if (movedRects) {
+            gestureSeenRef.current = false
+            setPendingElements(movedRects)
+          }
         }}
       >
         {WelcomeScreenComponent && <WelcomeScreenComponent />}
