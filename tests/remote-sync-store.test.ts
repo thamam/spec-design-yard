@@ -624,6 +624,116 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     store.saveSpec('main', 'T', 'mine')
     await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
     expect(store.getSyncState().haltKind).toBe('adopt')
+    expect(store.getSyncState().reason).toMatch(/differs from this session/i)
+    expect(store.getSyncState().reason).toMatch(/discards this session/i)
+  })
+
+  test('a 409 while disk still holds our baseline is buffer-ahead, not an external adopt', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const seed = 'system:\n  name: Seed\n'
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: seed, rev: 'r1', epoch: 'e1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: seed, rev: 'r1', epoch: 'e1' }) } as any
+    }))
+
+    store.saveSpec('main', 'T', `${seed}  # session connect\n`)
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+    expect(store.getSyncState().haltKind).toBe('retry')
+    expect(store.getSyncState().reason).toMatch(/have not reached disk/i)
+    expect(store.getSyncState().reason).not.toMatch(/changed outside/i)
+
+    // Mirroring stays armed so Retry save can still PUT — and a second 409
+    // must stay buffer-ahead, not flip to "disk won" / adopt.
+    const fetchMock = globalThis.fetch as any
+    fetchMock.mockClear()
+    store.saveSpec('main', 'T', `${seed}  # session connect\n`)
+    await vi.waitFor(() => {
+      expect(fetchMock.mock.calls.some(([, init]: any[]) => init?.method === 'PUT')).toBe(true)
+    })
+    await vi.waitFor(() => expect(store.getSyncState().haltKind).toBe('retry'))
+  })
+
+  test('a 409 whose disk already equals this session write is treated as a win', async () => {
+    const ours = 'system:\n  name: Connected\n'
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: 'system:\n  name: Seed\n', rev: 'r1', epoch: 'e1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: ours, rev: 'r2', epoch: 'e1' }) } as any
+    }))
+
+    store.saveSpec('main', 'T', ours)
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('synced'))
+    expect(store.getSyncState().haltKind).toBeUndefined()
+  })
+
+  test('CRLF on disk still matches an LF baseline so a lost-ack retry can land', async () => {
+    const seedLf = 'system:\n  name: Seed\n'
+    const seedCrLf = 'system:\r\n  name: Seed\r\n'
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: seedCrLf, rev: 'r1', epoch: 'e1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    let putCount = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        putCount++
+        if (putCount === 1) return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+        return { ok: true, status: 200, json: async () => ({ ok: true, rev: 'r3' }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: seedCrLf, rev: 'r2', epoch: 'e1' }) } as any
+    }))
+
+    store.saveSpec('main', 'T', `${seedLf}  # connect\n`)
+    await vi.waitFor(() => expect(putCount).toBe(2))
+    expect(store.getSyncState().status).toBe('synced')
+  })
+
+  test('a buffer-ahead 409 with no rev to chain still offers retry, not adopt', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const seed = 'system:\n  name: Seed\n'
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: seed, rev: 'r1', epoch: 'e1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: seed, epoch: 'e1' }) } as any
+    }))
+
+    store.saveSpec('main', 'T', `${seed}  # session\n`)
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+    expect(store.getSyncState().haltKind).toBe('retry')
   })
 
   test('a broken store (5xx on load) halts loudly rather than posing as standalone', async () => {
