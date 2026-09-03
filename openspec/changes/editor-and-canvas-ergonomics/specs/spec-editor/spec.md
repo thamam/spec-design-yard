@@ -26,7 +26,8 @@ no-op and every key falls through to the browser default.
   Tab and Shift+Tab SHALL indent/outdent every selected line and preserve
   the selection. After the user presses Esc, the next Tab SHALL move focus
   out of the textarea (keyboard escape hatch); any other keystroke or edit
-  SHALL disarm that escape.
+  SHALL disarm that escape, a bare modifier keydown (Shift, Control, Alt,
+  Meta) excepted, so that Esc then Shift+Tab escapes backwards.
 
 #### Scenario: Tab indents at the caret
 
@@ -55,6 +56,13 @@ no-op and every key falls through to the browser default.
 - WHEN the user presses Esc and then Tab
 - THEN focus moves out of the textarea per the browser default
 - AND no indent is inserted
+
+#### Scenario: Esc then Shift+Tab escapes backwards
+
+- GIVEN the spec textarea is focused
+- WHEN the user presses Esc and then Shift+Tab (Shift's own keydown arrives first)
+- THEN focus moves out of the textarea per the browser default
+- AND no outdent is applied
 
 ### Requirement: Enter key behaviour
 

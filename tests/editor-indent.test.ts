@@ -456,3 +456,46 @@ describe('the Esc escape hatch is disarmed by any edit, not just a typed one', (
     expect(textarea.value).toBe(value)
   })
 })
+
+describe('the Esc escape hatch survives a bare modifier keydown', () => {
+  // Esc then Shift+Tab is the backwards escape. Pressing Shift dispatches a
+  // keydown of its own before Tab arrives, and spending the one-shot latch on
+  // it sent the Shift+Tab that followed to handleIndent, which prevented the
+  // browser default and outdented the YAML instead of moving focus. Only the
+  // forward escape worked. Found by the Codex PR review on 0d20105.
+  test('Esc, Shift, then Shift+Tab leaves the browser default to move focus backwards', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = '    id: inbox'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(8, 8)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    fireEvent.keyDown(textarea, { key: 'Shift', shiftKey: true })
+    const notPrevented = fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
+    expect(notPrevented).toBe(true)
+    expect(textarea.value).toBe(value)
+  })
+
+  // Already GREEN before the fix: a regression guard on the disarm path the
+  // fix narrows, not evidence for it.
+  test('a real keystroke between Esc and Tab still disarms the escape', async () => {
+    render(React.createElement(Workspace))
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const value = 'system:\n  name: hello'
+    fireEvent.change(textarea, { target: { value } })
+    textarea.focus()
+    textarea.setSelectionRange(value.length, value.length)
+    fireEvent.select(textarea)
+
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    fireEvent.keyDown(textarea, { key: 'ArrowLeft' })
+    const prevented = fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(prevented).toBe(false)
+    expect(textarea.value).toBe(value + '  ')
+  })
+})

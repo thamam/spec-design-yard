@@ -220,9 +220,16 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
     }
 
     if (releaseFocusOnTab) {
-      setReleaseFocusOnTab(false)
-      if (e.key === "Tab") {
-        return
+      // A modifier pressed on its own dispatches a keydown of its own, and
+      // Shift+Tab — the backwards escape — always begins with one. Spending
+      // the latch on that keydown sent the Tab that followed to handleIndent,
+      // so Esc then Shift+Tab outdented instead of moving focus. A modifier
+      // alone is not a keystroke the user meant; anything else still is.
+      if (!MODIFIER_KEYS.has(e.key)) {
+        setReleaseFocusOnTab(false)
+        if (e.key === "Tab") {
+          return
+        }
       }
     }
 
@@ -1961,6 +1968,10 @@ function clampDiagnosticsHeight(
 ) {
   return Math.min(Math.max(height, minHeight), maxHeight)
 }
+
+// Keys whose own keydown precedes the keystroke the user means (Shift before
+// Shift+Tab); the Esc escape latch must survive them.
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"])
 
 export function EditorPanel({
   specText: propSpecText,
