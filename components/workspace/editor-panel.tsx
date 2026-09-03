@@ -2326,11 +2326,14 @@ export function EditorPanel({
   // Tree/Grid navigate to Focus when they select a unit. Canvas selection
   // (drag, connect) must not yank Code — the textarea may still be focused
   // and a tab switch dumps the next keystrokes onto Excalidraw hotkeys.
+  // `activeTab` is read as a gate only: putting it in the dep list would
+  // yank Metrics/Security back to Focus on every tab click while a unit
+  // stays selected.
   useEffect(() => {
     if (selectedUnit && activeTab !== "code") {
       setActiveTab("focus")
     }
-  }, [selectedUnit, setActiveTab, activeTab])
+  }, [selectedUnit, setActiveTab])
   
   const [localPathSource, setLocalPathSource] = useState<string>("")
   const [localPathTarget, setLocalPathTarget] = useState<string>("")

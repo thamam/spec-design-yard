@@ -41,6 +41,8 @@ function Harness() {
       parsedSpec={parsedSpec}
       selectedUnit={selectedUnit}
       setSelectedUnit={setSelectedUnit}
+      activeTab="focus"
+      setActiveTab={() => {}}
     />
   )
 }
