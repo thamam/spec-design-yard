@@ -352,6 +352,16 @@ describe('store API route — legacy index migration', () => {
     expect(fs.readdirSync(projectDir)).toEqual([])
   })
 
+  test('PUT with JSON smuggled in a text/plain parameter is refused', () => {
+    const res = mockRes()
+    handler(
+      storeReq('PUT', ['spec', 'main'], { title: 'T', yamlContent: 'x' }, { contentType: 'text/plain;foo=application/json' }),
+      res
+    )
+    expect(res.statusCode).toBe(415)
+    expect(fs.readdirSync(projectDir)).toEqual([])
+  })
+
   test('PUT spec larger than 1 MB is refused', () => {
     const yaml = 'x'.repeat(1_000_001)
     const res = mockRes()

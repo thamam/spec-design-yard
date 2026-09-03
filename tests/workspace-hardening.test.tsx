@@ -5,16 +5,19 @@ import Workspace from '../components/Workspace'
 import { db } from '../lib/db'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
 import { installWorkspaceFetch, projectReply } from './workspace-fetch-double'
+import { persistSpecDraft, rememberSpecDraft, clearCrashDraft } from '../lib/spec-draft'
 
 describe('workspace hardening and honest chrome', () => {
   beforeEach(() => {
     localStorage.clear()
     db.removeSpec('main')
+    clearCrashDraft()
   })
 
   afterEach(() => {
     localStorage.clear()
     db.removeSpec('main')
+    clearCrashDraft()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -98,7 +101,7 @@ describe('workspace hardening and honest chrome', () => {
     expect(textarea).toHaveFocus()
   })
 
-  test('a halted sync offers a Reload control', async () => {
+  test('a project-switched halt offers download plus an explicit discard-reload', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     installWorkspaceFetch({
       spec: { body: { found: false, epoch: 'e1' } },
@@ -120,10 +123,53 @@ describe('workspace hardening and honest chrome', () => {
     })
 
     await waitFor(() => {
+      expect(screen.getByTestId('sync-download')).toBeInTheDocument()
       expect(screen.getByTestId('sync-reload')).toBeInTheDocument()
     })
+    expect(screen.queryByTestId('sync-retry')).toBeNull()
+    fireEvent.click(screen.getByTestId('sync-download'))
     fireEvent.click(screen.getByTestId('sync-reload'))
     expect(reload).toHaveBeenCalled()
+  })
+
+  test('a transient save failure offers retry, not a discard-reload', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const saveSpy = vi.spyOn(db, 'saveSpec')
+    installWorkspaceFetch({
+      spec: { body: { found: false, epoch: 'e1' } },
+      project: projectReply('/tmp/proj'),
+      put: { status: 500, body: {} },
+    })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: 'system:\n  name: Retry Me\n  components: []\n' } })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-retry')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('sync-reload')).toBeNull()
+    saveSpy.mockClear()
+    fireEvent.click(screen.getByTestId('sync-retry'))
+    expect(saveSpy).toHaveBeenCalled()
+  })
+
+  test('hydration prefers a crash draft over the project file', async () => {
+    rememberSpecDraft('system:\n  name: Recovered Crash Draft\n  components: []\n')
+    persistSpecDraft()
+    installWorkspaceFetch({
+      spec: { body: { id: 'main', title: 'Disk', yamlContent: 'system:\n  name: On Disk\n  components: []\n', epoch: 'e1' } },
+      project: projectReply('/tmp/proj'),
+    })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('Recovered Crash Draft')
+    expect(textarea.value).not.toContain('On Disk')
   })
 
   test('arrow keys resize the split, and a zero-width container is ignored', async () => {

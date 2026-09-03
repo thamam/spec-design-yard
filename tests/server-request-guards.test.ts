@@ -45,6 +45,9 @@ describe('isJsonContentType', () => {
     expect(isJsonContentType('')).toBe(false)
     expect(isJsonContentType('text/plain')).toBe(false)
     expect(isJsonContentType('application/x-www-form-urlencoded')).toBe(false)
+    // CORS-safelisted smuggle: the JSON token is a parameter, not the type.
+    expect(isJsonContentType('text/plain;foo=application/json')).toBe(false)
+    expect(isJsonContentType('text/plain;charset=utf-8;type=application/json')).toBe(false)
   })
 })
 

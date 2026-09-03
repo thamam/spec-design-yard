@@ -1,10 +1,1 @@
-import { WorkspaceErrorBoundary } from './workspace/workspace-error-boundary'
-import { WorkspaceLayout } from './workspace/workspace-layout'
-
-export default function Workspace() {
-  return (
-    <WorkspaceErrorBoundary>
-      <WorkspaceLayout />
-    </WorkspaceErrorBoundary>
-  )
-}
+export { WorkspaceApp as default } from './workspace/workspace-app'

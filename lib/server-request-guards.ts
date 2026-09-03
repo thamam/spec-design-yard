@@ -38,5 +38,10 @@ export function isLoopbackHost(hostHeader: string | string[] | undefined): boole
 export function isJsonContentType(contentType: string | string[] | undefined): boolean {
   const raw = headerValue(contentType)
   if (!raw) return false
-  return raw.toLowerCase().includes("application/json")
+  // Media type is the token before `;`. Searching the whole header would
+  // accept a CORS-safelisted `text/plain;foo=application/json` and skip
+  // preflight, then Next would parse the body as text and a meta PUT could
+  // write that string into the project sidecar.
+  const mediaType = raw.split(";", 1)[0].trim().toLowerCase()
+  return mediaType === "application/json"
 }

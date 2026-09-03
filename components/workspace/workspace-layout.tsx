@@ -11,6 +11,8 @@ import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
 import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
 import { clampSplitPercent } from "../../lib/panel-split"
 import { formatIssueCount } from "../../lib/status-copy"
+import { rememberSpecDraft, readCrashDraft, clearCrashDraft } from "../../lib/spec-draft"
+import { triggerDownload } from "./download"
 
 const DEFAULT_SPLIT = 42 // percent
 
@@ -195,6 +197,10 @@ export function WorkspaceLayout() {
   const [pathTarget, setPathTarget] = useState<string>("")
 
   const [isHydrated, setIsHydrated] = useState(false)
+  // Every committed spec, including one that has not reached the 1s autosave
+  // yet. The error boundary persists this if a descendant render throws.
+  // Gated on hydration so the pre-hydration template is never a crash draft.
+  if (isHydrated) rememberSpecDraft(specText)
 
   // Where saves are going (browser vs project file vs halted) — surfaced in
   // the status bar so a mirroring latch-off is never console-only.
@@ -227,6 +233,10 @@ export function WorkspaceLayout() {
         // noise, not as a welcome. Only a deliberate browser-storage opt-out
         // keeps the demo, as something to play with.
         const unconfigured = db.getSyncState().status === "unconfigured"
+        // A crash draft is the last rendered spec the error boundary saved.
+        // Prefer it over the project file so Reload after a crash does not
+        // silently drop an edit that never reached the 1s autosave.
+        const crashDraft = readCrashDraft()
         // The one seam foreign spec text crosses into app state: a project file
         // or a localStorage cache may carry CRLF, the templates never do.
         // Normalise here and the whole app downstream — textarea offsets, the
@@ -234,13 +244,14 @@ export function WorkspaceLayout() {
         // space. Before `lastLoadedSpecRef`, not after: comparing normalised
         // state against a raw ref would fire an autosave on every load.
         const loaded = normalizeLineEndings(
-          savedDoc && savedDoc.yamlContent
-            ? savedDoc.yamlContent
-            : fileMode
-            ? FRESH_PROJECT_SPEC
-            : unconfigured
-            ? UNCONFIGURED_SPEC
-            : INITIAL_SPEC
+          crashDraft ||
+            (savedDoc && savedDoc.yamlContent
+              ? savedDoc.yamlContent
+              : fileMode
+              ? FRESH_PROJECT_SPEC
+              : unconfigured
+              ? UNCONFIGURED_SPEC
+              : INITIAL_SPEC)
         )
         lastLoadedSpecRef.current = loaded
         resetHistory(loaded)
@@ -252,7 +263,7 @@ export function WorkspaceLayout() {
         console.error("[spec-yard] hydration failed", e)
         if (cancelled) return
         const savedDoc = db.getSpec("main")
-        const loaded = normalizeLineEndings(savedDoc?.yamlContent || UNCONFIGURED_SPEC)
+        const loaded = normalizeLineEndings(readCrashDraft() || savedDoc?.yamlContent || UNCONFIGURED_SPEC)
         lastLoadedSpecRef.current = loaded
         resetHistory(loaded)
         setLoadedSpecId((n) => n + 1)
@@ -287,6 +298,7 @@ export function WorkspaceLayout() {
         : db.getSpec("main")?.title || "Untitled Spec"
     db.saveSpec("main", title, text)
     lastLoadedSpecRef.current = text
+    clearCrashDraft()
   }, [])
 
   const handleSave = useCallback(() => {
@@ -498,8 +510,17 @@ export function WorkspaceLayout() {
         syncState={syncState}
         isHydrated={isHydrated}
         issueCount={diagnostics.length}
+        specText={specText}
+        onRetrySave={handleSave}
       />
     </div>
+  )
+}
+
+function downloadSpec(text: string) {
+  triggerDownload(
+    `data:text/yaml;charset=utf-8,${encodeURIComponent(text)}`,
+    "main.spec.yaml"
   )
 }
 
@@ -507,10 +528,14 @@ function StatusBar({
   syncState,
   isHydrated,
   issueCount,
+  specText,
+  onRetrySave,
 }: {
   syncState: SyncState
   isHydrated: boolean
   issueCount: number
+  specText: string
+  onRetrySave: () => void
 }) {
   const halted = syncState.status === "halted"
   const label = !isHydrated
@@ -554,15 +579,39 @@ function StatusBar({
           </span>
         </span>
         {halted && (
-          <button
-            type="button"
-            data-testid="sync-reload"
-            onClick={() => window.location.reload()}
-            className="underline cursor-pointer bg-transparent border-0 p-0 text-[11px]"
-            style={{ color: "var(--warning)" }}
-          >
-            Reload
-          </button>
+          <span className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="sync-download"
+              onClick={() => downloadSpec(specText)}
+              className="underline cursor-pointer bg-transparent border-0 p-0 text-[11px]"
+              style={{ color: "var(--warning)" }}
+            >
+              Download spec
+            </button>
+            {syncState.haltKind === "retry" ? (
+              <button
+                type="button"
+                data-testid="sync-retry"
+                onClick={onRetrySave}
+                className="underline cursor-pointer bg-transparent border-0 p-0 text-[11px]"
+                style={{ color: "var(--warning)" }}
+              >
+                Retry save
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="sync-reload"
+                onClick={() => window.location.reload()}
+                className="underline cursor-pointer bg-transparent border-0 p-0 text-[11px]"
+                title="Reloads the project file and discards this browser copy"
+                style={{ color: "var(--warning)" }}
+              >
+                Reload and discard
+              </button>
+            )}
+          </span>
         )}
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>main.spec.yaml</span>

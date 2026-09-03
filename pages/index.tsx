@@ -1,3 +1,1 @@
-import Workspace from "@/components/Workspace"
-
-export default Workspace
+export { WorkspaceApp as default } from "@/components/workspace/workspace-app"

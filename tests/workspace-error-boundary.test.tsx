@@ -1,7 +1,8 @@
-import { describe, test, expect, vi, afterEach } from 'vitest'
+import { describe, test, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { WorkspaceErrorBoundary } from '../components/workspace/workspace-error-boundary'
+import { rememberSpecDraft, clearCrashDraft, persistSpecDraft } from '../lib/spec-draft'
 
 function Boom(): React.ReactElement {
   throw new Error('canvas loop')
@@ -11,8 +12,15 @@ function Ok() {
   return <div data-testid="ok">ok</div>
 }
 
+beforeEach(() => {
+  clearCrashDraft()
+  localStorage.clear()
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
+  clearCrashDraft()
+  localStorage.clear()
 })
 
 describe('WorkspaceErrorBoundary', () => {
@@ -25,34 +33,61 @@ describe('WorkspaceErrorBoundary', () => {
     expect(screen.getByTestId('ok')).toBeInTheDocument()
   })
 
-  test('shows a recovery alert and calls onReload', () => {
+  test('persists the last rendered spec and offers download before reload', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    rememberSpecDraft('system:\n  name: Unsaved\n')
     const onReload = vi.fn()
+    const onDownload = vi.fn()
     render(
-      <WorkspaceErrorBoundary onReload={onReload}>
+      <WorkspaceErrorBoundary onReload={onReload} onDownload={onDownload}>
         <Boom />
       </WorkspaceErrorBoundary>
     )
-    expect(screen.getByTestId('workspace-crash')).toBeInTheDocument()
-    expect(screen.getByTestId('workspace-crash').textContent).toMatch(/hit an error/i)
+    expect(screen.getByTestId('workspace-crash').textContent).toMatch(/download it before reloading/i)
+    expect(persistSpecDraft()).toBe('system:\n  name: Unsaved\n')
+    fireEvent.click(screen.getByTestId('workspace-crash-download'))
+    expect(onDownload).toHaveBeenCalledWith('system:\n  name: Unsaved\n')
     fireEvent.click(screen.getByTestId('workspace-crash-reload'))
     expect(onReload).toHaveBeenCalled()
   })
 
-  test('falls back to window.location.reload when no onReload is given', () => {
+  test('without a draft, does not claim edits are safe', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(
+      <WorkspaceErrorBoundary>
+        <Boom />
+      </WorkspaceErrorBoundary>
+    )
+    expect(screen.getByTestId('workspace-crash').textContent).toMatch(/may be unrecoverable/i)
+    expect(screen.queryByTestId('workspace-crash-download')).toBeNull()
+  })
+
+  test('falls back to window.location.reload and triggerDownload when no handlers are given', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    rememberSpecDraft('yaml: 1\n')
+    persistSpecDraft()
     const reload = vi.fn()
     const prev = window.location
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: { ...prev, reload },
     })
+    const click = vi.fn()
+    const createSpy = vi.spyOn(document, 'createElement')
     try {
       render(
         <WorkspaceErrorBoundary>
           <Boom />
         </WorkspaceErrorBoundary>
       )
+      fireEvent.click(screen.getByTestId('workspace-crash-download'))
+      const created = createSpy.mock.results
+        .map((r) => r.value)
+        .find((el) => el && el.tagName === 'A' && String(el.getAttribute('download')).includes('main.spec.yaml'))
+      expect(created).toBeTruthy()
+      if (created) {
+        created.click = click
+      }
       fireEvent.click(screen.getByTestId('workspace-crash-reload'))
       expect(reload).toHaveBeenCalled()
     } finally {

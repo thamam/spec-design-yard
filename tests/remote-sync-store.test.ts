@@ -525,6 +525,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
       expect(store.getSyncState().status).toBe('halted')
     })
     expect(store.getSyncState().reason).toMatch(/reload/i)
+    expect(store.getSyncState().haltKind).toBe('rejoin')
     expect(seen.some((s) => s.status === 'halted')).toBe(true)
     unsubscribe()
   })
@@ -545,6 +546,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
       expect(store.getSyncState().status).toBe('halted')
     })
     expect(store.getSyncState().reason).toMatch(/network/i)
+    expect(store.getSyncState().haltKind).toBe('retry')
   })
 
   test('a failed save is visible, not console-only', async () => {
@@ -566,6 +568,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
       expect(store.getSyncState().status).toBe('halted')
     })
     expect(store.getSyncState().reason).toMatch(/browser storage/i)
+    expect(store.getSyncState().haltKind).toBe('retry')
   })
 
   test('a transient save failure clears once a save lands again', async () => {
@@ -605,6 +608,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     store.arm()
     store.saveSpec('main', 'T', 'mine')
     await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
+    expect(store.getSyncState().haltKind).toBe('adopt')
   })
 
   test('a broken store (5xx on load) halts loudly rather than posing as standalone', async () => {
@@ -613,6 +617,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     const store = new RemoteSyncSpecStore()
     await store.loadFromServer()
     expect(store.getSyncState().status).toBe('halted')
+    expect(store.getSyncState().haltKind).toBe('rejoin')
   })
 })
 

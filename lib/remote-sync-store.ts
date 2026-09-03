@@ -35,9 +35,13 @@ import {
  * different stories to the user, and the workspace opens a different starting
  * spec for each — so they stay distinct rather than collapsing into one.
  */
+export type HaltKind = "retry" | "adopt" | "rejoin"
+
 export interface SyncState {
   status: "unconfigured" | "local-only" | "synced" | "halted"
   reason?: string
+  /** How the status bar should recover a halted session. Absent unless halted. */
+  haltKind?: HaltKind
 }
 
 export class RemoteSyncSpecStore implements SpecStore {
@@ -163,7 +167,11 @@ export class RemoteSyncSpecStore implements SpecStore {
         // missing project dir). Loud log, local-only for the session.
         console.error(`[spec-yard] Store API returned ${specRes.status} — file persistence disabled for this session`)
         this.fileModeDisabled = true
-        this.setSyncState({ status: "halted", reason: "Project store error — saving to browser only. Fix the project and reload." })
+        this.setSyncState({
+          status: "halted",
+          haltKind: "rejoin",
+          reason: "Project store error — saving to browser only. Download this spec, then fix the project and reload.",
+        })
         return false
       }
       const body = await specRes.json()
@@ -257,6 +265,7 @@ export class RemoteSyncSpecStore implements SpecStore {
         console.error(`[spec-yard] Spec save failed (${res.status}) — latest edits are only in browser storage`)
         this.setSyncState({
           status: "halted",
+          haltKind: "retry",
           reason: `Last save failed (${res.status}) — edits are in browser storage; still retrying.`,
         })
         return
@@ -271,6 +280,7 @@ export class RemoteSyncSpecStore implements SpecStore {
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
       this.setSyncState({
         status: "halted",
+        haltKind: "retry",
         reason: "Last save failed (network) — edits are in browser storage; still retrying.",
       })
     }
@@ -306,7 +316,8 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.fileModeDisabled = true
     this.setSyncState({
       status: "halted",
-      reason: "main.spec.yaml changed outside this session — reload to adopt it. Edits stay in browser storage.",
+      haltKind: "adopt",
+      reason: "main.spec.yaml changed outside this session. Download your copy, or reload to use the file on disk.",
     })
     console.error(
       "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
@@ -412,7 +423,8 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.fileModeDisabled = true
     this.setSyncState({
       status: "halted",
-      reason: "The active project changed in another tab — reload to rejoin it. Edits stay in browser storage.",
+      haltKind: "rejoin",
+      reason: "The active project changed in another tab. Download this spec, or reload to join the other project.",
     })
     console.error(
       "[spec-yard] The active project changed in another tab/window; this session stopped mirroring. Reload the workspace to join the new project."
