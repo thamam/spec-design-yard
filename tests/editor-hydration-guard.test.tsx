@@ -30,12 +30,16 @@ describe('EditorPanel hydration guard', () => {
     render(<EditorPanel specText={'system: {}\n'} isHydrated />)
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const overlay = screen.getByTestId('yaml-highlight-overlay')
-    expect(textarea.className).toMatch(/whitespace-pre(?!-wrap)/)
-    expect(overlay.className).toMatch(/whitespace-pre(?!-wrap)/)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle word wrap' }))
+    // Default stays wrapped so the highlight overlay stays pixel-aligned with
+    // the textarea (the previous implicit wrap, now a real toggle).
     expect(textarea.className).toMatch(/whitespace-pre-wrap/)
     expect(overlay.className).toMatch(/whitespace-pre-wrap/)
+    expect(screen.getByRole('button', { name: 'Toggle word wrap' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle word wrap' }))
+    expect(textarea.className).toMatch(/whitespace-pre(?!-wrap)/)
+    expect(overlay.className).toMatch(/whitespace-pre(?!-wrap)/)
+    expect(screen.getByRole('button', { name: 'Toggle word wrap' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   test('textarea is enabled once hydrated (and by default)', () => {

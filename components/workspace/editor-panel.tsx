@@ -56,7 +56,7 @@ interface CodeTabProps {
   wordWrap?: boolean
 }
 
-function CodeTab({ value, onChange, disabled = false, wordWrap = false }: CodeTabProps) {
+function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
@@ -300,7 +300,7 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = false }: CodeTa
         aria-busy={disabled}
         // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
         // so both layers agree on content width when a scrollbar appears.
-        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${wordWrap ? " whitespace-pre-wrap" : " whitespace-pre"}${disabled ? " opacity-40 cursor-wait" : ""}`}
+        className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${wordWrap ? " whitespace-pre-wrap break-words" : " whitespace-pre"}${disabled ? " opacity-40 cursor-wait" : ""}`}
         spellCheck="false"
       />
 
@@ -2212,7 +2212,7 @@ export function EditorPanel({
   const pathTarget = propPathTarget !== undefined ? propPathTarget : localPathTarget
   const setPathTarget = propSetPathTarget || setLocalPathTarget
 
-  const [wordWrap, setWordWrap] = useState(false)
+  const [wordWrap, setWordWrap] = useState(true)
   const [copied, setCopied] = useState(false)
 
   // Standard fallback state if no props provided
@@ -2514,6 +2514,7 @@ export function EditorPanel({
               onClick={() => setWordWrap((w) => !w)}
               title="Toggle word wrap"
               aria-label="Toggle word wrap"
+              aria-pressed={wordWrap}
               className="flex items-center justify-center w-7 h-7 rounded transition-colors"
               style={{
                 color: wordWrap ? "var(--accent)" : "var(--foreground-muted)",

@@ -21,7 +21,7 @@ interface YamlHighlightOverlayProps {
  * re-render of the tokenised content.
  */
 export const YamlHighlightOverlay = forwardRef<HTMLDivElement, YamlHighlightOverlayProps>(
-  function YamlHighlightOverlay({ value, wrap = false }, ref) {
+  function YamlHighlightOverlay({ value, wrap = true }, ref) {
     const lines = tokenizeSpec(value)
 
     return (
