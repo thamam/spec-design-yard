@@ -335,6 +335,9 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     act(() => {
       captured.props.onChange(drag1, { cursorButton: 'down' })
     })
+    act(() => {
+      captured.props.onChange(drag1, { cursorButton: 'up' })
+    })
     // Still inside the debounce window — the first drag has not flushed yet.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200)
