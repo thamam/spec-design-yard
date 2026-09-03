@@ -80,6 +80,13 @@ function CodeTab({ value, onChange, disabled = false, loading = false, wordWrap 
   // selection over the block it had just indented. jsdom's fake timers hid it;
   // scripts/e2e-editor-ergonomics.py asserts the real selection bounds.
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  // Last caret the user placed. Canvas drag writeback (and Auto-Fix) rewrite
+  // `value` from the parent; a controlled textarea then jumps to EOF unless
+  // we put this range back. Distinct from pendingSelectionRef, which is an
+  // explicit post-edit landing the Tab/Enter/autocomplete path armed.
+  const lastSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  const lastValueRef = useRef(value)
+  const typedThisCommitRef = useRef(false)
 
   /**
    * Hand the edited text to the parent and say where the selection must end
@@ -131,17 +138,41 @@ function CodeTab({ value, onChange, disabled = false, loading = false, wordWrap 
   // that carries the new value is the one that moved the caret.
   useIsomorphicLayoutEffect(() => {
     const pending = pendingSelectionRef.current
-    if (!pending) return
-    pendingSelectionRef.current = null
+    if (pending) {
+      pendingSelectionRef.current = null
+      typedThisCommitRef.current = false
+      lastValueRef.current = value
+      const textarea = textareaRef.current
+      if (!textarea) return
+      textarea.focus()
+      textarea.setSelectionRange(pending.start, pending.end)
+      lastSelectionRef.current = pending
+      setCursorPos(pending.start)
+      return
+    }
+
+    const typed = typedThisCommitRef.current
+    typedThisCommitRef.current = false
+    const valueChanged = lastValueRef.current !== value
+    lastValueRef.current = value
+    // User keystrokes already placed the caret. An external rewrite
+    // (canvas coords, Auto-Fix All) would otherwise drop it at EOF.
+    if (!valueChanged || typed) return
     const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.focus()
-    textarea.setSelectionRange(pending.start, pending.end)
-    setCursorPos(pending.start)
+    const sel = lastSelectionRef.current
+    if (!textarea || !sel) return
+    if (document.activeElement !== textarea) return
+    const max = textarea.value.length
+    const start = Math.min(sel.start, max)
+    const end = Math.min(sel.end, max)
+    textarea.setSelectionRange(start, end)
+    setCursorPos(start)
   })
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value
+    typedThisCommitRef.current = true
+    lastSelectionRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
     setSuppressAutocomplete(false)
@@ -149,6 +180,10 @@ function CodeTab({ value, onChange, disabled = false, loading = false, wordWrap 
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    lastSelectionRef.current = {
+      start: e.currentTarget.selectionStart,
+      end: e.currentTarget.selectionEnd,
+    }
     setCursorPos(e.currentTarget.selectionStart)
   }
 

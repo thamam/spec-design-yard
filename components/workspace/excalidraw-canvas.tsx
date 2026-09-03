@@ -1094,7 +1094,7 @@ export function ExcalidrawCanvas({
             gestureCompileRef.current = elements
           }
 
-          const { changes, pendingElements: movedRects, nextState } = diffScene({
+          const { changes, pendingElements: movedRects, nextState, dropArrowIds } = diffScene({
             updatedElements,
             compiledElements: elements,
             appState,
@@ -1103,6 +1103,18 @@ export function ExcalidrawCanvas({
             state: diffStateRef.current,
           })
           diffStateRef.current = nextState
+          if (dropArrowIds.length > 0 && excalidrawAPI) {
+            try {
+              const dropped = new Set(dropArrowIds)
+              excalidrawAPI.updateScene({
+                elements: updatedElements.map((el: any) =>
+                  dropped.has(el.id) ? { ...el, isDeleted: true } : el
+                ),
+              })
+            } catch (e) {
+              console.error("Failed to drop unresolved arrow ink: ", e)
+            }
+          }
           changes.forEach((change) => onCanvasChange(change))
           if (movedRects) {
             gestureSeenRef.current = false
