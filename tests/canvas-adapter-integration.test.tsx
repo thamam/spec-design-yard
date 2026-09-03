@@ -196,6 +196,66 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     expect(onCanvasChange).not.toHaveBeenCalled()
   })
 
+  test('a staged drag is dropped when a newer compile lands inside its debounce', async () => {
+    const { onCanvasChange, rerenderWith } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+    const dragged = moveInboxRect(compiled, 140, 125)
+
+    act(() => {
+      captured.props.onChange(dragged, { cursorButton: 'down' })
+    })
+    // Still inside the 450ms window: the move is staged, not yet delivered.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+
+    // Before the debounce fires, the spec moves on under it — the user types a
+    // new y, or asks for a re-layout.
+    await rerenderWith({
+      system: {
+        name: 'Test System',
+        components: [{ id: 'inbox', name: 'Inbox', type: 'Stage', x: 100, y: 300 }],
+      },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    // Flushing the older drag now would put y:125 back over the y:300 that was
+    // typed after it. The stale payload has to be dropped, not merely delayed.
+    expect(onCanvasChange).not.toHaveBeenCalled()
+  })
+
+  test('a re-render that changes nothing does not retire a gesture in flight', async () => {
+    const { onCanvasChange, rerenderWith } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+
+    // The pointer goes down. No move has been reported yet.
+    act(() => {
+      captured.props.onChange(compiled, { cursorButton: 'down' })
+    })
+
+    // The parent re-renders mid-drag for reasons of its own, same spec.
+    await rerenderWith(parsedSpec)
+
+    // The drag is reported now. It is still the same gesture on the same
+    // compile, so it has to reach the YAML.
+    const dragged = moveInboxRect(compiled, 140, 125)
+    act(() => {
+      captured.props.onChange(dragged, {})
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450)
+    })
+
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0].find((el: any) => el.id === 'inbox')).toMatchObject({
+      x: 140,
+      y: 125,
+    })
+  })
+
   test('an arrow-key nudge counts as a gesture, so the move still reaches the YAML', async () => {
     const { onCanvasChange, container } = await mountCanvas()
     const compiled = compileSpecToExcalidrawElements(parsedSpec)

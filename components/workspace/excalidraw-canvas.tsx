@@ -591,7 +591,18 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay), [parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay])
+  // `hiddenTypes` is defaulted to a fresh `[]` on every render, so keying the
+  // memo on the array's identity recompiled the entire scene each time the
+  // component rendered for any reason at all. Besides the waste, it left
+  // `elements` useless as a marker for "the compile this gesture belongs to":
+  // an unrelated re-render mid-drag would have retired a live gesture and
+  // dropped the move. Key on the contents instead.
+  const hiddenTypesKey = hiddenTypes.join("|")
+  const elements = useMemo(
+    () => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [parsedSpec, pathSource, pathTarget, hiddenTypesKey, showSecurityOverlay]
+  )
 
   // Excalidraw takes ownership of whatever elements it is handed and mutates
   // them in place as the user drags. Handing it `elements` directly meant our
@@ -608,8 +619,11 @@ export function ExcalidrawCanvas({
     [elements]
   )
 
-  // Staging and debouncing coordinates updates to avoid dragging lag
-  const [pendingElements, setPendingElements] = useState<any[] | null>(null)
+  // Staging and debouncing coordinates updates to avoid dragging lag. The
+  // compile the move was measured against travels with it: if a newer one lands
+  // while the payload is still waiting, these coordinates are stale and must be
+  // dropped rather than delivered.
+  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any } | null>(null)
 
   // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
   // this ref is just its storage cell.
@@ -681,13 +695,20 @@ export function ExcalidrawCanvas({
   }, [parsedSpec])
 
   useEffect(() => {
-    if (!pendingElements || !onCanvasChange) return
+    if (!pendingMove || !onCanvasChange) return
+    // The spec moved on while this drag was waiting out its debounce -- a
+    // coordinate typed in the YAML, or a re-layout. Delivering the older
+    // measurement now would overwrite the newer one, so drop it instead.
+    if (pendingMove.compile !== elements) {
+      setPendingMove(null)
+      return
+    }
     const timer = setTimeout(() => {
-      onCanvasChange(pendingElements)
-      setPendingElements(null)
+      onCanvasChange(pendingMove.rects)
+      setPendingMove(null)
     }, 450) // 450ms idle delay to confirm drag stop
     return () => clearTimeout(timer)
-  }, [pendingElements, onCanvasChange])
+  }, [pendingMove, onCanvasChange, elements])
 
   // Automatically scroll and fit canvas components to viewport on initial load
   const hasInitialScrolled = useRef(false)
@@ -802,7 +823,7 @@ export function ExcalidrawCanvas({
           if (movedRects) {
             gestureSeenRef.current = false
             gestureCompileRef.current = null
-            setPendingElements(movedRects)
+            setPendingMove({ rects: movedRects, compile: elements })
           }
         }}
       >
