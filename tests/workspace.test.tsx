@@ -80,7 +80,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
             id: 'node_a',
             type: 'Stage',
             metadata: { color: 'purple' },
-            connections: [{ target: 'node_b', label: 'post' }]
+            connections: [{ target: 'node_b', label: 'encrypted TLS' }]
           },
           {
             id: 'node_b',
@@ -100,7 +100,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     // Verify connection label was compiled to a text element
     const labelText = elements.find((el: any) => el.id === 'arrow-label-node_a-node_b' && el.type === 'text')
     expect(labelText).toBeDefined()
-    expect(labelText.text).toBe('post')
+    expect(labelText.text).toBe('encrypted TLS')
 
     // Verify bidirectional graphic element binding is established (arrow registers bound text element label)
     const arrow = elements.find((el: any) => el.id === 'arrow-node_a-node_b' && el.type === 'arrow')

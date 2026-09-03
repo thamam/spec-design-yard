@@ -101,13 +101,13 @@ The linter enforces design discipline. The following rules generate quality warn
 
 Spec-Yard contains a built-in static architecture security analyzer that checks for the six core STRIDE threat vectors plus sensitive metadata credentials leaks:
 
-1. 🟡 **`stride-spoofing`**: A `Gateway` component lacks an owner or is connected downstream without custom secure/auth connection labels (e.g., matching security keywords like `auth`, `secure`, `token`, `validate`). *Why it matters:* Gateways are external interfaces and must validate incoming identity.
-2. 🟡 **`stride-tampering`**: A connection link is unlabeled or lacks custom encryption labels specifying secure channels (TLS/HTTPS/gRPC/SSH). *Why it matters:* Unlabeled data flows are susceptible to transit intercept, tampering, or eavesdropping.
+1. 🟡 **`stride-spoofing`**: A `Gateway` component lacks a specific identity mitigation on outbound connections (e.g. `oauth`, `jwt`, `auth-token`, `mTLS`). A lone `auth`/`secure`/`token` keyword is not enough. *Why it matters:* Gateways are external interfaces and must validate incoming identity.
+2. 🟡 **`stride-tampering`**: A connection link lacks an explicit secure-channel label (`TLS`, `HTTPS`, `gRPC`, `SSH`, `encrypted`). Any other label, including a lone `auth` keyword, still flags. *Why it matters:* Unlabeled or vaguely labeled data flows are susceptible to transit intercept, tampering, or eavesdropping.
 3. 🔵 **`stride-repudiation`**: A database `Store` lacks outgoing or incoming audit log links to tracing/ledger Brick components. *Why it matters:* Transaction stores must maintain a traceable audit ledger to prove non-repudiation.
 4. 🟡 **`stride-information-disclosure`**: A `Gateway` connects directly to a database `Store` bypassing verification/parsing stages. *Why it matters:* Direct data-store exposures without middle-tier sanitize/processing stages can result in mass credential theft or unauthorized data exposure.
 5. 🟡 **`stride-elevation-of-privilege`**: A privileged node (marked `privileged: true` or containing `admin` or `root` in its name/ID) lacks connection to a verification node. *Why it matters:* High-privilege components must be gated by authentication/verification barriers.
 6. 🟡 **`stride-denial-of-service`**: A bottleneck node with high traffic fan-in (>= 3 inbound connections) lacks rate limiting, throttling, or buffering metadata parameters (`rate_limit: true`, `throttled: true`). *Why it matters:* High fan-in components are susceptible to overload, memory leaks, and service degradation.
-7. 🟡 **`stride-secret-leak`**: A metadata field containing sensitive keys (such as `api_key`, `password`, `token`, `session_secret`) holds raw, hardcoded credentials. *Why it matters:* Blueprints should never store raw credentials in plaintext. Use environment variable references (e.g. `${MY_API_KEY}`) or placeholders instead.
+7. 🟡 **`stride-secret-leak`**: A metadata field (component or system-level) with a sensitive key name (`api_key`, `password`, `aws_secret_access_key`, …) or a value shaped like a known secret (`AKIA…`, `sk_live_…`, PEM private keys) holds raw credentials. Also scans free-text `notes`. *Why it matters:* Blueprints should never store raw credentials in plaintext. Use environment variable references (e.g. `${MY_API_KEY}`) or placeholders instead.
 
 ---
 

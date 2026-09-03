@@ -2,6 +2,9 @@
 
 ## Product threat model
 
+The Security tab is a static STRIDE review of the drawn architecture, not
+vulnerability, CVE, or dependency scanning.
+
 Spec-Design-Yard is a **local architecture IDE**. Specs live on disk in the
 project folder you choose. There is no multi-user mode, no cloud backend,
 and no authentication on the project or store APIs.

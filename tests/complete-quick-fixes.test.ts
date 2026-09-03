@@ -311,7 +311,62 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
       type: 'quick-fix',
       payload: { path: 'system.components[0]', fixType: 'stride-spoofing' }
     })
-    expect(updated).toContain('label: secure auth-token request')
+    expect(updated).toContain('label: authenticated TLS auth-token request')
+  })
+
+  test('leaves an already-specific identity mitigation label in place', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: api_gw
+      type: Gateway
+      connections:
+        - target: stage_1
+          label: authenticated TLS auth-token request
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-spoofing' }
+    })
+    expect(updated).toBe(initial)
+  })
+
+  test('stride-spoofing upgrades a string-form connection to a labeled object', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: api_gw
+      type: Gateway
+      connections:
+        - stage_1
+    - id: stage_1
+      type: Stage
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0]', fixType: 'stride-spoofing' }
+    })
+    expect(updated).toContain('target: stage_1')
+    expect(updated).toContain('label: authenticated TLS auth-token request')
+  })
+
+  test('stride-tampering upgrades a string-form connection to a labeled object', () => {
+    const initial = `system:
+  name: Test System
+  components:
+    - id: stage_1
+      type: Stage
+      connections:
+        - store_1
+    - id: store_1
+      type: Store
+`
+    const updated = reconcileSpec(initial, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].connections[0]', fixType: 'stride-tampering' }
+    })
+    expect(updated).toContain('target: store_1')
+    expect(updated).toContain('label: encrypted TLS auth-token flow')
   })
 
   test('reconciles stride-tampering by adding secure label to connection', () => {
@@ -327,7 +382,7 @@ describe('Comprehensive Diagnostics and Quick-Fixes', () => {
       type: 'quick-fix',
       payload: { path: 'system.components[0].connections[0]', fixType: 'stride-tampering' }
     })
-    expect(updated).toContain('label: secure encrypted TLS flow')
+    expect(updated).toContain('label: encrypted TLS auth-token flow')
   })
 
   test('reconciles stride-repudiation by adding audit ledger component and connection', () => {

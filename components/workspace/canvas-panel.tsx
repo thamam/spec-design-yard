@@ -198,6 +198,7 @@ export function CanvasPanel({
           <CanvasToolButton
             icon={<ShieldAlert size={12} />}
             label="Security Threats Overlay"
+            title="STRIDE diagram heuristics — not CVE or runtime scanning"
             onClick={() => setOverlayPinned((p) => !p)}
             active={showSecurityOverlay}
           />

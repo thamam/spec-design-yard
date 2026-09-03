@@ -81,5 +81,55 @@ describe('STRIDE Secret Leakage Linter Rule & Quick Fix', () => {
 
     const parsed = yaml.parse(updated)
     expect(parsed.system.components[0].metadata.password).toBe('${SENSITIVE_VALUE_PLACEHOLDER}')
+    expect(updated).toContain('previous value preserved: my-hardcoded-secret-password')
+  })
+
+  test('does not write a preservation comment when the value is already a placeholder', () => {
+    const initialYaml = `system:
+  name: Already Placeholder
+  components:
+    - id: auth_service
+      type: Stage
+      metadata:
+        password: \${API_KEY}
+`
+    const updated = reconcileSpec(initialYaml, {
+      type: 'quick-fix',
+      payload: { path: 'system.components[0].metadata.password', fixType: 'stride-secret-leak' }
+    })
+    expect(updated).toContain('${SENSITIVE_VALUE_PLACEHOLDER}')
+    expect(updated).not.toContain('previous value preserved')
+  })
+
+  test('flags system-level keys, free-text notes, and value-shaped secrets', () => {
+    const spec = {
+      system: {
+        name: 'Broad Secret Scan',
+        aws_secret_access_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        metadata: {
+          owner: 'security-team',
+          description: 'rotate AKIAIOSFODNN7EXAMPLE next week',
+        },
+        components: [
+          {
+            id: 'notes_box',
+            type: 'Stage',
+            notes: '-----BEGIN RSA PRIVATE KEY-----\nMIIEogIBAAKCAQEA',
+            note: '-----BEGIN PRIVATE KEY-----\nMIIEogIBAAKCAQEA',
+            metadata: {
+              description: 'uses sk_live_abcdef123456 in staging',
+            },
+          },
+        ],
+      },
+    }
+
+    const diagnostics = lintSpec(spec)
+    const secretLeaks = diagnostics.filter(d => d.code === 'stride-secret-leak')
+    expect(secretLeaks.some(d => d.path === 'system.aws_secret_access_key')).toBe(true)
+    expect(secretLeaks.some(d => d.path === 'system.metadata.description')).toBe(true)
+    expect(secretLeaks.some(d => d.path === 'system.components[0].notes')).toBe(true)
+    expect(secretLeaks.some(d => d.path === 'system.components[0].note')).toBe(true)
+    expect(secretLeaks.some(d => d.path === 'system.components[0].metadata.description')).toBe(true)
   })
 })

@@ -38,13 +38,16 @@ describe('Security tab category fix applies ALL fixes in the category', () => {
     })
 
     fireEvent.click(screen.getByTestId('fix-threat-btn-secrets'))
+    fireEvent.click(await screen.findByTestId('secret-redact-confirm-confirm'))
 
     await waitFor(() => {
       const updated = (screen.getByTestId('spec-textarea') as HTMLTextAreaElement).value
       const placeholders = updated.match(/\$\{SENSITIVE_VALUE_PLACEHOLDER\}/g) || []
       expect(placeholders.length).toBe(2)
-      expect(updated).not.toContain('sk_live_aaa_123')
-      expect(updated).not.toContain('sk_live_bbb_456')
+      expect(updated).toContain('previous value preserved: sk_live_aaa_123')
+      expect(updated).toContain('previous value preserved: sk_live_bbb_456')
+      expect(updated).not.toMatch(/api_key:\s*["']?sk_live_aaa_123/)
+      expect(updated).not.toMatch(/api_key:\s*["']?sk_live_bbb_456/)
     })
 
     // And the category is fully mitigated — no diagnostic survives

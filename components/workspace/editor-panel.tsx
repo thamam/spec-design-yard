@@ -26,6 +26,7 @@ import { normalizeConnections, parseSpec, type DroppedConnection } from "../../l
 import { generateArchitectureAuditReport, architectureAuditReportFilename } from "../../lib/export-report"
 import { triggerDownload } from "./download"
 import { MetricsTab } from "./metrics-tab"
+import { computeStrideComplianceScore, countAnalyzableComponents } from "../../lib/stride-heuristics"
 
 interface EditorPanelProps {
   specText?: string
@@ -1883,7 +1884,58 @@ interface SecurityTabProps {
   onExportReport?: () => void
 }
 
+function ConfirmBanner({
+  testId,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel = "Cancel",
+  onConfirm,
+  onCancel,
+}: {
+  testId: string
+  title: string
+  body: string
+  confirmLabel: string
+  cancelLabel?: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${testId}-title`}
+      data-testid={testId}
+      className="mx-3 mt-3 p-3 rounded-md border border-amber-500/40 bg-amber-950/40 space-y-2"
+    >
+      <h3 id={`${testId}-title`} className="text-xs font-bold text-amber-200">{title}</h3>
+      <p className="text-[10px] text-zinc-300 leading-relaxed">{body}</p>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          data-testid={`${testId}-cancel`}
+          onClick={onCancel}
+          className="px-2 py-1 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
+        >
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          data-testid={`${testId}-confirm`}
+          onClick={onConfirm}
+          className="px-2 py-1 rounded text-[10px] font-bold bg-amber-600 hover:bg-amber-500 text-white"
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportReport }: SecurityTabProps) {
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
+
   const spoofingDiags = diagnostics.filter(d => d.code === "stride-spoofing")
   const hasSpoofing = spoofingDiags.length > 0
 
@@ -1905,15 +1957,11 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportRepo
   const secretDiags = diagnostics.filter(d => d.code === "stride-secret-leak")
   const hasSecrets = secretDiags.length > 0
 
-  let score = 100
-  if (hasSpoofing) score -= 15
-  if (hasTampering) score -= 15
-  if (hasRepudiation) score -= 5
-  if (hasInfo) score -= 15
-  if (hasElevation) score -= 15
-  if (hasDos) score -= 15
-  if (hasSecrets) score -= 15
-  score = Math.max(0, score)
+  const analyzableCount = countAnalyzableComponents(parsedSpec)
+  const scoreResult = computeStrideComplianceScore(diagnostics, analyzableCount)
+  const unscored = scoreResult.status === "unscored"
+  const score = scoreResult.status === "scored" ? scoreResult.score : null
+  const hasOpenGaps = hasSpoofing || hasTampering || hasRepudiation || hasInfo || hasElevation || hasDos || hasSecrets
 
   const threatCategories = [
     {
@@ -2001,33 +2049,51 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportRepo
     handleFixThreat(allSecurityDiags)
   }
 
-  const getScoreColor = (val: number) => {
+  const getScoreColor = (val: number | null) => {
+    if (val === null) return "text-zinc-300 border-zinc-600/40 bg-zinc-800/40"
     if (val >= 90) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/5"
     if (val >= 70) return "text-amber-400 border-amber-500/30 bg-amber-500/5"
     return "text-red-400 border-red-500/30 bg-red-500/5"
   }
+
+  const scoreCaption = unscored
+    ? "Add components to the diagram to analyze. An empty architecture is not a secure one — nothing modeled is not a perfect STRIDE review."
+    : score === 100
+      ? "No STRIDE heuristic findings on the components that are drawn. This is a diagram review, not proof the system is secure."
+      : `System has active security warnings. Compliance score dropped to ${score}%. Apply recommendations below to secure it.`
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4 font-sans select-none">
       <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
         <div>
           <h2 className="text-sm font-bold text-zinc-100">STRIDE Threat Modeling Dashboard</h2>
-          <p className="text-[10px] text-zinc-500 mt-0.5">Continuous automated security & vulnerability scanning</p>
+          <p data-testid="stride-dashboard-subtitle" className="text-[10px] text-zinc-500 mt-0.5">
+            Static STRIDE review of the drawn architecture — not CVE, dependency, or runtime scanning
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             data-testid="export-security-report-btn"
-            onClick={onExportReport}
+            onClick={() => setExportConfirmOpen(true)}
             className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 rounded text-xs font-bold transition-all cursor-pointer"
           >
             Export Report
           </button>
           <button
+            type="button"
+            data-testid="fix-all-stride-gaps-btn"
             onClick={handleFixAllThreats}
-            disabled={score === 100}
+            disabled={unscored || !hasOpenGaps}
+            title={
+              unscored
+                ? "Add components to analyze before fixing STRIDE gaps"
+                : hasOpenGaps
+                  ? "Apply every STRIDE quick-fix in this review"
+                  : "No STRIDE gaps to fix on the drawn components"
+            }
             className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
-              score === 100
+              unscored || !hasOpenGaps
                 ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
                 : "bg-indigo-600 hover:bg-indigo-700 text-white shadow"
             }`}
@@ -2037,15 +2103,32 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportRepo
         </div>
       </div>
 
+      {exportConfirmOpen && (
+        <ConfirmBanner
+          testId="export-report-confirm"
+          title="Export includes the full spec review"
+          body="This copies the report to the clipboard and downloads a markdown file. The report can contain secrets quoted from metadata, notes, or diagnostics. Confirm you want to export it."
+          confirmLabel="Copy and download"
+          onCancel={() => setExportConfirmOpen(false)}
+          onConfirm={() => {
+            setExportConfirmOpen(false)
+            onExportReport?.()
+          }}
+        />
+      )}
+
       <div className={`flex items-center gap-4 p-3 border rounded-lg ${getScoreColor(score)}`}>
-        <div className="text-2xl font-black font-mono tracking-tighter shrink-0">{score}%</div>
+        <div
+          data-testid="stride-compliance-score"
+          className="text-2xl font-black font-mono tracking-tighter shrink-0"
+        >
+          {unscored ? "—" : `${score}%`}
+        </div>
         <div className="min-w-0">
-          <div className="text-xs font-bold">Security Compliance Score</div>
-          <p className="text-[10px] text-zinc-400 leading-normal mt-0.5">
-            {score === 100
-              ? "Excellent! Your system blueprint fully mitigates all analyzed STRIDE threat boundaries."
-              : `System has active security warnings. Compliance score dropped to ${score}%. Apply recommendations below to secure it.`}
-          </p>
+          <div className="text-xs font-bold">
+            {unscored ? "Security Compliance Score — not scored" : "Security Compliance Score"}
+          </div>
+          <p className="text-[10px] text-zinc-400 leading-normal mt-0.5">{scoreCaption}</p>
         </div>
       </div>
 
@@ -2060,7 +2143,7 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportRepo
               <div className="flex items-center gap-2">
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
-                    cat.vulnerable ? "bg-red-500 animate-pulse" : "bg-emerald-500"
+                    unscored ? "bg-zinc-500" : cat.vulnerable ? "bg-red-500 animate-pulse" : "bg-emerald-500"
                   }`}
                 />
                 <span className="font-bold text-[11px] text-zinc-200">{cat.name}</span>
@@ -2069,12 +2152,14 @@ function SecurityTab({ parsedSpec, diagnostics = [], onQuickFixAll, onExportRepo
                 <span
                   data-testid={`threat-status-${cat.id}`}
                   className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wide ${
-                    cat.vulnerable
-                      ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                      : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    unscored
+                      ? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20"
+                      : cat.vulnerable
+                        ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                        : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                   }`}
                 >
-                  {cat.vulnerable ? "Vulnerable" : "Secured"}
+                  {unscored ? "Not analyzed" : cat.vulnerable ? "Vulnerable" : "Secured"}
                 </span>
                 {cat.vulnerable && (
                   <button
@@ -2214,6 +2299,11 @@ export function EditorPanel({
 
   const [wordWrap, setWordWrap] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [pendingSecretFix, setPendingSecretFix] = useState<
+    | { kind: "single"; path: string; extraData?: any }
+    | { kind: "batch"; fixes: { path: string; fixType: string; extraData?: any }[] }
+    | null
+  >(null)
 
   // Standard fallback state if no props provided
   const [localSpecText, setLocalSpecText] = useState(`system:
@@ -2333,7 +2423,7 @@ export function EditorPanel({
     return [...lintSpec(parsedSpec), ...droppedConnectionDiagnostics(droppedConnections)]
   }, [parsedSpec, yamlSyntaxError, droppedConnections])
 
-  const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
+  const applyQuickFix = (path: string, fixType: string, extraData?: any) => {
     const updated = reconcileSpec(specText, {
       type: "quick-fix",
       payload: { path, fixType: fixType as FixType, extraData }
@@ -2343,10 +2433,7 @@ export function EditorPanel({
     }
   }
 
-  // Batched variant: one reconcile for many fixes, so every fix sees the
-  // accumulated text instead of the same stale snapshot (only the last would
-  // survive otherwise).
-  const handleQuickFixAll = (fixes: { path: string; fixType: string; extraData?: any }[]) => {
+  const applyQuickFixAll = (fixes: { path: string; fixType: string; extraData?: any }[]) => {
     if (fixes.length === 0) return
     // Diagnostic codes are not always FixType names ("empty-system-name" →
     // "missing-system-name"); route each through the same mapping the
@@ -2360,6 +2447,36 @@ export function EditorPanel({
     if (updated !== specText) {
       setSpecText(updated)
     }
+  }
+
+  const handleQuickFix = (path: string, fixType: string, extraData?: any) => {
+    if (fixType === "stride-secret-leak") {
+      setPendingSecretFix({ kind: "single", path, extraData })
+      return
+    }
+    applyQuickFix(path, fixType, extraData)
+  }
+
+  // Batched variant: one reconcile for many fixes, so every fix sees the
+  // accumulated text instead of the same stale snapshot (only the last would
+  // survive otherwise).
+  const handleQuickFixAll = (fixes: { path: string; fixType: string; extraData?: any }[]) => {
+    if (fixes.length === 0) return
+    if (fixes.some((f) => f.fixType === "stride-secret-leak")) {
+      setPendingSecretFix({ kind: "batch", fixes })
+      return
+    }
+    applyQuickFixAll(fixes)
+  }
+
+  const confirmPendingSecretFix = () => {
+    if (!pendingSecretFix) return
+    if (pendingSecretFix.kind === "single") {
+      applyQuickFix(pendingSecretFix.path, "stride-secret-leak", pendingSecretFix.extraData)
+    } else {
+      applyQuickFixAll(pendingSecretFix.fixes)
+    }
+    setPendingSecretFix(null)
   }
 
   const fixableDiagnostics = useMemo(() => {
@@ -2466,6 +2583,16 @@ export function EditorPanel({
       style={{ background: "var(--surface)" }}
       aria-label="Spec editor"
     >
+      {pendingSecretFix && (
+        <ConfirmBanner
+          testId="secret-redact-confirm"
+          title="Replace hardcoded secret?"
+          body="This replaces the value with ${SENSITIVE_VALUE_PLACEHOLDER} and keeps the previous value preserved in a YAML comment so you can restore it. The comment still contains the secret. Cancel if you want to copy the value out first."
+          confirmLabel="Replace and keep comment"
+          onCancel={() => setPendingSecretFix(null)}
+          onConfirm={confirmPendingSecretFix}
+        />
+      )}
       {/* Tab bar */}
       <div
         className="flex items-center justify-between shrink-0 px-2"
