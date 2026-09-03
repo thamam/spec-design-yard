@@ -33,4 +33,8 @@ export const db = {
   subscribeSyncState(listener: (s: SyncState) => void): () => void {
     return specStore.subscribeSyncState(listener)
   },
+  /** Opt out of project files without a page reload. Keeps the current spec. */
+  adoptStandalone(): void {
+    specStore.adoptStandalone()
+  },
 }

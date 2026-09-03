@@ -18,6 +18,7 @@ import { useState, useMemo, useCallback, useRef } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
 import { Diagnostic } from "../../lib/linter"
 import { isFixable } from "../../lib/quick-fixes"
+import { CanvasSkeleton } from "./canvas-skeleton"
 
 /* Client-only Excalidraw */
 const ExcalidrawCanvas = dynamic(
@@ -27,37 +28,6 @@ const ExcalidrawCanvas = dynamic(
     loading: () => <CanvasSkeleton />,
   }
 )
-
-function CanvasSkeleton() {
-  return (
-    <div
-      className="flex-1 flex flex-col items-center justify-center gap-4"
-      role="status"
-      aria-label="Loading canvas"
-    >
-      {/* Dot-grid background */}
-      <svg className="absolute inset-0 w-full h-full opacity-30 pointer-events-none" aria-hidden="true">
-        <defs>
-          <pattern id="grid-dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-            <circle cx="1" cy="1" r="0.8" fill="rgba(255,255,255,0.12)" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid-dots)" />
-      </svg>
-
-      {/* Shimmer shapes */}
-      <div className="relative w-72 h-52 z-10">
-        <div className="absolute top-4 left-6 w-36 h-16 rounded-xl animate-pulse" style={{ background: "var(--surface-overlay)", border: "1px solid var(--border-subtle)" }} />
-        <div className="absolute bottom-6 right-4 w-24 h-14 rounded-xl animate-pulse" style={{ background: "var(--surface-overlay)", border: "1px solid var(--border-subtle)", animationDelay: "0.25s" }} />
-        <div className="absolute top-20 right-14 w-14 h-14 rounded-full animate-pulse" style={{ background: "var(--surface-overlay)", border: "1px solid var(--border-subtle)", animationDelay: "0.5s" }} />
-        <svg className="absolute top-12 left-40 animate-pulse" style={{ animationDelay: "0.75s" }} width="56" height="28" viewBox="0 0 56 28" fill="none" aria-hidden="true">
-          <path d="M0 14 H44 M36 6 L52 14 L36 22" stroke="rgba(79,142,247,0.35)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <p className="text-[12px] z-10" style={{ color: "var(--foreground-muted)" }}>Loading canvas…</p>
-    </div>
-  )
-}
 
 type CanvasView = "diagram" | "grid" | "layers"
 

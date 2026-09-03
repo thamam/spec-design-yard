@@ -41,6 +41,8 @@ interface EditorPanelProps {
   setActiveTab?: (tab: TabId) => void
   /** False while the workspace is hydrating; the editor refuses input until then. */
   isHydrated?: boolean
+  /** False while a first-run project decision is still in front of the user. */
+  isInteractive?: boolean
 }
 
 // The pane measurement has to happen before paint, but this page is
@@ -53,10 +55,12 @@ interface CodeTabProps {
   value: string
   onChange: (val: string) => void
   disabled?: boolean
+  /** Hydrating — distinct from first-run lock so aria-busy is honest. */
+  loading?: boolean
   wordWrap?: boolean
 }
 
-function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTabProps) {
+function CodeTab({ value, onChange, disabled = false, loading = false, wordWrap = true }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
@@ -296,8 +300,8 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTab
         onKeyDown={handleKeyDown}
         onScroll={handleTextareaScroll}
         disabled={disabled}
-        aria-label={disabled ? "Loading spec" : "Spec YAML"}
-        aria-busy={disabled}
+        aria-label={loading ? "Loading spec" : disabled ? "Choose a project folder before editing" : "Spec YAML"}
+        aria-busy={loading}
         // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
         // so both layers agree on content width when a scrollbar appears.
         className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${wordWrap ? " whitespace-pre-wrap break-words" : " whitespace-pre"}${disabled ? " opacity-40 cursor-wait" : ""}`}
@@ -2189,6 +2193,7 @@ export function EditorPanel({
   activeTab: propActiveTab,
   setActiveTab: propSetActiveTab,
   isHydrated: propIsHydrated,
+  isInteractive: propIsInteractive,
 }: EditorPanelProps) {
   const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
@@ -2579,7 +2584,13 @@ export function EditorPanel({
         className={activeTab === "code" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
-        <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} disabled={propIsHydrated === false} wordWrap={wordWrap} />
+        <CodeTab
+          value={specText}
+          onChange={(val) => setSpecText(val, { isTyping: true })}
+          disabled={propIsHydrated === false || propIsInteractive === false}
+          loading={propIsHydrated === false}
+          wordWrap={wordWrap}
+        />
       </div>
 
       <div

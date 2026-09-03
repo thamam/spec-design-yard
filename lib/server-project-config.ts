@@ -178,9 +178,21 @@ export function setStandaloneMode(): void {
   writeConfig({ mode: "standalone", activeProject: cfg.activeProject ?? null, recentProjects: recentsFrom(cfg) })
 }
 
-/** Prefilled path for the one-time first-run prompt. */
+/** Prefilled path for the one-time first-run prompt. Never persisted
+ *  unless the user actually creates or opens that folder. */
 export function getSuggestedProjectDir(): string {
   return path.join(os.homedir(), "spec-yard-projects", "my-system")
+}
+
+/** Branch name when `dir` is a git work tree on a named branch; otherwise null. */
+export function readGitBranch(dir: string): string | null {
+  try {
+    const head = fs.readFileSync(path.join(dir, ".git", "HEAD"), "utf8").trim()
+    const match = /^ref:\s+refs\/heads\/(.+)$/.exec(head)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
 }
 
 /** Test hook: clears session state (config files are the tests' own temp dirs). */

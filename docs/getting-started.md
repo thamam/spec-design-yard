@@ -17,10 +17,8 @@ Ensure you have the following installed on your machine:
 To set up the project locally, clone the repository, navigate into the project directory, and install its dependencies:
 
 ```bash
-# Navigate to the project folder
+git clone https://github.com/thamam/spec-design-yard.git
 cd spec-design-yard
-
-# Install npm dependencies
 npm install
 ```
 
@@ -33,6 +31,7 @@ In the project directory, you can run the following commands:
 ### `npm run dev`
 Runs the app in development mode, bound to loopback (`127.0.0.1`) only.
 - Open [http://127.0.0.1:3000](http://127.0.0.1:3000) (or [http://localhost:3000](http://localhost:3000)) to view it in your browser.
+- Another port: `npm run dev -- -p 3011` (then open that port). Do not point customer checks at a leftover `:3000` if you launched with `-p`.
 - The page will hot-reload automatically if you make changes to the workspace code.
 - The project and store APIs have no authentication. Do not re-bind with `-H 0.0.0.0` or expose the port on an untrusted network.
 
@@ -59,11 +58,10 @@ Runs Vitest in watch mode.
 
 ## Quick-Start Workflow
 
-1. **Install dependencies:** `npm install`
-2. **Launch the development server:** `npm run dev` (listens on `127.0.0.1` only)
-3. **Open the browser:** Go to `http://127.0.0.1:3000`
-4. **Make adjustments:** Edit the system architecture spec directly inside the Editor's **Code Tab** using YAML syntax, watch the live linter update inline, and view the visual graph adjust in real time on the canvas.
-5. **Verify stability:** Run `npm run test` to confirm all system unit and integration tests are passing perfectly.
+1. **Clone and install:** `git clone https://github.com/thamam/spec-design-yard.git && cd spec-design-yard && npm install`
+2. **Launch the development server:** `npm run dev` (listens on `127.0.0.1:3000`; use `npm run dev -- -p <port>` to pick another port)
+3. **Open the browser:** Go to `http://127.0.0.1:3000` (or the port you passed)
+4. **Pick a project folder** when the first-run prompt appears, then edit the YAML spec in the **Code** tab and watch the canvas update.
 
 ---
 
@@ -125,10 +123,10 @@ Either way the folder is recorded as the active project for future launches.
 ### Working without a project (opt-out)
 
 If you just want to sketch without touching the filesystem, the picker offers
-"Use browser storage instead": specs then live only in the browser's
-localStorage, and this is the one place the built-in demo spec appears — a
-first launch opens a blank slate instead, so nothing competes with the
-"choose a project folder" prompt. The choice is
+"Use browser storage instead". The workspace stays on screen (no white reload
+flash) and **keeps the spec you were looking at** — it does not surprise-load
+the External Brain demo. A later standalone launch with nothing saved in the
+browser opens the same labeled blank slate a fresh project gets. The choice is
 remembered; opt back in by picking a project folder from the same panel — a
 sketch made in browser storage carries over into the first project you pick
 (it lands in `main.spec.yaml` on your next edit).

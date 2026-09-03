@@ -49,6 +49,21 @@ describe('status bar sync visibility', () => {
     })
   })
 
+  test('an in-flight edit says Unsaved changes, not Synced', async () => {
+    installFetch({ fileMode: true })
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-status').textContent).toMatch(/synced/i)
+      expect((screen.getByTestId('spec-textarea') as HTMLTextAreaElement).disabled).toBe(false)
+    })
+    fireEvent.change(screen.getByTestId('spec-textarea'), {
+      target: { value: 'system:\n  name: Dirty Edit\n  components: []\n' },
+    })
+    expect(screen.getByTestId('sync-status').textContent).toMatch(/unsaved changes/i)
+    expect(screen.getByTestId('sync-status').textContent).not.toMatch(/synced/i)
+  })
+
   test('a project-switched latch surfaces a visible reload instruction', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     installFetch({
@@ -59,8 +74,14 @@ describe('status bar sync visibility', () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()
 
+    await waitFor(() => {
+      expect((screen.getByTestId('spec-textarea') as HTMLTextAreaElement).disabled).toBe(false)
+    })
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: 'system:\n  name: Edited\n  components: []\n' } })
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-status').textContent).toMatch(/unsaved/i)
+    })
     // Autosave debounce (1s) then the PUT 409s and latches.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1200))

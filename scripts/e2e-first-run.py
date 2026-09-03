@@ -97,6 +97,11 @@ with sync_playwright() as p:
           badge_text(page))
     panel = page.locator('[data-testid="project-picker-panel"]')
     check("first run opens the picker without being asked", panel.count() > 0)
+    overlay = page.locator('[data-testid="first-run-overlay"]')
+    check("first run shows a blocking overlay", overlay.count() > 0)
+    ta_disabled = page.locator('[data-testid="spec-textarea"]')
+    check("the editor is not typeable until a project decision",
+          ta_disabled.get_attribute("disabled") is not None)
 
     dir_input = page.locator('[data-testid="project-dir-input"]')
     prefill = dir_input.input_value() if dir_input.count() > 0 else ""
@@ -185,6 +190,12 @@ with sync_playwright() as p:
     standalone_btn.click()
     check("badge reports browser storage after opting out",
           wait_for_badge(page, "browser storage"), badge_text(page))
+    after_opt = spec_text(page)
+    check("opt-out keeps the current spec instead of loading the demo",
+          "External Brain" not in after_opt and "New System" in after_opt,
+          after_opt[:120])
+    check("opt-out does not leave a first-run overlay up",
+          page.locator('[data-testid="first-run-overlay"]').count() == 0)
     shot(page, "05-standalone-opt-out")
 
     check("no console/page errors across the whole first-run flow",

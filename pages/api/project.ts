@@ -5,6 +5,7 @@ import path from "path"
 import {
   getProjectStatus,
   getSuggestedProjectDir,
+  readGitBranch,
   setActiveProject,
   setStandaloneMode,
 } from "../../lib/server-project-config"
@@ -60,7 +61,14 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
       } catch {
         // Stale config or launch typo: report it so the picker can warn.
       }
-      return res.status(200).json({ mode: "project", dir: realDir, exists, source: status.source, recents: status.recents })
+      return res.status(200).json({
+        mode: "project",
+        dir: realDir,
+        exists,
+        source: status.source,
+        recents: status.recents,
+        gitBranch: exists ? readGitBranch(realDir) : null,
+      })
     }
     if (status.mode === "standalone") {
       return res.status(200).json({ mode: "standalone", recents: status.recents })

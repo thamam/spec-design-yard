@@ -8,23 +8,22 @@ By mapping architectures from a human-readable **YAML specification**, Spec-Yard
 
 ## 🚀 Quick Start
 
-Get the workspace running locally in four short steps:
-
 ```bash
-# 1. Install dependencies
+git clone https://github.com/thamam/spec-design-yard.git
+cd spec-design-yard
 npm install
-
-# 2. (One-time) put the `spec-yard` launcher on your PATH
-npm run install-cli
-
-# 3. Run the development server (binds 127.0.0.1 only)
-npm run dev
-
-# 4. Verify the system tests
-npm run test
+npm run dev          # binds 127.0.0.1:3000
 ```
 
-Once running, open **[http://127.0.0.1:3000](http://127.0.0.1:3000)** (or [http://localhost:3000](http://localhost:3000)).
+Open **[http://127.0.0.1:3000](http://127.0.0.1:3000)** (or [http://localhost:3000](http://localhost:3000)). To use another port: `npm run dev -- -p 3011`.
+
+Optional, later: `npm run install-cli` puts `spec-yard` in `~/.local/bin`. That directory is often **not** on `PATH` — the script prints the `export` and warns if it is missing:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Contributor checks (`npm test`, `npm run build`) are not part of launching the workspace.
 
 **Host bind:** every default launch path (`npm run dev`, `npm run start`, `spec-yard`, CI) listens on loopback `127.0.0.1` only. The project and store APIs have no authentication — anyone who can reach the port can read and overwrite files under the active project. Do not pass `-H 0.0.0.0` and do not put this process on an untrusted network.
 

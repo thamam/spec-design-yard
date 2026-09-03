@@ -8,6 +8,19 @@ import { lintSpec } from '../lib/linter'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
 import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { db } from '../lib/db'
+
+const INBOX_SPEC = `system:
+  name: Test
+  components:
+    - id: inbox
+      type: Store
+      name: inbox/
+`
+
+function seedInboxSpec() {
+  db.saveSpec('main', 'Test', INBOX_SPEC)
+}
 
 describe('Workspace Split-Pane Spec-Diagram View', () => {
   test('renders editor panel and canvas panel side-by-side', async () => {
@@ -29,7 +42,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     expect(textarea.value).toContain('system:')
-    expect(textarea.value).toContain('inbox')
+    expect(textarea.value).toContain('New System')
   })
 
   test('updates editor value on user input', async () => {
@@ -47,9 +60,9 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     await waitForWorkspaceHydration()
     
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
-    expect(textarea.value).toContain('inbox')
+    expect(textarea.value).toContain('New System')
     
-    // Check that we can simulate user moving the inbox component on the canvas
+    // Check that we can simulate user moving a component on the canvas
     // By directly triggering the handleCanvasChange or testing key bindings
     expect(textarea.value).not.toContain('x: 300')
   })
@@ -318,6 +331,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
   })
 
   test('FocusTab property editor updates spec text correctly', async () => {
+    seedInboxSpec()
     render(<Workspace />)
     await waitForWorkspaceHydration()
     
@@ -393,6 +407,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
   })
 
   test('selecting a component from GridView switches to Focus Tab and updates selectedUnit', async () => {
+    seedInboxSpec()
     render(<Workspace />)
     await waitForWorkspaceHydration()
 

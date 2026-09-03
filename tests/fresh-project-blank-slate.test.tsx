@@ -96,13 +96,14 @@ describe('fresh project blank slate (file mode, no spec file)', () => {
     expect(textarea.value).not.toContain('# New project')
   })
 
-  test('standalone mode keeps the built-in demo spec', async () => {
+  test('standalone mode opens a blank slate, not the demo', async () => {
     installFetchMock({ fileMode: false })
     render(<Workspace />)
     await waitForWorkspaceHydration()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
-    expect(textarea.value).toContain('External Brain')
+    expect(textarea.value).toContain('New System')
+    expect(textarea.value).not.toContain('External Brain')
   })
 })
 
@@ -135,7 +136,7 @@ describe('first run (no project chosen yet)', () => {
     expect(textarea.value).toContain('New System')
   })
 
-  test('an explicit browser-storage opt-out still gets the demo to play with', async () => {
+  test('an explicit browser-storage opt-out opens a blank slate, not the demo', async () => {
     installWorkspaceFetch({
       spec: { body: { enabled: false, mode: 'standalone' } },
       project: { body: { mode: 'standalone', recents: [] } },
@@ -144,6 +145,7 @@ describe('first run (no project chosen yet)', () => {
     await waitForWorkspaceHydration()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
-    expect(textarea.value).toContain('External Brain')
+    expect(textarea.value).toContain('New System')
+    expect(textarea.value).not.toContain('External Brain')
   })
 })
