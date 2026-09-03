@@ -123,7 +123,7 @@ export function WorkspaceLayout() {
     canUndo,
     canRedo,
     resetHistory,
-  } = useUndoRedo(INITIAL_SPEC)
+  } = useUndoRedo(UNCONFIGURED_SPEC)
 
   // The canvas hands its zoomToFit() up here by prop (not through
   // window.excalidrawAPI) so the global shortcut and the canvas controls all
@@ -319,21 +319,27 @@ export function WorkspaceLayout() {
     }
   }, [specText, isHydrated, persistSpec])
 
-  // Sync canvas position edits, deletions, and renames back into YAML spec
+  // Latest spec for canvas writeback. The callback identity must not follow
+  // every keystroke: that recreated onCanvasChange, restarted the drag
+  // debounce, and raced a YAML recompile that then dropped the staged dest.
+  const specTextRef = useRef(specText)
+  specTextRef.current = specText
+
   const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
     if (!isHydrated) return
+    const current = specTextRef.current
     if (Array.isArray(change)) {
-      const updated = reconcileSpec(specText, { type: "coords", payload: change })
-      if (updated !== specText) {
+      const updated = reconcileSpec(current, { type: "coords", payload: change })
+      if (updated !== current) {
         setSpecText(updated, { immediate: true })
       }
     } else if (change && typeof change === "object" && change.type) {
-      const updated = reconcileSpec(specText, { type: change.type as any, payload: change.payload })
-      if (updated !== specText) {
+      const updated = reconcileSpec(current, { type: change.type as any, payload: change.payload })
+      if (updated !== current) {
         setSpecText(updated, { immediate: true })
       }
     }
-  }, [isHydrated, specText, setSpecText])
+  }, [isHydrated, setSpecText])
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
@@ -501,6 +507,7 @@ export function WorkspaceLayout() {
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
             activeTab={activeTab}
+            isHydrated={isHydrated}
           />
         </div>
       </div>

@@ -77,8 +77,9 @@ export function ProjectPicker({ reload }: { reload?: () => void }) {
         }
       })
       .catch(() => {
-        // Unreachable/odd responses degrade to the browser-storage display.
-        if (!cancelled) setInfo({ mode: "standalone", recents: [] })
+        // Network down is the same unknown as a non-OK response — claiming
+        // "Browser storage" would lie about where writes are going.
+        if (!cancelled) setInfo({ mode: "unknown", recents: [] })
       })
     return () => {
       cancelled = true

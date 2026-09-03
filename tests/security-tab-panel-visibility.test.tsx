@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Regression guard: the security tab panel carried an unconditional `flex`
 // class alongside the HTML `hidden` attribute, and author-level
@@ -11,8 +12,9 @@ import Workspace from '../components/Workspace'
 describe('Security tab panel visibility', () => {
   const securityPanel = () => document.getElementById('tabpanel-security') as HTMLElement
 
-  test('security dashboard panel is hidden unless the Security tab is active', () => {
+  test('security dashboard panel is hidden unless the Security tab is active', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Default tab is Code — security dashboard must be hidden
     expect(securityPanel()).toBeTruthy()

@@ -7,10 +7,12 @@ import { lintSpec } from "../../lib/linter"
 import {
   createCanvasDiffState,
   diffScene,
+  isOverlayElementId,
   positionKey,
   pruneTracking,
   registerCompiledElements,
   resolvePendingRename,
+  stagedMoveInvalidatedByCompile,
 } from "../../lib/canvas-diff"
 import { normalizeConnections } from "../../lib/spec-model"
 
@@ -430,7 +432,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
           boundElements: [],
           updated: threatTextVersion,
           link: null,
-          locked: false,
+          locked: true,
         })
 
         const threatZoneId = `threat-zone-${comp.id}-${idx}`
@@ -458,7 +460,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
           boundElements: [],
           updated: threatZoneVersion,
           link: null,
-          locked: false,
+          locked: true,
         })
       }
     }
@@ -864,10 +866,13 @@ export function ExcalidrawCanvas({
 
   useEffect(() => {
     if (!pendingMove || !onCanvasChange) return
-    // The spec moved on while this drag was waiting out its debounce -- a
-    // coordinate typed in the YAML, or a re-layout. Delivering the older
-    // measurement now would overwrite the newer one, so drop it instead.
-    if (pendingMove.compile !== elements) {
+    // The spec moved on while this drag was waiting out its debounce. Drop
+    // only when that recompile actually changed the staged ids' coords — a
+    // name edit or a Focus keystroke must not throw away the dest.
+    if (
+      pendingMove.compile !== elements &&
+      stagedMoveInvalidatedByCompile(pendingMove.rects, pendingMove.compile, elements)
+    ) {
       setPendingMove(null)
       return
     }
@@ -1059,8 +1064,10 @@ export function ExcalidrawCanvas({
               (id) => appState.selectedElementIds[id]
             )
             if (selectedIds.length > 0) {
-              const matchedId = selectedIds.find((id) =>
-                parsedSpec?.system?.components?.some((c: any) => c.id === id)
+              const matchedId = selectedIds.find(
+                (id) =>
+                  !isOverlayElementId(id) &&
+                  parsedSpec?.system?.components?.some((c: any) => c.id === id)
               )
               if (matchedId && matchedId !== selectedUnit) {
                 lastSelectedUnitRef.current = matchedId

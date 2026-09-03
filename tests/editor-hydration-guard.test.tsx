@@ -19,12 +19,23 @@ describe('EditorPanel hydration guard', () => {
     expect(textarea).toHaveAttribute('aria-label', 'Loading spec')
   })
 
-  test('Search focuses the spec textarea', () => {
+  test('Find is disabled with a truthful not-available title', () => {
+    render(<EditorPanel specText={'system: {}\n'} isHydrated />)
+    const find = screen.getByRole('button', { name: 'Find in file' })
+    expect(find).toBeDisabled()
+    expect(find).toHaveAttribute('title', expect.stringMatching(/not available/i))
+  })
+
+  test('Word wrap actually changes the textarea white-space', () => {
     render(<EditorPanel specText={'system: {}\n'} isHydrated />)
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
-    textarea.blur()
-    fireEvent.click(screen.getByRole('button', { name: 'Find in file (Ctrl or Cmd+F)' }))
-    expect(textarea).toHaveFocus()
+    const overlay = screen.getByTestId('yaml-highlight-overlay')
+    expect(textarea.className).toMatch(/whitespace-pre(?!-wrap)/)
+    expect(overlay.className).toMatch(/whitespace-pre(?!-wrap)/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle word wrap' }))
+    expect(textarea.className).toMatch(/whitespace-pre-wrap/)
+    expect(overlay.className).toMatch(/whitespace-pre-wrap/)
   })
 
   test('textarea is enabled once hydrated (and by default)', () => {

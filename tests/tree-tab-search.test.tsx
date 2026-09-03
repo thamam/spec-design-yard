@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Tree Tab Interactive Component Search and Filtering', () => {
-  test('renders tree search input and type filter dropdown inside Tree tab', () => {
+  test('renders tree search input and type filter dropdown inside Tree tab', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Tree Tab
     const treeTabButton = screen.getByRole('tab', { name: /Tree/i })
@@ -24,8 +26,9 @@ describe('Tree Tab Interactive Component Search and Filtering', () => {
     expect(typeSelect.value).toBe('all')
   })
 
-  test('filters components list by search term query (case-insensitive)', () => {
+  test('filters components list by search term query (case-insensitive)', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Tree Tab
     const treeTabButton = screen.getByRole('tab', { name: /Tree/i })
@@ -51,8 +54,9 @@ describe('Tree Tab Interactive Component Search and Filtering', () => {
     expect(within(container).queryByText('inbox')).not.toBeInTheDocument()
   })
 
-  test('filters components list by component type dropdown', () => {
+  test('filters components list by component type dropdown', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Tree Tab
     const treeTabButton = screen.getByRole('tab', { name: /Tree/i })
@@ -73,8 +77,9 @@ describe('Tree Tab Interactive Component Search and Filtering', () => {
     expect(within(container).queryByText('b1_schema')).not.toBeInTheDocument()
   })
 
-  test('combines search term and type filter together', () => {
+  test('combines search term and type filter together', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Tree Tab
     const treeTabButton = screen.getByRole('tab', { name: /Tree/i })
@@ -104,8 +109,9 @@ describe('Tree Tab Interactive Component Search and Filtering', () => {
     expect(within(container).getByText('digest_stage')).toBeInTheDocument()
   })
 
-  test('renders matching statistics when search or filter is active', () => {
+  test('renders matching statistics when search or filter is active', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Tree Tab
     const treeTabButton = screen.getByRole('tab', { name: /Tree/i })
@@ -120,5 +126,27 @@ describe('Tree Tab Interactive Component Search and Filtering', () => {
     // Match stat should show matched count (e.g. "Matched: 1 of 11" or "Matched 2 of 11")
     expect(within(container).getByTestId('tree-match-stats')).toBeInTheDocument()
     expect(within(container).getByTestId('tree-match-stats').textContent).toContain('Matched:')
+  })
+
+  test('tree expand and select rows are keyboard-reachable buttons', async () => {
+    render(<Workspace />)
+    await waitForWorkspaceHydration()
+    fireEvent.click(screen.getByRole('tab', { name: /Tree/i }))
+    const container = screen.getByTestId('tree-tab-container')
+
+    const systemRow = within(container).getByRole('button', { name: /system root|external brain/i })
+    expect(systemRow).toHaveAttribute('tabindex', '0')
+    fireEvent.keyDown(systemRow, { key: 'Enter' })
+    expect(within(container).queryByText('components')).toBeNull()
+
+    fireEvent.keyDown(systemRow, { key: ' ' })
+    const componentsRow = within(container).getByRole('button', { name: /components/i })
+    fireEvent.keyDown(componentsRow, { key: 'Enter' })
+    expect(within(container).queryByText('inbox')).toBeNull()
+
+    fireEvent.keyDown(componentsRow, { key: ' ' })
+    const inboxRow = within(container).getByRole('button', { name: /select component inbox/i })
+    fireEvent.keyDown(inboxRow, { key: 'Enter' })
+    expect(screen.getByRole('tab', { name: /Focus/i })).toHaveAttribute('aria-selected', 'true')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 // Same stub strategy as canvas-adapter-integration.test.tsx: intercept the
@@ -35,10 +35,11 @@ import Workspace from '../components/Workspace'
 import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
 import { parseSpec } from '../lib/spec-model'
 
-/** Flush the next/dynamic import and mount effects until the stub has captured Excalidraw's props. */
+/** Flush hydration + the next/dynamic import until the stub has captured Excalidraw's props. */
 async function flushUntilCanvasMounted() {
-  for (let i = 0; i < 20 && !captured.props; i++) {
+  for (let i = 0; i < 40 && !captured.props; i++) {
     await act(async () => {
+      await Promise.resolve()
       await vi.advanceTimersByTimeAsync(10)
     })
   }
@@ -123,5 +124,47 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     expect(digest).toBeTruthy()
     expect(digest!.x).toBeUndefined()
     expect(digest!.y).toBeUndefined()
+  })
+
+  test('a staged drag still writes back after a YAML edit that did not move those ids', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const { spec } = parseSpec(textarea.value)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    const inboxRect = compiled.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    const scene = captured.props.initialData.elements
+    const sceneInbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+
+    const dragX = inboxRect.x + 40
+    const dragY = inboxRect.y + 25
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'down' })
+    })
+    sceneInbox.x = dragX
+    sceneInbox.y = dragY
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'up' })
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+
+    // Type a comment — recompiles the spec without changing inbox coords.
+    fireEvent.change(textarea, {
+      target: { value: textarea.value.replace('# Attaching Bricks', '# Attaching Bricks\n    # typed during debounce') },
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    const { spec: updated } = parseSpec(textarea.value)
+    const inbox = updated?.system?.components?.find((c: any) => c.id === 'inbox')
+    expect(inbox!.x).toBe(Math.round(dragX))
+    expect(inbox!.y).toBe(Math.round(dragY))
+    expect(textarea.value).toContain('typed during debounce')
   })
 })

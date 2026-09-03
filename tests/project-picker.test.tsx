@@ -213,13 +213,12 @@ describe('ProjectPicker — standalone mode (secondary)', () => {
 })
 
 describe('ProjectPicker — degraded', () => {
-  test('an unreachable project API degrades to a browser-storage badge', async () => {
-    // Server gone => the store fetch fails too and the app runs local-only,
-    // so "Browser storage" is the truthful label.
+  test('an unreachable project API degrades to an unknown badge, never a false Browser storage', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down') }))
     render(<ProjectPicker />)
     const badge = await screen.findByTestId('project-picker-badge')
-    await waitFor(() => expect(badge.textContent).toMatch(/browser storage/i))
+    await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))
+    expect(badge.textContent).not.toMatch(/browser storage/i)
   })
 
   test('a non-OK project API response shows an unknown badge, never a false Browser storage', async () => {

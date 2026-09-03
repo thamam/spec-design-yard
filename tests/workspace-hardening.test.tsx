@@ -28,6 +28,16 @@ describe('workspace hardening and honest chrome', () => {
     expect(screen.getByTestId('sync-status').textContent).toMatch(/loading/i)
   })
 
+  test('pre-hydration seed is the unconfigured slate, not the demo, and the canvas is not compiled', async () => {
+    vi.spyOn(db, 'loadFromServer').mockImplementation(() => new Promise(() => {}))
+    render(<Workspace />)
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.value).toContain('Pick a project folder')
+    expect(textarea.value).not.toContain('External Brain')
+    expect(textarea.value).not.toContain('inbox')
+    expect(screen.getByLabelText('Loading canvas')).toBeInTheDocument()
+  })
+
   test('unmounting mid-hydration does not unlock a dead workspace', async () => {
     let resolveLoad: (value: boolean) => void = () => {}
     let rejectLoad: (reason: Error) => void = () => {}

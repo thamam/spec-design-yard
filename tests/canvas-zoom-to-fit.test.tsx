@@ -49,8 +49,9 @@ import {
 const FIT_OPTIONS = { fitToViewport: true, viewportZoomFactor: 0.85 }
 
 async function flushUntilCanvasMounted() {
-  for (let i = 0; i < 20 && !captured.api; i++) {
+  for (let i = 0; i < 40 && !captured.api; i++) {
     await act(async () => {
+      await Promise.resolve()
       await vi.advanceTimersByTimeAsync(10)
     })
   }
@@ -832,38 +833,34 @@ describe('the production loadedSpecId → specIdentity wiring', () => {
     return { release: () => release?.() }
   }
 
-  test('a spec that hydrates after the first fit gets a fit of its own', async () => {
+  test('the canvas stays uncompiled until hydration, then fits the loaded spec', async () => {
     const { release } = deferredSpecFetch(FAR_SPEC)
 
     render(<Workspace />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    // Gating the compile on isHydrated: no Excalidraw, no first-fit of the
+    // seed template — that flash is what first-run was losing positions to.
+    expect(captured.api).toBeNull()
+    expect(screen.getByLabelText('Loading canvas')).toBeInTheDocument()
+    expect(
+      ((screen.queryByTestId('spec-textarea') as HTMLTextAreaElement).value || '')
+    ).not.toContain('Far Away System')
+
+    release()
+    await act(async () => {
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(1000)
+    })
     await flushUntilCanvasMounted()
     await flushInitialFit()
-    const fitsBeforeHydration = captured.api.scrollToContent.mock.calls.length
 
-    // Now let the spec arrive. Hydration bumps loadedSpecId, which is the
-    // ONLY thing that can make the already-mounted canvas fit a second time.
-    release()
-    // Two passes: the first lets the awaited fetch resolve and the hydration
-    // state land, the second lets the 300ms fit the identity bump scheduled
-    // actually fire.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
-    })
-
-    // Hydration really did land, so a missing second fit would mean the
-    // identity never advanced — not that the spec never arrived.
     expect(
       ((screen.queryByTestId('spec-textarea') as HTMLTextAreaElement).value || '')
     ).toContain('Far Away System')
-    expect(captured.api.scrollToContent.mock.calls.length).toBeGreaterThan(
-      fitsBeforeHydration
-    )
+    expect(captured.api.scrollToContent).toHaveBeenCalled()
     const [elements] = captured.api.scrollToContent.mock.calls.at(-1)
-    // The fit that matters frames the LOADED spec, not the template the
-    // canvas mounted on.
     expect(elements.some((el: any) => el.id === 'far_gate')).toBe(true)
     for (const el of elements) {
       expect(Number.isFinite(el.x + el.y + el.width + el.height)).toBe(true)
