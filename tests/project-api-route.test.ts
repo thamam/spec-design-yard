@@ -177,6 +177,22 @@ describe('project API route', () => {
     expect(res.statusCode).toBe(415)
   })
 
+  test('LOCALHOST Host is accepted (Host is case-insensitive)', () => {
+    const res = mockRes()
+    projectHandler(projectReq('GET', { host: 'LOCALHOST:3000' }), res)
+    expect(res.statusCode).toBe(200)
+  })
+
+  test('create:true under a file path fails closed with create-failed', () => {
+    const filePath = path.join(otherDir, 'a-file.txt')
+    fs.writeFileSync(filePath, 'x')
+    const nested = path.join(filePath, 'nested')
+    const res = mockRes()
+    projectHandler(projectReq('PUT', { body: { dir: nested, create: true } }), res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.code).toBe('create-failed')
+  })
+
   test('unsupported methods are 405', () => {
     const res = mockRes()
     projectHandler(projectReq('DELETE'), res)

@@ -266,7 +266,13 @@ export class RemoteSyncSpecStore implements SpecStore {
       // never reaches here (fileModeDisabled stops the PUT).
       if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
     } catch (e) {
+      // Same honesty as !res.ok: a thrown fetch left the bar claiming
+      // "Synced to project" while nothing reached the file.
       console.error(`[spec-yard] Failed to mirror ${url} to server`, e)
+      this.setSyncState({
+        status: "halted",
+        reason: "Last save failed (network) — edits are in browser storage; still retrying.",
+      })
     }
   }
 

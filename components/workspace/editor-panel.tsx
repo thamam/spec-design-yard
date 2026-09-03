@@ -295,6 +295,8 @@ function CodeTab({ value, onChange, disabled = false }: CodeTabProps) {
         onKeyDown={handleKeyDown}
         onScroll={handleTextareaScroll}
         disabled={disabled}
+        aria-label={disabled ? "Loading spec" : "Spec YAML"}
+        aria-busy={disabled}
         // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
         // so both layers agree on content width when a scrollbar appears.
         className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${disabled ? " opacity-40 cursor-wait" : ""}`}
@@ -2320,8 +2322,10 @@ export function EditorPanel({
               <WrapTextIcon size={12} />
             </button>
             <button
-              title="Search"
-              aria-label="Search in file"
+              type="button"
+              title="Find in file (Ctrl or Cmd+F)"
+              aria-label="Find in file (Ctrl or Cmd+F)"
+              onClick={() => document.getElementById("spec-textarea")?.focus()}
               className="flex items-center justify-center w-7 h-7 rounded transition-colors"
               style={{ color: "var(--foreground-muted)" }}
             >

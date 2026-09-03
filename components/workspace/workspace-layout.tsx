@@ -9,8 +9,8 @@ import { reconcileSpec } from "../../lib/reconciler"
 import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
 import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
+import { clampSplitPercent } from "../../lib/panel-split"
 
-const MIN_PANEL_WIDTH = 280
 const DEFAULT_SPLIT = 42 // percent
 
 const INITIAL_SPEC = `system:
@@ -215,35 +215,49 @@ export function WorkspaceLayout() {
   useEffect(() => {
     let cancelled = false
     const hydrate = async () => {
-      // true = file mode is on (a project dir is being mirrored to).
-      const fileMode = await db.loadFromServer()
-      if (cancelled) return
-      const savedDoc = db.getSpec("main")
-      // No spec anywhere. A file-backed project opens blank (the demo must
-      // never leak into a client repo), and so does a first run — opening a
-      // 59-diagnostic demo behind the "choose your project" prompt reads as
-      // noise, not as a welcome. Only a deliberate browser-storage opt-out
-      // keeps the demo, as something to play with.
-      const unconfigured = db.getSyncState().status === "unconfigured"
-      // The one seam foreign spec text crosses into app state: a project file
-      // or a localStorage cache may carry CRLF, the templates never do.
-      // Normalise here and the whole app downstream — textarea offsets, the
-      // indent handlers, reconcileSpec, undo/redo — works in one coordinate
-      // space. Before `lastLoadedSpecRef`, not after: comparing normalised
-      // state against a raw ref would fire an autosave on every load.
-      const loaded = normalizeLineEndings(
-        savedDoc && savedDoc.yamlContent
-          ? savedDoc.yamlContent
-          : fileMode
-          ? FRESH_PROJECT_SPEC
-          : unconfigured
-          ? UNCONFIGURED_SPEC
-          : INITIAL_SPEC
-      )
-      lastLoadedSpecRef.current = loaded
-      resetHistory(loaded)
-      setLoadedSpecId((n) => n + 1)
-      setIsHydrated(true)
+      try {
+        // true = file mode is on (a project dir is being mirrored to).
+        const fileMode = await db.loadFromServer()
+        if (cancelled) return
+        const savedDoc = db.getSpec("main")
+        // No spec anywhere. A file-backed project opens blank (the demo must
+        // never leak into a client repo), and so does a first run — opening a
+        // 59-diagnostic demo behind the "choose your project" prompt reads as
+        // noise, not as a welcome. Only a deliberate browser-storage opt-out
+        // keeps the demo, as something to play with.
+        const unconfigured = db.getSyncState().status === "unconfigured"
+        // The one seam foreign spec text crosses into app state: a project file
+        // or a localStorage cache may carry CRLF, the templates never do.
+        // Normalise here and the whole app downstream — textarea offsets, the
+        // indent handlers, reconcileSpec, undo/redo — works in one coordinate
+        // space. Before `lastLoadedSpecRef`, not after: comparing normalised
+        // state against a raw ref would fire an autosave on every load.
+        const loaded = normalizeLineEndings(
+          savedDoc && savedDoc.yamlContent
+            ? savedDoc.yamlContent
+            : fileMode
+            ? FRESH_PROJECT_SPEC
+            : unconfigured
+            ? UNCONFIGURED_SPEC
+            : INITIAL_SPEC
+        )
+        lastLoadedSpecRef.current = loaded
+        resetHistory(loaded)
+        setLoadedSpecId((n) => n + 1)
+      } catch (e) {
+        // loadFromServer already swallows its own failures; this is for a
+        // throw from resetHistory / parse / an unexpected store fault. Unlock
+        // the editor on a labeled blank rather than leaving it disabled forever.
+        console.error("[spec-yard] hydration failed", e)
+        if (cancelled) return
+        const savedDoc = db.getSpec("main")
+        const loaded = normalizeLineEndings(savedDoc?.yamlContent || UNCONFIGURED_SPEC)
+        lastLoadedSpecRef.current = loaded
+        resetHistory(loaded)
+        setLoadedSpecId((n) => n + 1)
+      } finally {
+        if (!cancelled) setIsHydrated(true)
+      }
     }
     hydrate()
     return () => {
@@ -263,6 +277,22 @@ export function WorkspaceLayout() {
     setSpecText(val, options)
   }, [isHydrated, setSpecText])
 
+  const persistSpec = useCallback((text: string) => {
+    const { spec } = parseSpec(text)
+    const systemName = spec?.system?.name
+    const title =
+      typeof systemName === "string" && systemName.trim() !== ""
+        ? systemName.trim()
+        : db.getSpec("main")?.title || "Untitled Spec"
+    db.saveSpec("main", title, text)
+    lastLoadedSpecRef.current = text
+  }, [])
+
+  const handleSave = useCallback(() => {
+    if (!isHydrated) return
+    persistSpec(specText)
+  }, [isHydrated, specText, persistSpec])
+
   // Save current spec to DB on modification (once hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
     if (specText && isHydrated) {
@@ -270,20 +300,11 @@ export function WorkspaceLayout() {
         return
       }
 
-      const timer = setTimeout(() => {
-        const { spec } = parseSpec(specText)
-        const systemName = spec?.system?.name
-        const title =
-          typeof systemName === "string" && systemName.trim() !== ""
-            ? systemName.trim()
-            : db.getSpec("main")?.title || "Untitled Spec"
-        db.saveSpec("main", title, specText)
-        lastLoadedSpecRef.current = specText
-      }, 1000)
+      const timer = setTimeout(() => persistSpec(specText), 1000)
 
       return () => clearTimeout(timer)
     }
-  }, [specText, isHydrated])
+  }, [specText, isHydrated, persistSpec])
 
   // Sync canvas position edits, deletions, and renames back into YAML spec
   const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
@@ -331,13 +352,8 @@ export function WorkspaceLayout() {
       const totalWidth = container.getBoundingClientRect().width
       const delta = e.clientX - dragStartX.current
       const deltaPct = (delta / totalWidth) * 100
-      const next = Math.min(
-        Math.max(
-          dragStartSplit.current + deltaPct,
-          (MIN_PANEL_WIDTH / totalWidth) * 100
-        ),
-        100 - (MIN_PANEL_WIDTH / totalWidth) * 100
-      )
+      const next = clampSplitPercent(dragStartSplit.current + deltaPct, totalWidth)
+      if (next == null) return
       setSplitPercent(next)
     }
 
@@ -351,13 +367,40 @@ export function WorkspaceLayout() {
     }
   }, [isDragging])
 
+  const onSeparatorKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return
+    e.preventDefault()
+    const totalWidth = containerRef.current?.getBoundingClientRect().width ?? 0
+    const step = e.shiftKey ? 5 : 2
+    let raw = splitPercent
+    if (e.key === "ArrowLeft") raw = splitPercent - step
+    else if (e.key === "ArrowRight") raw = splitPercent + step
+    else if (e.key === "Home") raw = 0
+    else raw = 100
+    const next = clampSplitPercent(raw, totalWidth)
+    if (next == null) return
+    setSplitPercent(next)
+  }, [splitPercent])
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
+      <button
+        type="button"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:px-3 focus:py-1 focus:m-2 rounded"
+        style={{ background: "var(--accent)", color: "#fff" }}
+        data-testid="skip-to-editor"
+        onClick={() => document.getElementById("spec-textarea")?.focus()}
+      >
+        Skip to editor
+      </button>
       <WorkspaceHeader
         canUndo={canUndo}
         canRedo={canRedo}
+        canSave={isHydrated}
         onUndo={undo}
         onRedo={redo}
+        onSave={handleSave}
+        onRun={() => setActiveTab("metrics")}
       />
 
       {/* Split pane body */}
@@ -368,7 +411,7 @@ export function WorkspaceLayout() {
       >
         {/* Left — editor */}
         <div
-          style={{ width: `${splitPercent}%`, minWidth: MIN_PANEL_WIDTH }}
+          style={{ width: `${splitPercent}%`, minWidth: 0 }}
           className="flex flex-col min-w-0 overflow-hidden"
         >
           <EditorPanel
@@ -392,7 +435,12 @@ export function WorkspaceLayout() {
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize panels"
+          aria-valuenow={Math.round(splitPercent)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          tabIndex={0}
           onMouseDown={onMouseDown}
+          onKeyDown={onSeparatorKeyDown}
           className="relative flex items-center justify-center w-[5px] shrink-0 group cursor-col-resize select-none z-10"
           style={{ background: "var(--border)" }}
         >
@@ -425,7 +473,7 @@ export function WorkspaceLayout() {
 
         {/* Right — canvas */}
         <div
-          style={{ width: `${100 - splitPercent}%`, minWidth: MIN_PANEL_WIDTH }}
+          style={{ width: `${100 - splitPercent}%`, minWidth: 0 }}
           className="flex flex-col min-w-0 overflow-hidden"
         >
           <CanvasPanel
@@ -445,21 +493,35 @@ export function WorkspaceLayout() {
       </div>
 
       {/* Status bar */}
-      <StatusBar syncState={syncState} />
+      <StatusBar
+        syncState={syncState}
+        isHydrated={isHydrated}
+        issueCount={diagnostics.length}
+      />
     </div>
   )
 }
 
-function StatusBar({ syncState }: { syncState: SyncState }) {
+function StatusBar({
+  syncState,
+  isHydrated,
+  issueCount,
+}: {
+  syncState: SyncState
+  isHydrated: boolean
+  issueCount: number
+}) {
   const halted = syncState.status === "halted"
-  const label =
-    syncState.status === "synced"
-      ? "Synced to project"
-      : halted
-      ? syncState.reason || "Saving halted — reload the workspace"
-      : syncState.status === "unconfigured"
-      ? "No project chosen — pick a folder to save to files"
-      : "Browser storage only"
+  const label = !isHydrated
+    ? "Loading workspace…"
+    : syncState.status === "synced"
+    ? "Synced to project"
+    : halted
+    ? syncState.reason || "Saving halted — reload the workspace"
+    : syncState.status === "unconfigured"
+    ? "No project chosen — pick a folder to save to files"
+    : "Browser storage only"
+  const issueLabel = issueCount === 0 ? "No issues" : `${issueCount} issues`
   return (
     <footer
       className="flex items-center justify-between px-4 h-6 shrink-0 text-[11px] select-none"
@@ -474,8 +536,10 @@ function StatusBar({ syncState }: { syncState: SyncState }) {
           <span
             className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
             style={{
-              background: halted
-                ? "var(--warning, #eab308)"
+              background: !isHydrated
+                ? "var(--foreground-muted)"
+                : halted
+                ? "var(--warning)"
                 : syncState.status === "synced"
                 ? "var(--success)"
                 : "var(--foreground-muted)",
@@ -483,20 +547,35 @@ function StatusBar({ syncState }: { syncState: SyncState }) {
           />
           <span
             className="truncate"
-            style={halted ? { color: "var(--warning, #eab308)", fontWeight: 600 } : undefined}
+            style={halted ? { color: "var(--warning)", fontWeight: 600 } : undefined}
           >
             {label}
           </span>
         </span>
+        {halted && (
+          <button
+            type="button"
+            data-testid="sync-reload"
+            onClick={() => window.location.reload()}
+            className="underline cursor-pointer bg-transparent border-0 p-0 text-[11px]"
+            style={{ color: "var(--warning)" }}
+          >
+            Reload
+          </button>
+        )}
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>main.spec.yaml</span>
       </div>
       <div className="flex items-center gap-4">
+        {isHydrated && (
+          <>
+            <span data-testid="issue-count">{issueLabel}</span>
+            <span style={{ color: "var(--foreground-dim)" }}>|</span>
+          </>
+        )}
         <span>UTF-8</span>
         <span style={{ color: "var(--foreground-dim)" }}>|</span>
         <span>YAML</span>
-        <span style={{ color: "var(--foreground-dim)" }}>|</span>
-        <span>Ln 1, Col 1</span>
       </div>
     </footer>
   )

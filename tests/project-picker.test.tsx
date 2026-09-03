@@ -177,6 +177,18 @@ describe('ProjectPicker — first run (unconfigured)', () => {
     // First-run create goes straight through — no exists-check round-trip.
     expect(puts).toEqual([{ dir: '/Users/dev/spec-yard-projects/my-system', create: true }])
   })
+
+  test('Escape closes the first-run panel; the input is focused when it opens', async () => {
+    installProjectFetch({
+      info: { mode: 'unconfigured', suggestedDir: '/tmp/suggested', recents: [] },
+    })
+    render(<ProjectPicker />)
+    const panel = await screen.findByTestId('project-picker-panel')
+    expect(panel.getAttribute('role')).toBe('dialog')
+    await waitFor(() => expect(screen.getByTestId('project-dir-input')).toHaveFocus())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('project-picker-panel')).toBeNull())
+  })
 })
 
 describe('ProjectPicker — standalone mode (secondary)', () => {

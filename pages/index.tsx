@@ -1,5 +1,3 @@
-import { WorkspaceLayout } from "@/components/workspace/workspace-layout"
+import Workspace from "@/components/Workspace"
 
-export default function Page() {
-  return <WorkspaceLayout />
-}
+export default Workspace

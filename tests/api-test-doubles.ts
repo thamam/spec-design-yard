@@ -29,11 +29,17 @@ export function storeReq(
   method: string,
   pathSegments: string[] | string,
   body?: any,
-  opts: { host?: string; epoch?: string } = {}
+  opts: { host?: string; epoch?: string; contentType?: string | null } = {}
 ) {
   const query: any = { path: pathSegments }
   if (opts.epoch !== undefined) query.epoch = opts.epoch
-  return { method, query, body, headers: { host: opts.host ?? LOOPBACK_HOST } } as any
+  const headers: Record<string, string> = { host: opts.host ?? LOOPBACK_HOST }
+  // Writes require a JSON content-type (CSRF-by-preflight), matching the
+  // project route. Tests opt out with contentType: null.
+  if (method === "PUT" && opts.contentType !== null) {
+    headers["content-type"] = opts.contentType ?? "application/json"
+  }
+  return { method, query, body, headers } as any
 }
 
 export function projectReq(

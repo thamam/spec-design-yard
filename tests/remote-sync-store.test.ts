@@ -529,6 +529,24 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     unsubscribe()
   })
 
+  test('a thrown fetch on save is visible, not a fake synced state', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') throw new Error('network down')
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    expect(store.getSyncState().status).toBe('synced')
+
+    store.saveSpec('main', 'T', 'yaml')
+    await vi.waitFor(() => {
+      expect(store.getSyncState().status).toBe('halted')
+    })
+    expect(store.getSyncState().reason).toMatch(/network/i)
+  })
+
   test('a failed save is visible, not console-only', async () => {
     // Review finding: a non-409 failure (project dir deleted mid-session,
     // disk full, permissions) logged and returned, leaving the status bar

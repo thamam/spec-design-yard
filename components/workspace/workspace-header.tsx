@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   GitBranchIcon,
   PlayIcon,
@@ -16,19 +16,34 @@ import { ProjectPicker } from "./project-picker"
 export function WorkspaceHeader({
   canUndo = false,
   canRedo = false,
+  canSave = true,
   onUndo,
   onRedo,
+  onSave,
+  onRun,
 }: {
   canUndo?: boolean
   canRedo?: boolean
+  canSave?: boolean
   onUndo?: () => void
   onRedo?: () => void
+  onSave?: () => void
+  onRun?: () => void
 }) {
   const [saved, setSaved] = useState(true)
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current)
+    }
+  }, [])
 
   const handleSave = () => {
+    onSave?.()
     setSaved(false)
-    setTimeout(() => setSaved(true), 1200)
+    if (savedTimer.current) clearTimeout(savedTimer.current)
+    savedTimer.current = setTimeout(() => setSaved(true), 800)
   }
 
   return (
@@ -99,13 +114,16 @@ export function WorkspaceHeader({
         <HeaderButton
           icon={<TerminalIcon size={13} />}
           label="Terminal"
+          title="Not available — this is a local workspace"
           onClick={() => {}}
+          disabled
         />
         <HeaderButton
           icon={<SaveIcon size={13} />}
           label={saved ? "Save" : "Saving…"}
           onClick={handleSave}
           active={!saved}
+          disabled={!canSave}
         />
         <HeaderButton
           icon={<Undo size={13} />}
@@ -122,7 +140,9 @@ export function WorkspaceHeader({
         <HeaderButton
           icon={<ShareIcon size={13} />}
           label="Share"
+          title="Not available — specs live on this machine"
           onClick={() => {}}
+          disabled
         />
         <div
           className="w-px h-4 mx-1"
@@ -132,13 +152,16 @@ export function WorkspaceHeader({
         <HeaderButton
           icon={<PlayIcon size={13} />}
           label="Run"
-          onClick={() => {}}
+          title="Open the packet simulator"
+          onClick={onRun || (() => {})}
           accent
         />
         <HeaderButton
           icon={<SettingsIcon size={13} />}
           label="Settings"
+          title="Not available — no settings panel yet"
           onClick={() => {}}
+          disabled
         />
       </div>
     </header>
@@ -148,18 +171,20 @@ export function WorkspaceHeader({
 interface HeaderButtonProps {
   icon: React.ReactNode
   label: string
+  title?: string
   onClick: () => void
   active?: boolean
   accent?: boolean
   disabled?: boolean
 }
 
-function HeaderButton({ icon, label, onClick, active, accent, disabled }: HeaderButtonProps) {
+function HeaderButton({ icon, label, title, onClick, active, accent, disabled }: HeaderButtonProps) {
   return (
     <button
+      type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      title={label}
+      title={title || label}
       aria-label={label}
       className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors duration-100 ${
         disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
