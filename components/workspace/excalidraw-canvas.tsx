@@ -7,6 +7,7 @@ import { lintSpec } from "../../lib/linter"
 import {
   createCanvasDiffState,
   diffScene,
+  positionKey,
   pruneTracking,
   registerCompiledElements,
   resolvePendingRename,
@@ -687,7 +688,9 @@ export function ExcalidrawCanvas({
   // compile the move was measured against travels with it: if a newer one lands
   // while the payload is still waiting, these coordinates are stale and must be
   // dropped rather than delivered.
-  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any } | null>(null)
+  // `key` names the move (which rects, to where) so the same one is never
+  // staged twice — see the staging branch in onChange for why that matters.
+  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any; key: string } | null>(null)
 
   // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
   // this ref is just its storage cell.
@@ -968,7 +971,21 @@ export function ExcalidrawCanvas({
           if (movedRects) {
             gestureSeenRef.current = false
             gestureCompileRef.current = null
-            setPendingMove({ rects: movedRects, compile: elements })
+            // Excalidraw reports from componentDidUpdate, so the re-render this
+            // setState causes comes straight back through here with the same
+            // scene -- and while the pointer is down the gate above re-arms on
+            // every report. Staging a fresh object each time closed the loop
+            // (setState -> re-render -> onChange -> setState) until React
+            // aborted it with "Maximum update depth exceeded": a click inside
+            // the 450ms debounce after a drag was enough. Stage a move only
+            // when it is not the one already staged; returning the same state
+            // object is a bail-out, and the echo ends there.
+            const key = movedRects.map((r: any) => `${r.id}@${positionKey(r)}`).join("|")
+            setPendingMove((prev) =>
+              prev && prev.compile === elements && prev.key === key
+                ? prev
+                : { rects: movedRects, compile: elements, key }
+            )
           }
         }}
       >
