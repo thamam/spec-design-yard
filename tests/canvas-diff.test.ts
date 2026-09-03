@@ -49,8 +49,16 @@ function stateFor(elements: any[]): CanvasDiffState {
   return registerCompiledElements(createCanvasDiffState(), elements)
 }
 
-function run(updatedElements: any[], compiledElements: any[], state: CanvasDiffState, appState: any = {}) {
-  return diffScene({ updatedElements, compiledElements, appState, parsedSpec, state })
+function run(
+  updatedElements: any[],
+  compiledElements: any[],
+  state: CanvasDiffState,
+  appState: any = {},
+  // Coordinate sync is gated on a real pointer gesture; these cases stand in
+  // for one having happened.
+  gestureSeen = true,
+) {
+  return diffScene({ updatedElements, compiledElements, appState, parsedSpec, gestureSeen, state })
 }
 
 describe("diffScene", () => {
@@ -194,7 +202,9 @@ describe("diffScene", () => {
     const { changes, pendingElements } = run(scene, compiled, stateFor(compiled))
 
     expect(changes).toEqual([])
-    expect(pendingElements?.map((r: any) => r.id)).toEqual(["inbox", "digest"])
+    // Only what moved: staging the untouched rects too would pin every
+    // auto-layout coordinate into the YAML on any drag.
+    expect(pendingElements?.map((r: any) => r.id)).toEqual(["inbox"])
   })
 
   it("stays quiet mid-gesture except for deletions", () => {
