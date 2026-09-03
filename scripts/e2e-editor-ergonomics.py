@@ -419,6 +419,7 @@ with sync_playwright() as p:
             taScrollWidth: ta.scrollWidth,
             taClientWidth: ta.clientWidth,
             overlayScrollWidth: overlay.scrollWidth,
+            overlayClientWidth: overlay.clientWidth,
           };
         }""",
         long_id,
@@ -426,9 +427,20 @@ with sync_playwright() as p:
     check("the wrapping identifier is tokenised in the overlay", wrap.get("found") is True, str(wrap))
     check("the long identifier actually wraps rather than overflowing",
           wrap.get("wrapped") is True and wrap.get("insideX") is True, str(wrap))
-    check("neither layer scrolls horizontally where the other does not",
-          wrap.get("taScrollWidth") == wrap.get("overlayScrollWidth")
-          or (wrap.get("taScrollWidth", 0) <= wrap.get("taClientWidth", 0) + 1),
+    # Both layers must agree on their content width, or a line near the wrap
+    # boundary wraps in one and not the other. The textarea reserves a
+    # scrollbar gutter (scrollbar-gutter: stable) and so must the overlay.
+    # Headless Chromium draws classic 15px scrollbars, so this has teeth here
+    # even though macOS overlay scrollbars would hide a mismatch: without the
+    # overlay's gutter its clientWidth is 15px wider (standalone probe:
+    # hidden+stable reserves 15px, hidden alone 0px). The previous check had
+    # an always-true `or` fallback and compared nothing.
+    check("both layers reserve the same content width (scrollbar-gutter parity)",
+          wrap.get("taClientWidth") == wrap.get("overlayClientWidth"),
+          str(wrap))
+    check("neither layer scrolls horizontally",
+          wrap.get("taScrollWidth", 0) <= wrap.get("taClientWidth", 0) + 1
+          and wrap.get("overlayScrollWidth", 0) <= wrap.get("overlayClientWidth", 0) + 1,
           str(wrap))
     shot(page, "08b2-editor-ergonomics-overlay-wrap-alignment")
 

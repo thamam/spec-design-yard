@@ -37,11 +37,6 @@ for offset in 0 1 2 3; do
   fi
 done
 
-if [ "$BASE_PORT" = "3000" ]; then
-  echo "refusing to run on port 3000 — that is the conventional dev-server port" >&2
-  exit 2
-fi
-
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 2; }
 python3 -c "import playwright" 2>/dev/null || {
   echo "playwright is required: pip install playwright && playwright install chromium" >&2
