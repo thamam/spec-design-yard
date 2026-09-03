@@ -34,6 +34,58 @@ function isUsableCoordinate(v: any): boolean {
   return Number.isFinite(v) && Math.abs(v) <= MAX_COORD
 }
 
+/** A fixed arrow anchor: the absolute point plus its ratio on the shape's bbox. */
+interface EdgePort {
+  x: number
+  y: number
+  fixedPoint: [number, number]
+}
+
+/**
+ * Arrows anchor to the four edge midpoints (N/E/S/W), never the centre.
+ * Excalidraw derives a bound endpoint from the binding's `fixedPoint` ratio
+ * (x + fixedPoint[0]*width, y + fixedPoint[1]*height) and keeps it pinned
+ * there as shapes move; [0.5, 0.5] — the ratio this compiler used to emit —
+ * is the centre, so arrows started and ended mid-shape and the arrowhead
+ * vanished under the target rect.
+ */
+function edgePort(
+  rect: { x: number; y: number; width: number; height: number },
+  side: "N" | "E" | "S" | "W"
+): EdgePort {
+  switch (side) {
+    case "N":
+      return { x: rect.x + rect.width / 2, y: rect.y, fixedPoint: [0.5, 0] }
+    case "S":
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height, fixedPoint: [0.5, 1] }
+    case "W":
+      return { x: rect.x, y: rect.y + rect.height / 2, fixedPoint: [0, 0.5] }
+    case "E":
+      return { x: rect.x + rect.width, y: rect.y + rect.height / 2, fixedPoint: [1, 0.5] }
+  }
+}
+
+/**
+ * The port pair for a connection: each shape offers the edge midpoint facing
+ * the other, picked on the dominant axis of the centre-to-centre delta.
+ * Exact ties — including perfectly stacked shapes — resolve horizontally.
+ */
+function facingPorts(
+  source: { x: number; y: number; width: number; height: number },
+  target: { x: number; y: number; width: number; height: number }
+): [EdgePort, EdgePort] {
+  const dx = target.x + target.width / 2 - (source.x + source.width / 2)
+  const dy = target.y + target.height / 2 - (source.y + source.height / 2)
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? [edgePort(source, "E"), edgePort(target, "W")]
+      : [edgePort(source, "W"), edgePort(target, "E")]
+  }
+  return dy >= 0
+    ? [edgePort(source, "S"), edgePort(target, "N")]
+    : [edgePort(source, "N"), edgePort(target, "S")]
+}
+
 const COLOR_MAP: Record<string, { stroke: string; bg: string }> = Object.assign(Object.create(null), {
   indigo: { stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' },
   purple: { stroke: '#c084fc', bg: 'rgba(168, 85, 247, 0.1)' },
@@ -173,6 +225,33 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
     }
   })
 
+  // Bound arrows must be listed on both endpoints' boundElements: Excalidraw's
+  // delete and resize handlers walk that registry (boundElementsVisitor), so
+  // an arrow missing from it is not deleted with its shape and never takes
+  // part in bound-element updates. Mirrors the arrow emission rules exactly
+  // (object-form connections; hidden target types skipped) so the registry
+  // lists precisely the arrows section 3 below draws.
+  const boundArrowIds: Record<string, string[]> = Object.create(null)
+  const noteBoundArrow = (elementId: string, arrowId: string) => {
+    const list = boundArrowIds[elementId] || (boundArrowIds[elementId] = [])
+    if (!list.includes(arrowId)) list.push(arrowId)
+  }
+  components.forEach((comp: any) => {
+    if (!comp || typeof comp !== "object" || !comp.id || !Array.isArray(comp.connections)) return
+    comp.connections.forEach((conn: any) => {
+      if (!conn || typeof conn !== "object" || !conn.target) return
+      const targetType = componentTypeMap.get(String(conn.target).trim())
+      if (targetType && hiddenTypesSet.has(targetType)) return
+      const arrowId = `arrow-${comp.id}-${conn.target}`
+      noteBoundArrow(comp.id, arrowId)
+      if (positions[conn.target]) {
+        noteBoundArrow(conn.target, arrowId)
+      } else {
+        noteBoundArrow(`orphan-${comp.id}-${conn.target}`, arrowId)
+      }
+    })
+  })
+
   // 2. Generate Rectangle & Text elements for each component
   components.forEach((comp: any, idx: number) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
@@ -262,7 +341,10 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       isDeleted: false,
       groupIds: [],
       frameId: null,
-      boundElements: [{ id: textId, type: 'text' }],
+      boundElements: [
+        { id: textId, type: 'text' },
+        ...(boundArrowIds[comp.id] || []).map((id) => ({ id, type: 'arrow' })),
+      ],
       updated: rectVersion,
       link: null,
       locked: false,
@@ -428,7 +510,7 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
             isDeleted: false,
             groupIds: [],
             frameId: null,
-            boundElements: [],
+            boundElements: (boundArrowIds[dummyId] || []).map((id) => ({ id, type: 'arrow' })),
             updated: dummyVersion,
             link: null,
             locked: false,
@@ -469,12 +551,19 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
       const arrowId = `arrow-${comp.id}-${conn.target}`
       const hasLabel = conn.label && typeof conn.label === "string" && conn.label.trim() !== ""
       const labelId = `arrow-label-${comp.id}-${conn.target}`
-      
-      // Calculate delta offsets between center of shapes
-      const sx = posSource.x + 95
-      const sy = posSource.y + 40
-      const tx = isOrphan ? (posTarget.x + 20) : (posTarget.x + 95)
-      const ty = isOrphan ? (posTarget.y + 20) : (posTarget.y + 40)
+
+      // Anchor to the N/E/S/W edge midpoint facing the other shape, not the
+      // centre (190x80 rects; the orphan ellipse is 40x40).
+      const sourceRect = { x: posSource.x, y: posSource.y, width: 190, height: 80 }
+      const targetRect = isOrphan
+        ? { x: posTarget.x, y: posTarget.y, width: 40, height: 40 }
+        : { x: posTarget.x, y: posTarget.y, width: 190, height: 80 }
+      const [startPort, endPort] = facingPorts(sourceRect, targetRect)
+
+      const sx = startPort.x
+      const sy = startPort.y
+      const tx = endPort.x
+      const ty = endPort.y
 
       const dx = tx - sx
       const dy = ty - sy
@@ -502,8 +591,13 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
         strokeWidth,
         roughness: 1.3,
         endArrowhead: 'arrow',
-        startBinding: { elementId: comp.id, fixedPoint: [0.5, 0.5] },
-        endBinding: { elementId: isOrphan ? `orphan-${comp.id}-${conn.target}` : conn.target, fixedPoint: [0.5, 0.5] },
+        // NOT elbowed: elbow arrows re-derive their route through the elbow
+        // engine, which takes zoom as a routing input — observed in 0.18 to
+        // render an S->N arrow at zoom 1.6 but produce no ink at all at zoom
+        // 1.0. Straight arrows render deterministically at any zoom; their
+        // ports re-anchor at the recompile after a drag's writeback.
+        startBinding: { elementId: comp.id, fixedPoint: startPort.fixedPoint },
+        endBinding: { elementId: isOrphan ? `orphan-${comp.id}-${conn.target}` : conn.target, fixedPoint: endPort.fixedPoint },
         seed: getDeterministicSeed(arrowId),
         version: arrowVersion,
         versionNonce: arrowVersion,
