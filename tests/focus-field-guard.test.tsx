@@ -49,6 +49,7 @@ describe('FocusTab focus-guard reads data-focus-field, not data-testid', () => {
   test('external spec change does not clobber a focused field mid-edit, but syncs once unfocused', () => {
     render(<Harness />)
 
+    fireEvent.click(screen.getByRole('button', { name: /^details$/i }))
     const ownerInput = screen.getByTestId('focus-owner-input') as HTMLInputElement
     expect(ownerInput.value).toBe('tom')
     expect(ownerInput.getAttribute('data-focus-field')).toBe('focus-owner-input')

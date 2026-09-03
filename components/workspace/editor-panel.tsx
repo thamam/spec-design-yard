@@ -567,6 +567,31 @@ function getConnectionBadgeLabel(d: Diagnostic): string {
   return d.message
 }
 
+function DisclosureButton({
+  label,
+  open,
+  onToggle,
+  testId,
+}: {
+  label: string
+  open: boolean
+  onToggle: () => void
+  testId: string
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-expanded={open}
+      onClick={onToggle}
+      className="flex items-center gap-1.5 text-xs font-bold text-zinc-100 uppercase tracking-wide w-full text-left"
+    >
+      {open ? <ChevronDownIcon size={14} aria-hidden="true" /> : <ChevronRightIcon size={14} aria-hidden="true" />}
+      {label}
+    </button>
+  )
+}
+
 function FocusTab({
   specText,
   setSpecText,
@@ -702,6 +727,16 @@ function FocusTab({
   const connectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
   const inboundConnectionDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Progressive disclosure — session-local; defaults re-applied on selection change.
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [connectionsOpen, setConnectionsOpen] = useState(true)
+  const [compiledSpecOpen, setCompiledSpecOpen] = useState(false)
+  const [addOutgoingOpen, setAddOutgoingOpen] = useState(false)
+  const [addIncomingOpen, setAddIncomingOpen] = useState(false)
+  const [expandedOutgoingTarget, setExpandedOutgoingTarget] = useState<string | null>(null)
+  const [expandedIncomingSource, setExpandedIncomingSource] = useState<string | null>(null)
+  const [globalDetailsOpen, setGlobalDetailsOpen] = useState(false)
+
   // 2. Reset form state on selection change
   if (selectedUnit !== prevUnit) {
     setPrevUnit(selectedUnit)
@@ -725,6 +760,13 @@ function FocusTab({
       setLocalInboundConnectionLabels({})
       setIdInput(selectedUnit)
       setIdError(null)
+      setDetailsOpen(false)
+      setConnectionsOpen(true)
+      setCompiledSpecOpen(false)
+      setAddOutgoingOpen(false)
+      setAddIncomingOpen(false)
+      setExpandedOutgoingTarget(null)
+      setExpandedIncomingSource(null)
     } else {
       setFormState({})
       setNewConnTarget("")
@@ -735,6 +777,13 @@ function FocusTab({
       setLocalInboundConnectionLabels({})
       setIdInput("")
       setIdError(null)
+      setDetailsOpen(false)
+      setConnectionsOpen(true)
+      setCompiledSpecOpen(false)
+      setAddOutgoingOpen(false)
+      setAddIncomingOpen(false)
+      setExpandedOutgoingTarget(null)
+      setExpandedIncomingSource(null)
     }
   }
 
@@ -961,6 +1010,7 @@ function FocusTab({
       setSpecText(updated)
       setNewConnTarget("")
       setNewConnLabel("")
+      setAddOutgoingOpen(false)
     }
   }
 
@@ -1041,6 +1091,7 @@ function FocusTab({
       setSpecText(updated)
       setNewInboundConnSource("")
       setNewInboundConnLabel("")
+      setAddIncomingOpen(false)
     }
   }
 
@@ -1131,53 +1182,9 @@ function FocusTab({
             </div>
           )}
 
-          {/* Form Editor Panel */}
+          {/* Always-visible identity: name + type + connection chips */}
           <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
-            <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
-              Interactive Property Editor
-            </h3>
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Component ID with Rename trigger */}
-              <div className="flex flex-col gap-1.5 col-span-1 sm:col-span-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component ID (System Key)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    data-testid="focus-id-input"
-                    data-focus-field="focus-id-input"
-                    value={idInput}
-                    onChange={(e) => {
-                      setIdInput(e.target.value)
-                      setIdError(null)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        handleIdRename()
-                      }
-                    }}
-                    className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
-                    placeholder="e.g. processor"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleIdRename}
-                    data-testid="focus-id-rename-btn"
-                    className="px-3.5 py-1.5 rounded-md text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0 active:scale-95"
-                  >
-                    Rename ID
-                  </button>
-                </div>
-                {idError && (
-                  <span className="text-[10px] text-red-400 mt-0.5" data-testid="focus-id-error">
-                    ⚠️ {idError}
-                  </span>
-                )}
-              </div>
-
-              {/* Name field */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Display Name</label>
                 <input
@@ -1191,7 +1198,6 @@ function FocusTab({
                 />
               </div>
 
-              {/* Type select */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component Type</label>
                 <select
@@ -1207,7 +1213,40 @@ function FocusTab({
                   <option value="Store">Store (Database)</option>
                 </select>
               </div>
+            </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="focus-outgoing-chip"
+                aria-label={`${connectionsList.length} outgoing`}
+                onClick={() => setConnectionsOpen(true)}
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20"
+              >
+                {connectionsList.length} outgoing
+              </button>
+              <button
+                type="button"
+                data-testid="focus-incoming-chip"
+                aria-label={`${inboundConnectionsList.length} incoming`}
+                onClick={() => setConnectionsOpen(true)}
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700"
+              >
+                {inboundConnectionsList.length} incoming
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <DisclosureButton
+              label="Details"
+              open={detailsOpen}
+              onToggle={() => setDetailsOpen(open => !open)}
+              testId="focus-details-disclosure"
+            />
+            {detailsOpen && (
+              <div data-testid="focus-details-panel" className="flex flex-col gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* Metadata Owner */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Owner / Contact</label>
@@ -1314,12 +1353,58 @@ function FocusTab({
                 placeholder="Briefly describe what this component does..."
               />
             </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Component ID (advanced)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    data-testid="focus-id-input"
+                    data-focus-field="focus-id-input"
+                    value={idInput}
+                    onChange={(e) => {
+                      setIdInput(e.target.value)
+                      setIdError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleIdRename()
+                      }
+                    }}
+                    className="flex-1 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs px-2.5 py-1.5 rounded-md font-mono focus:outline-none transition-all"
+                    placeholder="e.g. processor"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleIdRename}
+                    data-testid="focus-id-rename-btn"
+                    className="px-3.5 py-1.5 rounded-md text-xs font-sans font-bold uppercase tracking-wider bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/20 transition-all cursor-pointer shrink-0 active:scale-95"
+                  >
+                    Rename ID
+                  </button>
+                </div>
+                {idError && (
+                  <span className="text-[10px] text-red-400 mt-0.5" data-testid="focus-id-error">
+                    ⚠️ {idError}
+                  </span>
+                )}
+              </div>
+              </div>
+            )}
           </div>
 
-          {/* Outgoing Connections Manager */}
           <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <DisclosureButton
+              label="Connections"
+              open={connectionsOpen}
+              onToggle={() => setConnectionsOpen(open => !open)}
+              testId="focus-connections-disclosure"
+            />
+            {connectionsOpen && (
+              <div data-testid="focus-connections-panel" className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
             <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
               Outgoing Connections
             </h3>
 
@@ -1342,6 +1427,20 @@ function FocusTab({
                         >
                           {conn.target}
                         </button>
+                        <span className="flex-1 text-[11px] text-zinc-400 font-mono truncate">
+                          {localConnectionLabels[conn.target] || conn.label || ""}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Edit outgoing connection to ${conn.target}`}
+                          onClick={() => setExpandedOutgoingTarget(prev => prev === conn.target ? null : conn.target)}
+                          className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-all cursor-pointer shrink-0"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      {expandedOutgoingTarget === conn.target && (
+                      <div className="flex items-center gap-2 w-full">
                         <input
                           type="text"
                           data-testid={`focus-conn-label-input-${conn.target}`}
@@ -1358,6 +1457,7 @@ function FocusTab({
                           Disconnect
                         </button>
                       </div>
+                      )}
                       {connDiagnostics.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-0.5 px-1">
                           {connDiagnostics.map((d, dIdx) => (
@@ -1383,9 +1483,18 @@ function FocusTab({
               <p className="text-[11px] text-zinc-500 italic">No outgoing connections from this component.</p>
             )}
 
-            {/* Add connection controls */}
             <div className="border-t border-zinc-900/60 pt-3 flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Add Connection</span>
+              <button
+                type="button"
+                data-testid="focus-add-outgoing-toggle"
+                aria-expanded={addOutgoingOpen}
+                aria-label="Add outgoing connection"
+                onClick={() => setAddOutgoingOpen(open => !open)}
+                className="self-start px-2.5 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800"
+              >
+                Add outgoing connection
+              </button>
+              {addOutgoingOpen && (
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   data-testid="add-connection-select"
@@ -1422,13 +1531,12 @@ function FocusTab({
                   Add Connection
                 </button>
               </div>
+              )}
             </div>
-          </div>
+            </div>
 
-          {/* Incoming Connections Manager */}
-          <div className="border border-zinc-900 bg-zinc-950/20 p-4 rounded-xl flex flex-col gap-3.5 shrink-0">
+            <div className="flex flex-col gap-2">
             <h3 className="text-xs font-bold text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-md shadow-indigo-500/20" />
               Incoming Connections
             </h3>
 
@@ -1451,6 +1559,20 @@ function FocusTab({
                         >
                           {conn.source}
                         </button>
+                        <span className="flex-1 text-[11px] text-zinc-400 font-mono truncate">
+                          {localInboundConnectionLabels[conn.source] || conn.label || ""}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Edit incoming connection from ${conn.source}`}
+                          onClick={() => setExpandedIncomingSource(prev => prev === conn.source ? null : conn.source)}
+                          className="px-2 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-all cursor-pointer shrink-0"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      {expandedIncomingSource === conn.source && (
+                      <div className="flex items-center gap-2 w-full">
                         <input
                           type="text"
                           data-testid={`focus-inbound-conn-label-input-${conn.source}`}
@@ -1468,6 +1590,7 @@ function FocusTab({
                           Remove Inbound
                         </button>
                       </div>
+                      )}
                       {inboundDiagnostics.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-0.5 px-1">
                           {inboundDiagnostics.map((d, dIdx) => (
@@ -1493,9 +1616,18 @@ function FocusTab({
               <p className="text-[11px] text-zinc-500 italic">No incoming connections to this component.</p>
             )}
 
-            {/* Add inbound connection controls */}
             <div className="border-t border-zinc-900/60 pt-3 flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Add Incoming Connection</span>
+              <button
+                type="button"
+                data-testid="focus-add-incoming-toggle"
+                aria-expanded={addIncomingOpen}
+                aria-label="Add incoming connection"
+                onClick={() => setAddIncomingOpen(open => !open)}
+                className="self-start px-2.5 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800"
+              >
+                Add incoming connection
+              </button>
+              {addIncomingOpen && (
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   data-testid="add-inbound-connection-select"
@@ -1533,15 +1665,33 @@ function FocusTab({
                   Add Inbound Connection
                 </button>
               </div>
+              )}
             </div>
+            </div>
+              </div>
+            )}
           </div>
 
-          {/* Live Compiled YAML Spec Viewer */}
-          <div className="flex-1 flex flex-col min-h-[150px] overflow-hidden">
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 shrink-0 font-mono">Live AST-Reconciled Spec</h4>
-            <pre className="flex-1 border border-zinc-900 bg-zinc-950 p-4 rounded-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs">
-              {getSelectedUnitSpec()}
-            </pre>
+          <div className="flex flex-col shrink-0 gap-2">
+            <button
+              type="button"
+              data-testid="focus-compiled-spec-disclosure"
+              aria-label="Show compiled spec"
+              aria-expanded={compiledSpecOpen}
+              onClick={() => setCompiledSpecOpen(open => !open)}
+              className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-mono text-left"
+            >
+              {compiledSpecOpen ? <ChevronDownIcon size={12} aria-hidden="true" /> : <ChevronRightIcon size={12} aria-hidden="true" />}
+              Show compiled spec
+            </button>
+            {compiledSpecOpen && (
+              <pre
+                data-testid="focus-compiled-spec"
+                className="min-h-[150px] border border-zinc-900 bg-zinc-950 p-4 rounded-lg overflow-auto leading-6 text-emerald-400/90 whitespace-pre-wrap select-text font-mono text-xs"
+              >
+                {getSelectedUnitSpec()}
+              </pre>
+            )}
           </div>
         </div>
       ) : (
@@ -1586,7 +1736,10 @@ function FocusTab({
                       <button
                         type="button"
                         data-testid="focus-system-init-metadata-btn"
-                        onClick={() => onQuickFix("system", "missing-system-metadata")}
+                        onClick={() => {
+                          onQuickFix("system", "missing-system-metadata")
+                          setGlobalDetailsOpen(true)
+                        }}
                         className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-bold uppercase tracking-wide transition-colors active:scale-95 cursor-pointer border border-indigo-500/20"
                       >
                         Initialize System Metadata
@@ -1598,6 +1751,14 @@ function FocusTab({
 
               return (
                 <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4">
+                  <DisclosureButton
+                    label="Details"
+                    open={globalDetailsOpen}
+                    onToggle={() => setGlobalDetailsOpen(open => !open)}
+                    testId="focus-system-details-disclosure"
+                  />
+                  {globalDetailsOpen && (
+                  <div data-testid="focus-system-details-panel" className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* System Version */}
                     <div className="flex flex-col gap-1.5">
@@ -1657,6 +1818,8 @@ function FocusTab({
                       className="w-full p-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-zinc-200 text-xs rounded transition-all focus:outline-none font-mono"
                     />
                   </div>
+                  </div>
+                  )}
                 </div>
               )
             })()}

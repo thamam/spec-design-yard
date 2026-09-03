@@ -255,13 +255,13 @@ describe('CodeTab Tab indent + undo', () => {
 })
 
 describe('Tab routing when the suggestion popup is open', () => {
-  // The popup goes live at a 4-space indent inside `components:`, where the
-  // component-field vocabulary applies. Earlier fixtures dodged this by
-  // selecting indent-2 or non-YAML text, so the autocomplete branch never
-  // competed with a real indent gesture.
-  const VALUE = 'system:\n  components:\n    - id: alpha\n      type: Stage\n'
-  const LINE_3 = VALUE.indexOf('    - id: alpha')
-  const INTO_LINE_4 = VALUE.indexOf('      type: Stage') + '      type'.length
+  // The popup goes live on a typed key prefix at a 4-space indent inside
+  // `components:` (`c` → `connections:`). An empty query no longer opens
+  // the popup (focus-progressive-disclosure); these fixtures keep a real
+  // prefix so the autocomplete branch still competes with indent.
+  const VALUE = 'system:\n  components:\n    - id: alpha\n      c\n      type: Stage\n'
+  const AFTER_C = VALUE.indexOf('      c') + '      c'.length
+  const INTO_TYPE = VALUE.indexOf('      type: Stage') + '      type'.length
 
   async function setup(selStart: number, selEnd: number) {
     render(React.createElement(Workspace))
@@ -277,32 +277,32 @@ describe('Tab routing when the suggestion popup is open', () => {
   }
 
   test('Tab over a multi-line selection indents instead of accepting a suggestion', async () => {
-    const textarea = await setup(LINE_3, INTO_LINE_4)
+    const textarea = await setup(AFTER_C, INTO_TYPE)
 
     fireEvent.keyDown(textarea, { key: 'Tab' })
 
     expect(textarea.value).toBe(
-      'system:\n  components:\n      - id: alpha\n        type: Stage\n'
+      'system:\n  components:\n    - id: alpha\n        c\n        type: Stage\n'
     )
   })
 
   test('Shift+Tab over a multi-line selection outdents instead of accepting a suggestion', async () => {
-    const textarea = await setup(LINE_3, INTO_LINE_4)
+    const textarea = await setup(AFTER_C, INTO_TYPE)
 
     fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
 
     expect(textarea.value).toBe(
-      'system:\n  components:\n  - id: alpha\n    type: Stage\n'
+      'system:\n  components:\n    - id: alpha\n    c\n    type: Stage\n'
     )
   })
 
   test('Shift+Tab at a collapsed caret outdents instead of accepting a suggestion', async () => {
-    const textarea = await setup(LINE_3, LINE_3)
+    const textarea = await setup(AFTER_C, AFTER_C)
 
     fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
 
     expect(textarea.value).toBe(
-      'system:\n  components:\n  - id: alpha\n      type: Stage\n'
+      'system:\n  components:\n    - id: alpha\n    c\n      type: Stage\n'
     )
   })
 
@@ -311,11 +311,9 @@ describe('Tab routing when the suggestion popup is open', () => {
   // the caret at the end of a partial token on its own line, so accepting
   // produces YAML that parses.
   //
-  // Known pre-existing wart, deliberately NOT asserted here: the popup also
-  // opens on an empty prefix at column 0, and accepting there splices `id:`
-  // ahead of the indentation and yields YAML the parser rejects. That
-  // behaviour is on main, is out of scope for this round, and is on the
-  // follow-up list — a test asserting it would lock it in.
+  // Empty-prefix popup on a blank indented line is now closed (see
+  // getAutocompleteSuggestions + tests/autocomplete.test.ts). The old wart
+  // of accepting `id:` at column 0 is gone with it.
   test('Tab at a collapsed caret still accepts the highlighted suggestion', async () => {
     const partial = 'system:\n  components:\n    - id: alpha\n      ty\n'
     render(React.createElement(Workspace))

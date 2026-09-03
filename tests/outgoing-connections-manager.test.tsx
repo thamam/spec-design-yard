@@ -30,6 +30,7 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     expect(targetLabel).toBeInTheDocument()
 
     // 6. Verify that editing the connection label updates the spec
+    fireEvent.click(screen.getByRole('button', { name: /edit outgoing connection to digest_stage/i }))
     const labelInput = screen.getByPlaceholderText('Add connection label...') as HTMLInputElement
     expect(labelInput).toBeInTheDocument()
 
@@ -81,9 +82,10 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     fireEvent.click(focusTabBtn)
 
     // 3. Find connection target select dropdown and input for label
+    fireEvent.click(screen.getByRole('button', { name: /add outgoing connection/i }))
     const targetSelect = screen.getByTestId('add-connection-select') as HTMLSelectElement
     const newLabelInput = screen.getByTestId('add-connection-label-input') as HTMLInputElement
-    const addBtn = screen.getByRole('button', { name: /add connection/i })
+    const addBtn = screen.getByRole('button', { name: /^add connection$/i })
 
     expect(targetSelect).toBeInTheDocument()
     expect(newLabelInput).toBeInTheDocument()
