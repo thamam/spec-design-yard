@@ -187,6 +187,31 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 180 })
   })
 
+  test('a move held through a gesture lands only after a full quiet period once it ends', async () => {
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
+
+    dragBy(scene, inbox, 40, 0)
+
+    // Held from 300ms: the timer polls at 450 and 900. The gesture ends at
+    // 890 without moving anything -- the move must not land on the 900 tick,
+    // which is where a release just ahead of its final coordinates would be
+    // overtaken by the older move. It lands a full 450ms after the gesture
+    // ended instead.
+    await elapse(300)
+    drive(scene, { cursorButton: 'down' })
+    drive(scene, { cursorButton: 'down', selectedElementsAreBeingDragged: true })
+    await elapse(590)
+    drive(scene, { cursorButton: 'up' })
+    await elapse(20)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(420)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(30)
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 140 })
+  })
+
   test('the same move reported with its rects in another order is not restaged', async () => {
     const { onCanvasChange, scene, rect } = await mountCanvas()
     const inbox = rect('inbox')

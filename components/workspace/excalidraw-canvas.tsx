@@ -780,10 +780,20 @@ export function ExcalidrawCanvas({
     // spec, the scene is resnapped under the user's cursor, and the drag in
     // progress is retired as stale. Wait the gesture out instead; its release
     // either restages a real move (which restarts the debounce) or leaves
-    // this one to land.
+    // this one to land -- after a full quiet period of its own, not on the
+    // next tick of the original phase, so a release arriving just before a
+    // tick cannot land the older move under the coordinates it is about to
+    // report.
     let timer: ReturnType<typeof setTimeout>
+    let held = false
     const deliver = () => {
       if (gestureLiveRef.current) {
+        held = true
+        timer = setTimeout(deliver, 450)
+        return
+      }
+      if (held) {
+        held = false
         timer = setTimeout(deliver, 450)
         return
       }
