@@ -612,6 +612,18 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     await vi.waitFor(() => expect(store.getSyncState().status).toBe('synced'))
   })
 
+  test('a reconcile GET that throws still latches a real fork', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+      throw new Error('reconcile GET down')
+    }))
+    store.saveSpec('main', 'T', 'mine')
+    await vi.waitFor(() => expect(store.getSyncState().haltKind).toBe('adopt'))
+  })
+
   test('a genuine external-edit conflict halts with a reload instruction', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
@@ -664,6 +676,7 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
   })
 
   test('a 409 whose disk already equals this session write is treated as a win', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const ours = 'system:\n  name: Connected\n'
     vi.stubGlobal('fetch', mockFetchSequence({
       '/api/store/spec/main': {
@@ -674,6 +687,15 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     const store = new RemoteSyncSpecStore()
     await store.loadFromServer()
     store.arm()
+
+    // Leave the bar halted so the win path must explicitly restore "synced"
+    // (hydration already reports synced, which hid an uncovered reconcile).
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 500, json: async () => ({}) } as any
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: 'system:\n  name: Seed\n', rev: 'r1' }) } as any
+    }))
+    store.saveSpec('main', 'T', 'system:\n  name: Seed\n')
+    await vi.waitFor(() => expect(store.getSyncState().status).toBe('halted'))
 
     vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
       if (init?.method === 'PUT') return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
