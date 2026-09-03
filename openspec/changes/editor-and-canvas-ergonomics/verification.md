@@ -16,7 +16,8 @@ was re-run on it too, and `.orchestrator/integration/status` holds that run.
 
 Eight hardening rounds followed the first green gate at `f8f8ee7`: nine
 defects (round 1), seven (round 2), seven (round 3), nine (round 4), eleven
-(round 5), eight (round 6), eleven (round 7) and four (round 8), each a BLOCK
+(round 5), eight (round 6), eleven (round 7) and five (round 8: four fixed,
+one record-only), each a BLOCK
 from an independent cross-model review of the merged diff. Round 8's findings
 were all unreachable in normal use, which is why it was the last.
 

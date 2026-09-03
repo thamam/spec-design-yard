@@ -31,9 +31,9 @@ modifies.
     unchanged.
   - Unit tests: detector extraction parity (same outputs as before on the
     autocomplete fixtures), Enter after `metadata:` indents one level
-    deeper, Enter mid-list matches sibling indent, Enter on a top-level
-    line stays at column 0, popup-navigated Enter still applies the
-    suggestion.
+    deeper, Enter on a `- key: value` list-item line aligns under the key
+    (design.md Decision 2), Enter on a top-level line stays at column 0,
+    popup-navigated Enter still applies the suggestion.
   - E2E: press Enter inside a component block, assert the new line starts
     at the block's indent.
 

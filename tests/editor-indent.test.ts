@@ -146,21 +146,17 @@ describe('CodeTab Tab/Shift+Tab wiring', () => {
   })
 })
 
-describe('CodeTab Tab/Shift+Tab caret restore (setTimeout flush)', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
+describe('CodeTab Tab/Shift+Tab caret restore (layout effect)', () => {
+  // Named for the mechanism that exists. This suite used to say "setTimeout
+  // flush" and drove fake timers to flush a timer 7e92d1d deleted when the
+  // restore moved into a layout effect (editor-panel.tsx, the dependency-less
+  // useIsomorphicLayoutEffect) — the same rot FIX Z fixed in
+  // tests/keyboard-autocomplete-and-fix-all.test.tsx and
+  // tests/editor-enter-indent.test.ts, missed here. The layout effect runs
+  // inside the act() that dispatches the key, so the assertion needs no flush.
   test('Tab restores the caret after the value round-trips through the parent store', async () => {
     render(React.createElement(Workspace))
-    // waitFor polls on real timers; switch to fake only after hydration
-    vi.useRealTimers()
     await waitForWorkspaceHydration()
-    vi.useFakeTimers()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const value = 'system:\n  name: hello'
@@ -178,18 +174,13 @@ describe('CodeTab Tab/Shift+Tab caret restore (setTimeout flush)', () => {
       fireEvent.keyDown(textarea, { key: 'Tab' })
     })
 
-    act(() => {
-      vi.advanceTimersByTime(0)
-    })
     expect(textarea.selectionStart).toBe(caret + 2)
     expect(textarea.selectionEnd).toBe(caret + 2)
   })
 
   test('Shift+Tab restores the caret to the outdented position', async () => {
     render(React.createElement(Workspace))
-    vi.useRealTimers()
     await waitForWorkspaceHydration()
-    vi.useFakeTimers()
 
     const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
     const value = '    id: inbox'
@@ -204,9 +195,6 @@ describe('CodeTab Tab/Shift+Tab caret restore (setTimeout flush)', () => {
 
     act(() => {
       fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })
-    })
-    act(() => {
-      vi.advanceTimersByTime(0)
     })
 
     expect(textarea.value).toBe('  id: inbox')

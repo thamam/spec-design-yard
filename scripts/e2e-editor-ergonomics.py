@@ -1,11 +1,23 @@
-"""E2E user-chair test for the editor-and-canvas-ergonomics change (port 3112).
+"""E2E user-chair test for the editor-and-canvas-ergonomics change (port
+BASE_PORT + 3, 3112 by default).
 
-Foundation-lane extension point: none of the five backlog features exist yet
-at the time this scenario was written, so it asserts only what is genuinely
-true today — the harness, the mount, and the textarea's basic write path —
-and leaves the ergonomics-specific beats (keyboard nav, overlay, diagnostics
-resize, zoom-to-fit) for the lanes that build them. See the marked section at
-the end.
+Written first as the foundation lane's extension point — the harness, the
+mount, a CRLF file normalising to LF on load, and the textarea's basic write
+path — with the editor and canvas lanes appending their beats below the
+marked line. It now covers all five backlog features in a real browser:
+
+  Lane A (editor): Tab and Shift+Tab indent/outdent, single line and
+  multi-line selection; Enter lands at the block's indent; Esc then Tab
+  escapes the textarea; the syntax-colour overlay tracks the textarea's
+  scroll, colours tokens, stays pixel-aligned through typing and wrapped
+  lines, and degrades on broken YAML; the edited YAML lands in
+  main.spec.yaml on disk.
+
+  Lane B (canvas): dragging the diagnostics panel's top border, its collapse
+  toggle, the first issue row at the minimum height, the touch drag; the
+  three routes to one zoom-to-fit; switching projects re-frames the canvas.
+
+The final assertion must stay last (see the end of the file).
 
 Run it via `npm run test:e2e editor-ergonomics` (which supplies an isolated
 server via SPEC_YARD_PROJECT_DIR), or point SPEC_YARD_URL at a dev server

@@ -655,7 +655,7 @@
   },
   "hardening_round8": {
     "round": "integration-hardening round 8, the final pass (.orchestrator/integration/FIXES-round8-final.md)",
-    "note": "Five findings, none reachable in normal use, which is the exit condition: no further review round follows. FIX CCC repairs a regression round-7 FIX VV introduced.",
+    "note": "Five findings: the four fixes linked below plus one record-only item (the brief's 'Record only' section, a listed follow-up, no code). None reachable in normal use, which is the exit condition: no further review round follows. FIX CCC repairs a regression round-7 FIX VV introduced.",
     "links": [
       {
         "fix": "FIX CCC — a quoted mapping key stopped opening a block (regression from round-7 FIX VV)",

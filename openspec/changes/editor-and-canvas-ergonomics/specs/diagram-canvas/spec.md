@@ -50,6 +50,11 @@ STRIDE threat zones keep their deliberate `'dashed'`.
 + NEW: The canvas SHALL fit its content once when a spec first renders and
   once each time a different spec/project is loaded into the canvas.
   Ordinary edits to the currently loaded spec SHALL NOT trigger a re-fit.
+  An empty scene is the one carve-out: a spec with no diagram elements SHALL
+  NOT be fitted (there is nothing to frame, and fitting an empty scene blanks
+  the canvas), and loading it still counts as the load, so the first
+  component added to it afterwards is an ordinary edit and SHALL NOT trigger
+  a fit. The manual fit routes SHALL likewise be a no-op on an empty scene.
 
 #### Scenario: Switching projects re-fits
 
@@ -62,6 +67,13 @@ STRIDE threat zones keep their deliberate `'dashed'`.
 - GIVEN the user has manually panned/zoomed the current diagram
 - WHEN the user edits the spec YAML (same spec, new content)
 - THEN the viewport position and zoom are unchanged
+
+#### Scenario: An empty spec is never fitted
+
+- GIVEN a spec with no components is loaded
+- WHEN the user adds the first component to it
+- THEN the viewport position and zoom are unchanged: the empty load counted
+  as the load, and the first component is an ordinary edit
 
 ## ADDED Requirements
 
