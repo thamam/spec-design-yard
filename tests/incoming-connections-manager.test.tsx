@@ -41,6 +41,7 @@ describe('Incoming Connections Manager in Focus Tab', () => {
     fireEvent.click(focusTabBtn)
 
     // 7. Verify that editing the incoming connection label updates the spec
+    fireEvent.click(screen.getByRole('button', { name: /edit incoming connection from inbox/i }))
     const labelInput = screen.getByTestId('focus-inbound-conn-label-input-inbox') as HTMLInputElement
     expect(labelInput).toBeInTheDocument()
 
@@ -92,6 +93,7 @@ describe('Incoming Connections Manager in Focus Tab', () => {
     fireEvent.click(focusTabBtn)
 
     // 3. Find incoming connection controls
+    fireEvent.click(screen.getByRole('button', { name: /add incoming connection/i }))
     const targetSelect = screen.getByTestId('add-inbound-connection-select') as HTMLSelectElement
     const newLabelInput = screen.getByTestId('add-inbound-connection-label-input') as HTMLInputElement
     const addBtn = screen.getByTestId('add-inbound-connection-btn')

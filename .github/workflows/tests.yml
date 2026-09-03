@@ -1,5 +1,6 @@
 name: Tests
 
+# no-op: force pull_request to evaluate this workflow on current HEAD
 on:
   pull_request:
     branches: [ main ]
