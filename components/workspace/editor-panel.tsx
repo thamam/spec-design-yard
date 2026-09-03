@@ -2587,7 +2587,7 @@ export function EditorPanel({
         <ConfirmBanner
           testId="secret-redact-confirm"
           title="Replace hardcoded secret?"
-          body="This replaces the value with ${SENSITIVE_VALUE_PLACEHOLDER} and keeps the original in a YAML comment so you can restore it. The comment still contains the secret. Cancel if you want to copy the value out first."
+          body="This replaces the value with ${SENSITIVE_VALUE_PLACEHOLDER} and keeps the previous value preserved in a YAML comment so you can restore it. The comment still contains the secret. Cancel if you want to copy the value out first."
           confirmLabel="Replace and keep comment"
           onCancel={() => setPendingSecretFix(null)}
           onConfirm={confirmPendingSecretFix}

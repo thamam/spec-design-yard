@@ -89,6 +89,29 @@ describe("Security tab honesty", () => {
     createElementSpy.mockRestore()
   })
 
+  test("Fix All Gaps applies non-secret STRIDE fixes without a redact confirm", async () => {
+    const spec = `system:
+  name: Gateway Gap
+  components:
+    - id: gw
+      type: Gateway
+      connections:
+        - target: worker
+    - id: worker
+      type: Stage
+`
+    const setSpecText = vi.fn()
+    const panel = renderSecurityTab(spec, { setSpecText })
+    const fixAll = within(panel).getByTestId("fix-all-stride-gaps-btn")
+    expect(fixAll).not.toBeDisabled()
+    fireEvent.click(fixAll)
+    expect(screen.queryByTestId("secret-redact-confirm")).not.toBeInTheDocument()
+    await waitFor(() => expect(setSpecText).toHaveBeenCalled())
+    expect(String(setSpecText.mock.calls[0][0])).toMatch(
+      /authenticated TLS auth-token request|encrypted TLS auth-token flow/
+    )
+  })
+
   test("Use Environment Variable does not replace a secret until the user confirms", async () => {
     const spec = `system:
   name: Secret Leak System

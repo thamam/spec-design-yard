@@ -1094,9 +1094,12 @@ export function reconcileSpec(specText: string, change: CanvasChange): string {
                   connNode.set("label", SPOOFING_FIX_LABEL)
                   modified = true
                 }
-              } else if (typeof connNode === "string") {
-                conns.set(idx, doc.createNode({ target: connNode, label: SPOOFING_FIX_LABEL }))
-                modified = true
+              } else if (typeof connNode === "string" || yaml.isScalar(connNode)) {
+                const target = String(typeof connNode === "string" ? connNode : connNode.value ?? "")
+                if (target) {
+                  conns.set(idx, doc.createNode({ target, label: SPOOFING_FIX_LABEL }))
+                  modified = true
+                }
               }
             })
           }

@@ -130,7 +130,7 @@ export function generateArchitectureAuditReport(
 
 Generated automatically by Sentinel (Hermes agent, Spec-Design Yard) on ${dateStr}.
 
-> This report is a static STRIDE review of the drawn architecture. It is not CVE, dependency, or runtime vulnerability scanning. It may include diagnostics that quote secret material from the spec.`
+> This report is a static STRIDE review of the drawn architecture. It is not CVE, dependency, or runtime vulnerability scanning. It may include diagnostics that quote secret material from the spec.
 
 ## 1. System Overview
 - **System Name:** ${systemName}
