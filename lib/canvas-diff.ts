@@ -56,6 +56,16 @@ export interface DiffSceneInput {
   /** Excalidraw `appState` from the same `onChange` call. */
   appState?: any
   parsedSpec?: any
+  /**
+   * Whether a real pointer gesture has happened on the canvas since the last
+   * coordinate sync. Position alone cannot tell a drag apart from an echo of
+   * our own compile — `onChange` fires for both, and Excalidraw reports it
+   * from `componentDidUpdate`, i.e. before any effect of ours can record what
+   * we just drew. Without a gesture to point to, a coordinate difference is
+   * the scene lagging the spec, and writing it back overwrites the user's
+   * edit. Defaults to false: no gesture, no coordinate writeback.
+   */
+  gestureSeen?: boolean
   state: CanvasDiffState
 }
 
@@ -78,6 +88,11 @@ export function createCanvasDiffState(): CanvasDiffState {
   }
 }
 
+/** Rounded "x,y" identity for a rect, matching the reconciler's own rounding. */
+export function positionKey(el: any): string {
+  return `${Math.round(el?.x ?? 0)},${Math.round(el?.y ?? 0)}`
+}
+
 /** Copy-on-write set insert: returns the same set when nothing changes. */
 function withId(set: Set<string>, id: string): Set<string> {
   if (set.has(id)) return set
@@ -85,6 +100,7 @@ function withId(set: Set<string>, id: string): Set<string> {
   next.add(id)
   return next
 }
+
 
 /**
  * Record everything the compiler just drew, so later scene echoes of these ids
@@ -194,7 +210,7 @@ export function getSourceAndTargetFromArrowId(arrowId: string, parsedSpec: any):
 }
 
 export function diffScene(input: DiffSceneInput): DiffSceneResult {
-  const { updatedElements, compiledElements, appState, parsedSpec, state } = input
+  const { updatedElements, compiledElements, appState, parsedSpec, state, gestureSeen = false } = input
 
   let deletedIds = state.deletedIds
   let addedIds = state.addedIds
@@ -222,11 +238,21 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
   // Optimization: single-pass element set lookup
   const currentElementIds = new Set(compiledElements.map((el: any) => el.id))
 
-  // Avoid interrupting active drawing/resizing/editing gestures
+  // Avoid interrupting active drawing/resizing/editing gestures.
+  // Excalidraw 0.18 renamed these fields: `draggingElement` split into
+  // `newElement` (drawing a new shape) and `selectedElementsAreBeingDragged`
+  // (moving existing ones), and `editingElement` became `editingTextElement` /
+  // `editingLinearElement`. Checking only the pre-0.18 names left this guard
+  // permanently false, so every intermediate frame of a hand-drag reached the
+  // coordinate sync below. The old names stay for scenes from an older host.
   const isUserInteracting =
     !!appState?.draggingElement ||
+    !!appState?.newElement ||
+    !!appState?.selectedElementsAreBeingDragged ||
     !!appState?.resizingElement ||
-    !!appState?.editingElement
+    !!appState?.editingElement ||
+    !!appState?.editingTextElement ||
+    !!appState?.editingLinearElement
 
   // 2. Sync deletions back to editor spec
   if (hasScene) {
@@ -426,18 +452,21 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
     }
   }
 
-  // 4. Sync coordinate changes back to editor spec
-  if (hasScene) {
-    const rects = updatedElements.filter((el: any) => el.type === 'rectangle' && !el.isDeleted)
-    if (rects.length > 0) {
-      const hasChanged = rects.some((r: any) => {
-        const current = compiledElements.find((el: any) => el.id === r.id)
-        return current && (Math.round(current.x) !== Math.round(r.x) || Math.round(current.y) !== Math.round(r.y))
-      })
-      if (hasChanged) {
-        pendingElements = rects
-      }
-    }
+  // 4. Sync coordinate changes back to editor spec.
+  // Gated on a real pointer gesture: without one, a rect sitting somewhere
+  // other than where the compiler just put it means the scene has not caught
+  // up with the spec, not that the user moved anything. Writing that back
+  // overwrote the coordinate the user was typing, which recompiled, which the
+  // scene again lagged behind — a spec/canvas ping-pong that never settled.
+  // Only the rects that actually moved are staged: staging the whole scene
+  // materialised every auto-layout coordinate into the YAML on any drag.
+  if (hasScene && gestureSeen) {
+    const moved = updatedElements.filter((r: any) => {
+      if (r.type !== 'rectangle' || r.isDeleted) return false
+      const current = compiledElements.find((el: any) => el.id === r.id)
+      return !!current && positionKey(r) !== positionKey(current)
+    })
+    if (moved.length > 0) pendingElements = moved
   }
 
   return finish()

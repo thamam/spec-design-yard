@@ -126,41 +126,41 @@ export function compileSpecToExcalidrawElements(parsedSpec: any, pathSource?: st
   // Layout positions registry using Object.create(null) to prevent prototype pollution
   const positions: Record<string, { x: number; y: number }> = Object.create(null)
 
-  // 1. Assign positions to nodes based on logical layout rules
+  // 1. Assign positions to nodes based on logical layout rules.
+  // Every component consumes its lane slot, pinned or not. If the counters only
+  // advanced for unpinned components, giving one component an explicit x/y
+  // would slide every later component a slot to the left — and the coordinate
+  // writeback would then persist that slide, so a single drag made the rest of
+  // the diagram twitch on both axes.
   let coreIdx = 0
   let brickIdx = 0
 
   components.forEach((comp: any) => {
     if (!comp || typeof comp !== "object" || !comp.id) return
+    const type = String(comp.type || "").toLowerCase()
+    const isBrick = type === 'brick'
+    // Bricks sit in a row below the core loop; stages and stores run across it.
+    const slot = isBrick ? brickIdx++ : coreIdx++
+
+    // Each axis is honoured on its own. Requiring both meant `y: 200` with no
+    // `x` was silently discarded and the component snapped back to its auto
+    // slot, so hand-placing one axis in the YAML looked like the canvas
+    // fighting the edit.
+    const auto = isBrick
+      ? { x: 100 + slot * 260, y: 380 }
+      : { x: 60 + slot * 250, y: 160 }
     // Not `typeof === 'number'`: YAML spells NaN and the infinities as
     // `.nan` / `.inf`, and both pass a typeof check. They flow straight into
     // element geometry, poison getCommonBounds, and leave scrollToContent
     // writing a non-finite scroll/zoom — a blank canvas with no error. Nor is
-    // Number.isFinite enough on its own: see MAX_COORD. Either way the
-    // coordinate falls back to the computed layout, as a missing one does.
-    if (isUsableCoordinate(comp.x) && isUsableCoordinate(comp.y)) {
-      positions[comp.id] = {
-        x: comp.x,
-        y: comp.y,
-      }
-    } else {
-      const type = String(comp.type || "").toLowerCase()
-      
-      if (type === 'brick') {
-        // Lay out bricks in a row below the core loop
-        positions[comp.id] = {
-          x: 100 + brickIdx * 260,
-          y: 380,
-        }
-        brickIdx++
-      } else {
-        // Lay out core stages and stores in a horizontal sequence
-        positions[comp.id] = {
-          x: 60 + coreIdx * 250,
-          y: 160,
-        }
-        coreIdx++
-      }
+    // Number.isFinite enough on its own: see MAX_COORD. Either way that axis
+    // falls back to its auto slot, as a missing one does.
+    const hasX = isUsableCoordinate(comp.x)
+    const hasY = isUsableCoordinate(comp.y)
+
+    positions[comp.id] = {
+      x: hasX ? comp.x : auto.x,
+      y: hasY ? comp.y : auto.y,
     }
   })
 
@@ -655,14 +655,66 @@ export function ExcalidrawCanvas({
       .catch(() => setLoadError(true))
   }, [])
 
-  const elements = useMemo(() => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay), [parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay])
+  // `hiddenTypes` is defaulted to a fresh `[]` on every render, so keying the
+  // memo on the array's identity recompiled the entire scene each time the
+  // component rendered for any reason at all. Besides the waste, it left
+  // `elements` useless as a marker for "the compile this gesture belongs to":
+  // an unrelated re-render mid-drag would have retired a live gesture and
+  // dropped the move. Key on the contents instead.
+  const hiddenTypesKey = hiddenTypes.join("|")
+  const elements = useMemo(
+    () => compileSpecToExcalidrawElements(parsedSpec, pathSource, pathTarget, hiddenTypes, showSecurityOverlay),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [parsedSpec, pathSource, pathTarget, hiddenTypesKey, showSecurityOverlay]
+  )
 
-  // Staging and debouncing coordinates updates to avoid dragging lag
-  const [pendingElements, setPendingElements] = useState<any[] | null>(null)
+  // Excalidraw takes ownership of whatever elements it is handed and mutates
+  // them in place as the user drags. Handing it `elements` directly meant our
+  // own compile baseline moved with the gesture, so the scene and the baseline
+  // were never different during a drag and the move was never detected — while
+  // a spec edit, which does build fresh objects, looked like a drag. Give the
+  // scene its own copies so `elements` stays a faithful record of the spec.
+  const sceneElements = useMemo(
+    () =>
+      elements.map((el: any) => ({
+        ...el,
+        ...(Array.isArray(el.points) ? { points: el.points.map((p: any) => [...p]) } : {}),
+      })),
+    [elements]
+  )
+
+  // Staging and debouncing coordinates updates to avoid dragging lag. The
+  // compile the move was measured against travels with it: if a newer one lands
+  // while the payload is still waiting, these coordinates are stale and must be
+  // dropped rather than delivered.
+  const [pendingMove, setPendingMove] = useState<{ rects: any[]; compile: any } | null>(null)
 
   // All scene-vs-compile tracking lives in the pure lib/canvas-diff module;
   // this ref is just its storage cell.
   const diffStateRef = useRef(createCanvasDiffState())
+
+  // Set the moment the user acts on the canvas -- a pointer gesture Excalidraw
+  // reports, or an arrow-key nudge -- and cleared once the resulting move has
+  // been staged. Coordinates may only flow back into the YAML while this is
+  // set: every other `onChange` is either our own `updateScene` echoing back or
+  // the scene still catching up with the spec, and treating those as drags
+  // overwrote whatever the user was typing.
+  const gestureSeenRef = useRef(false)
+  // Which compile the outstanding gesture was made against. A gesture only ever
+  // speaks for the scene it happened on: once the compiler has run again, the
+  // scene is the side that has to catch up, so anything still outstanding is
+  // lag rather than a drag. Gestures that move nothing -- a click that only
+  // selects, a draw handled by the add path -- never reach the staging branch
+  // that lowers the flag, so without this they latch on and the next spec edit
+  // is read as a drag: the flicker, back by way of a stray click.
+  //
+  // This is compared synchronously instead of being cleared in an effect
+  // because Excalidraw reports scene changes from its own update lifecycle,
+  // during the commit -- before any passive effect of ours could have retired
+  // the flag. Lowering it on pointer release instead would be worse still: a
+  // release can arrive before the final coordinates are committed, which would
+  // drop real drags.
+  const gestureCompileRef = useRef<any>(null)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
   }, [elements])
@@ -707,13 +759,20 @@ export function ExcalidrawCanvas({
   }, [parsedSpec])
 
   useEffect(() => {
-    if (!pendingElements || !onCanvasChange) return
+    if (!pendingMove || !onCanvasChange) return
+    // The spec moved on while this drag was waiting out its debounce -- a
+    // coordinate typed in the YAML, or a re-layout. Delivering the older
+    // measurement now would overwrite the newer one, so drop it instead.
+    if (pendingMove.compile !== elements) {
+      setPendingMove(null)
+      return
+    }
     const timer = setTimeout(() => {
-      onCanvasChange(pendingElements)
-      setPendingElements(null)
+      onCanvasChange(pendingMove.rects)
+      setPendingMove(null)
     }, 450) // 450ms idle delay to confirm drag stop
     return () => clearTimeout(timer)
-  }, [pendingElements, onCanvasChange])
+  }, [pendingMove, onCanvasChange, elements])
 
   // One automatic fit per loaded spec. The latch is keyed on the loaded spec's
   // identity, so a different spec or project loading into an already-mounted
@@ -817,11 +876,11 @@ export function ExcalidrawCanvas({
   useEffect(() => {
     if (!excalidrawAPI) return
     try {
-      excalidrawAPI.updateScene({ elements })
+      excalidrawAPI.updateScene({ elements: sceneElements })
     } catch (e) {
       console.error("Failed to update Excalidraw scene: ", e)
     }
-  }, [excalidrawAPI, elements])
+  }, [excalidrawAPI, sceneElements])
 
   if (loadError) {
     return <ExcalidrawFallback reason="load-error" />
@@ -832,7 +891,19 @@ export function ExcalidrawCanvas({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
+    <div
+      ref={containerRef}
+      className="flex-1 min-h-0 w-full h-full relative"
+      // Excalidraw nudges the selection with the arrow keys and reports no
+      // pointer gesture for it, so the writeback gate below would discard the
+      // move and the nudge would silently fail to persist. Captured on the way
+      // down, because the canvas handles the key before it can bubble.
+      onKeyDownCapture={(e) => {
+        if (!e.key.startsWith("Arrow")) return
+        gestureSeenRef.current = true
+        gestureCompileRef.current = elements
+      }}
+    >
       <ExcalidrawComponent
         excalidrawAPI={handleExcalidrawRef}
         theme="dark"
@@ -842,7 +913,7 @@ export function ExcalidrawCanvas({
           },
         }}
         initialData={{
-          elements,
+          elements: sceneElements,
           appState: {
             // No explicit viewBackgroundColor: the dark theme's inversion filter
             // would flip a dark value to light; the default resolves to dark.
@@ -874,16 +945,31 @@ export function ExcalidrawCanvas({
           // moves are all decided by the pure scene differ.
           if (!onCanvasChange) return
 
+          if (
+            appState?.cursorButton === "down" ||
+            appState?.selectedElementsAreBeingDragged ||
+            appState?.newElement ||
+            appState?.resizingElement
+          ) {
+            gestureSeenRef.current = true
+            gestureCompileRef.current = elements
+          }
+
           const { changes, pendingElements: movedRects, nextState } = diffScene({
             updatedElements,
             compiledElements: elements,
             appState,
             parsedSpec,
+            gestureSeen: gestureSeenRef.current && gestureCompileRef.current === elements,
             state: diffStateRef.current,
           })
           diffStateRef.current = nextState
           changes.forEach((change) => onCanvasChange(change))
-          if (movedRects) setPendingElements(movedRects)
+          if (movedRects) {
+            gestureSeenRef.current = false
+            gestureCompileRef.current = null
+            setPendingMove({ rects: movedRects, compile: elements })
+          }
         }}
       >
         {WelcomeScreenComponent && <WelcomeScreenComponent />}

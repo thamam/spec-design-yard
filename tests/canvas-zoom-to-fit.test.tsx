@@ -594,11 +594,19 @@ describe('zoom to fit — the NaN-bounds invariant', () => {
         expect(Number.isFinite(el[key])).toBe(true)
       }
     }
-    // A coordinate is rejected as a pair, exactly as a missing one is: both
-    // axes come from the layout so a component never lands half-authored.
+    // Each axis falls back on its own — main's rule since PR #15, where
+    // `y: 200` with no `x` keeps its y — so a poisoned axis takes the layout
+    // slot while the authored one survives. Every component still consumes
+    // its lane slot, pinned or not, so sink (third core) sits at 60 + 2 * 250.
     const gateRect = elements.find((el) => el.id === 'gate')
     expect(gateRect.x).toBe(60)
-    expect(gateRect.y).toBe(160)
+    expect(gateRect.y).toBe(40)
+    const storeRect = elements.find((el) => el.id === 'store')
+    expect(storeRect.x).toBe(400)
+    expect(storeRect.y).toBe(160)
+    const sinkRect = elements.find((el) => el.id === 'sink')
+    expect(sinkRect.x).toBe(560)
+    expect(sinkRect.y).toBe(160)
   })
 
   // Red/green record: this test was already GREEN against origin/main — the
