@@ -23,6 +23,7 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     fireEvent.click(focusTabButton)
 
     // 3. Verify latency and throughput inputs are in the document
+    fireEvent.click(screen.getByRole('button', { name: /^details$/i }))
     const latencyInput = screen.getByTestId('focus-latency-input') as HTMLInputElement
     const throughputInput = screen.getByTestId('focus-throughput-input') as HTMLInputElement
 
@@ -65,6 +66,7 @@ describe('Interactive Simulation Configuration & Performance Tuning', () => {
     const focusTabButton = screen.getByRole('tab', { name: /Focus/i })
     fireEvent.click(focusTabButton)
 
+    fireEvent.click(screen.getByRole('button', { name: /^details$/i }))
     const latencyInput = screen.getByTestId('focus-latency-input') as HTMLInputElement
     const throughputInput = screen.getByTestId('focus-throughput-input') as HTMLInputElement
 

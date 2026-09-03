@@ -193,6 +193,40 @@ function stripComment(line: string): string {
   return line
 }
 
+/**
+ * True when the caret is in a free-text value: a comment, a same-line
+ * description/owner/name/version/label/id value, or the body of a block
+ * scalar. The suggestion popup must stay closed in these contexts.
+ */
+export function isFreeTextValueContext(specText: string, cursorPosition: number): boolean {
+  const lineStart = specText.lastIndexOf("\n", cursorPosition - 1) + 1
+  const lineEndIdx = specText.indexOf("\n", cursorPosition)
+  const lineEnd = lineEndIdx === -1 ? specText.length : lineEndIdx
+  const currentLine = specText.substring(lineStart, lineEnd)
+  const cursorInLine = cursorPosition - lineStart
+  const textBeforeCursor = currentLine.substring(0, cursorInLine)
+
+  if (currentLine.trimStart().startsWith("#")) return true
+
+  if (/^\s*(?:-\s*)?(description|owner|name|version|label|id):\s*/i.test(textBeforeCursor)) {
+    return true
+  }
+
+  let indentLevel = currentLine.search(/\S/)
+  if (indentLevel === -1) indentLevel = currentLine.length
+  const linesBefore = specText.substring(0, lineStart).split("\n")
+  for (let i = linesBefore.length - 1; i >= 0; i--) {
+    const line = linesBefore[i]
+    const trimmed = line.trim()
+    if (trimmed === "") continue
+    const lineIndent = line.search(/\S/)
+    if (lineIndent < indentLevel) {
+      return /:\s*[|>][0-9+-]*\s*$/.test(stripComment(line).trim())
+    }
+  }
+  return false
+}
+
 export function getAutocompleteSuggestions(specText: string, cursorPosition: number): AutocompleteResult {
   const defaultResult: AutocompleteResult = {
     suggestions: [],
@@ -202,6 +236,10 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
   }
 
   if (cursorPosition < 0 || cursorPosition > specText.length) {
+    return defaultResult
+  }
+
+  if (isFreeTextValueContext(specText, cursorPosition)) {
     return defaultResult
   }
 
@@ -301,6 +339,9 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
     const queryStart = cursorPosition - query.length
 
     if (parentBlock === "metadata") {
+      // Empty query on a blank line would dump every key — that is the
+      // popup that steals Tab-indent after Enter. Require a typed prefix.
+      if (!query) return defaultResult
       const suggestions = METADATA_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
@@ -310,6 +351,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         replaceRange: [queryStart, replaceEnd],
       }
     } else if (parentBlock === "connections") {
+      if (!query) return defaultResult
       const suggestions = CONNECTION_KEYS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)
       return {
@@ -319,6 +361,7 @@ export function getAutocompleteSuggestions(specText: string, cursorPosition: num
         replaceRange: [queryStart, replaceEnd],
       }
     } else if (indentLevel >= 4) {
+      if (!query) return defaultResult
       // Default component property suggestions (requires at least component indentation level)
       const suggestions = COMPONENT_FIELDS
         .filter((k) => k.toLowerCase().startsWith(query.toLowerCase()) && k !== query)

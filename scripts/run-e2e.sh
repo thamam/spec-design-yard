@@ -19,7 +19,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_PORT="${SPEC_YARD_E2E_PORT:-3109}"
 
-# Every scenario runs on BASE_PORT + 0..3, so guarding only BASE_PORT let
+# Every scenario runs on BASE_PORT + 0..4, so guarding only BASE_PORT let
 # SPEC_YARD_E2E_PORT=2997 put editor-ergonomics on 3000 — the maintainer's dev
 # server. Check the whole derived range, before anything starts.
 #
@@ -29,7 +29,7 @@ BASE_PORT="${SPEC_YARD_E2E_PORT:-3109}"
 # 3109 + 3), so forbidding them here made the default invocation exit 2 and
 # broke CI. A machine-specific avoidance list does not belong in the shared
 # harness; the one genuinely global hazard is the dev server on 3000.
-for offset in 0 1 2 3; do
+for offset in 0 1 2 3 4; do
   derived=$((BASE_PORT + offset))
   if [ "$derived" = "3000" ]; then
     echo "refusing port 3000 (BASE_PORT $BASE_PORT + $offset): that is the dev server" >&2
@@ -151,7 +151,7 @@ ONLY="${1:-}"
 # The one source for which scenarios exist. run_scenario asserts its own name
 # is in here, so a scenario added below without being listed fails loudly
 # instead of becoming unselectable by name.
-KNOWN_SCENARIOS="file-mode first-run standalone editor-ergonomics"
+KNOWN_SCENARIOS="file-mode first-run standalone editor-ergonomics focus-disclosure"
 if [ -n "$ONLY" ]; then
   MATCHED=0
   for known in $KNOWN_SCENARIOS; do
@@ -196,6 +196,13 @@ SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$EDITOR_CLIENT" && pwd -P)"
               "SPEC_YARD_E2E_CONFIG_WRITES_OK=1")
 run_scenario "editor-ergonomics" "$((BASE_PORT + 3))" "scripts/e2e-editor-ergonomics.py" \
   "SPEC_YARD_PROJECT_DIR=$EDITOR_CLIENT"
+
+# --- 5. focus disclosure: thin inspector, Details / compiled spec ---
+FOCUS_CLIENT="$TMP/focus-disclosure-repo"
+mkdir -p "$FOCUS_CLIENT"
+SCENARIO_ENV=("SPEC_YARD_E2E_CLIENT=$(cd "$FOCUS_CLIENT" && pwd -P)")
+run_scenario "focus-disclosure" "$((BASE_PORT + 4))" "scripts/e2e-focus-disclosure.py" \
+  "SPEC_YARD_PROJECT_DIR=$FOCUS_CLIENT"
 
 # The KNOWN_SCENARIOS check binds the CALLS to the list; this binds the list
 # to the calls. A name listed with no run_scenario call would otherwise be

@@ -199,4 +199,109 @@ describe('Autocomplete Utility', () => {
     expect(result.query).toBe('l')
     expect(result.suggestions).toContain('label:')
   })
+
+  test('getAutocompleteSuggestions does not open on a blank metadata line', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        `
+    const result = getAutocompleteSuggestions(spec, spec.length)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions does not open on a blank connections line', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      connections:
+        `
+    const result = getAutocompleteSuggestions(spec, spec.length)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions does not open on a blank indented key line', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      `
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions does not open while typing a description value', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        description: The owner of this box`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions does not open inside a description block scalar', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        description: |
+          owner`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions does not open on a comment line', () => {
+    const spec = `system:
+  components:
+    - id: inbox
+      type: Store
+      # owner`
+    const cursor = spec.length
+    const result = getAutocompleteSuggestions(spec, cursor)
+    expect(result.suggestions).toEqual([])
+    expect(result.type).toBeNull()
+  })
+
+  test('getAutocompleteSuggestions still offers type status and color on empty query after the key', () => {
+    const typeSpec = `system:
+  components:
+    - id: inbox
+      type: `
+    expect(getAutocompleteSuggestions(typeSpec, typeSpec.length).suggestions).toEqual(
+      ['Store', 'Stage', 'Brick', 'Gateway']
+    )
+
+    const statusSpec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        status: `
+    expect(getAutocompleteSuggestions(statusSpec, statusSpec.length).type).toBe('metadata-status')
+    expect(getAutocompleteSuggestions(statusSpec, statusSpec.length).suggestions).toEqual(
+      ['draft', 'active', 'deprecated']
+    )
+
+    const colorSpec = `system:
+  components:
+    - id: inbox
+      type: Store
+      metadata:
+        color: `
+    expect(getAutocompleteSuggestions(colorSpec, colorSpec.length).type).toBe('metadata-color')
+    expect(getAutocompleteSuggestions(colorSpec, colorSpec.length).suggestions).toContain('indigo')
+  })
 })

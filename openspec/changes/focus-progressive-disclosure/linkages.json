@@ -1,0 +1,77 @@
+{
+  "change": "focus-progressive-disclosure",
+  "links": [
+    {
+      "requirement": "focus-inspector/Progressive disclosure of component fields",
+      "design": "Decision 1: Disclosure is session-local useState inside FocusTab; Decision 2: Hidden-by-default fields are not mounted; Decision 4: Real buttons with accessible names, not clickable divs",
+      "tasks": [
+        "Task 1: Focus default view + Details disclosure"
+      ]
+    },
+    {
+      "requirement": "focus-inspector/Compact connections with progressive edit",
+      "design": "Decision 3: One Connections section; chips only expand it",
+      "tasks": [
+        "Task 2: Connections section, chips, compact rows, add control"
+      ]
+    },
+    {
+      "requirement": "focus-inspector/Compiled spec is hidden until asked for",
+      "design": "Decision 2: Hidden-by-default fields are not mounted; Decision 4: Real buttons with accessible names, not clickable divs",
+      "tasks": [
+        "Task 3: Compiled spec disclosure + diagnostics unchanged"
+      ]
+    },
+    {
+      "requirement": "focus-inspector/Diagnostics stay on the default view",
+      "design": "Decision 2: Hidden-by-default fields are not mounted",
+      "tasks": [
+        "Task 3: Compiled spec disclosure + diagnostics unchanged"
+      ]
+    },
+    {
+      "requirement": "focus-inspector/Global settings use the same disclosure",
+      "design": "Decision 1: Disclosure is session-local useState inside FocusTab; Decision 2: Hidden-by-default fields are not mounted",
+      "tasks": [
+        "Task 1: Focus default view + Details disclosure"
+      ]
+    },
+    {
+      "requirement": "focus-inspector/Disclosure state is session-local",
+      "design": "Decision 1: Disclosure is session-local useState inside FocusTab",
+      "tasks": [
+        "Task 1: Focus default view + Details disclosure"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Suggestion popup stays off free-text and blank key lines",
+      "design": "Decision 5: Autocomplete stays quiet until a closed vocabulary is in play",
+      "tasks": [
+        "Task 4: Autocomplete stays quiet on free text and blank key lines"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Tab key behaviour",
+      "design": "Decision 5: Autocomplete stays quiet until a closed vocabulary is in play — Tab-indent remains when the popup is closed",
+      "tasks": [
+        "Task 4: Autocomplete stays quiet on free text and blank key lines"
+      ]
+    },
+    {
+      "requirement": "spec-editor/YAML write discipline",
+      "design": "Decision 7: Invariants carried as requirements",
+      "tasks": [
+        "Task 6: Quality gate"
+      ]
+    },
+    {
+      "requirement": "spec-editor/Test coverage for editor behaviours",
+      "design": "Decision 7: Invariants carried as requirements",
+      "tasks": [
+        "Task 4: Autocomplete stays quiet on free text and blank key lines",
+        "Task 5: E2E scenario focus-disclosure",
+        "Task 6: Quality gate"
+      ]
+    }
+  ]
+}

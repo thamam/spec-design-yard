@@ -25,7 +25,8 @@ describe('Interactive Component ID Renaming in Focus Tab', () => {
     // 4. Verify selected unit header
     expect(screen.getByText('Selected Unit: digest_stage')).toBeInTheDocument()
 
-    // 5. Find ID input field and button
+    // 5. Find ID input field and button (ID rename lives in Details)
+    fireEvent.click(screen.getByRole('button', { name: /^details$/i }))
     const idInput = screen.getByTestId('focus-id-input') as HTMLInputElement
     const renameBtn = screen.getByTestId('focus-id-rename-btn')
 

@@ -236,8 +236,13 @@ describe('store API route — adversarial hardening', () => {
     const baseRev = getRes.body.rev
     expect(typeof baseRev).toBe('string')
 
-    // External edit: rewrite the file directly (mtime changes, index doesn't)
-    fs.writeFileSync(path.join(projectDir, 'main.spec.yaml'), 'v: EXTERNAL\n')
+    // External edit: rewrite the file directly (mtime changes, index doesn't).
+    // Force a later mtime — some filesystems keep the same millisecond when
+    // two writes land in one tick, and the 409 path keys on mtimeMs.
+    const specFile = path.join(projectDir, 'main.spec.yaml')
+    fs.writeFileSync(specFile, 'v: EXTERNAL\n')
+    const st = fs.statSync(specFile)
+    fs.utimesSync(specFile, st.atime, new Date(st.mtime.getTime() + 1000))
 
     const conflictRes = mockRes()
     handler(storeReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev }), conflictRes)
