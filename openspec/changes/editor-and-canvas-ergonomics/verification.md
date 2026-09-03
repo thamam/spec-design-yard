@@ -9,10 +9,11 @@ once by inventing a second run the file cannot hold (`lane-verify.sh`
 truncates `status` on every run, so it records exactly one).
 
 <!-- GATED COMMIT: copy the HEAD= line from status verbatim, nothing more. -->
-**Gate: `HEAD=b8e4a7671da5b75937b32ab8797a9a2bc58f82e9`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
+**Gate: `HEAD=e0862281a65e856e3f7bdca0f5a879c7fd218db2`**, STEP_UNIT=0 STEP_COVERAGE_GATE=0
 STEP_BUILD=0 STEP_E2E=0, EXIT_CODE=0.
-This file's own commit is one later and changes only the line above; the gate
-was re-run on it too, and `.orchestrator/integration/status` holds that run.
+This file's own commit is one later and changes only the lines above. It was
+not gated locally (`status` holds exactly one run, the one named); CI on PR #14
+gates every pushed commit, this one included.
 
 Eight hardening rounds followed the first green gate at `f8f8ee7`: nine
 defects (round 1), seven (round 2), seven (round 3), nine (round 4), eleven
