@@ -589,3 +589,52 @@ plain. Round 2 consolidated them into `ALLOWED_METADATA_KEYS` (FIX F). The
 lesson for the record: that rejection was written from the importing file
 without grepping the linter, and a rejection is a claim needing the same
 evidence as a fix.
+
+### PR stage (after PR #14 opened, 2026-09-02 22:49 UTC onward)
+
+Five events, in order. Each commit named here was checked by running the
+command or reading the file, not carried over from a brief.
+
+1. **The port guard refused the harness's own default port** (`466cd50`).
+   Found by the Codex PR review (P1) and CodeRabbit (Critical) within minutes
+   of the PR opening; the local gate never saw it because `lane-verify.sh`
+   always passes an explicit port. The lesson is in the gate paragraph above.
+2. **Six CodeRabbit minor findings**, all docs and test hygiene, closed in
+   `e086228` (round-8 count, the empty-scene carve-out missing from the
+   canvas requirement, a stale task bullet, a contradictory gate record, a
+   stale e2e docstring, dead fake-timer scaffolding). Every thread resolved
+   with its disposition in a PR comment. Gate green at `e086228`.
+3. **`origin/main` moved** (PR #15, canvas position flicker, five commits,
+   merged 2026-09-03) and the PR went CONFLICTING, which also stops GitHub
+   from running the Tests workflow. Merged into the branch at `84456ef`, two
+   conflicts in `components/workspace/excalidraw-canvas.tsx`: the layout
+   positions (main honours each axis on its own; this branch rejects
+   non-finite and absurd coordinates; combined as per-axis
+   `isUsableCoordinate`, and the poisoned-fixture test now asserts the
+   per-axis outcome), and the fit-on-load effect (this branch's identity
+   latch replaces main's per-mount effect wholesale; the sync effect keeps
+   this branch's empty-scene behaviour and hands Excalidraw main's
+   `sceneElements` copies so `elements` stays the compile baseline main's
+   gesture tracking compares against). The five canvas suites, main's new
+   `canvas-position-flicker` included, pass on the merge.
+4. **FIX GGG: Esc then Shift+Tab outdented instead of escaping** (`5160a40`).
+   Codex PR review P2, and the fresh-context adversary below found it
+   independently. Shift's own keydown spent the one-shot latch before Tab
+   arrived. Red on `84456ef`: `tests/editor-indent.test.ts:479` "expected
+   false to be true" (the default was prevented). Green after. The companion
+   test (a real keystroke still disarms) was already green and is marked as a
+   regression guard. Requirement amended, scenario added.
+5. **Fresh-context adversary pass** (Opus subagent, read-only, given only
+   the diff at `e086228`, `AGENTS.md` and the eight-item defect checklist,
+   not the intent). No HIGH. One MEDIUM, **refuted with a measurement**: the
+   claim that `scrollbar-gutter: stable` is inert on the overlay's
+   `overflow: hidden` box. A standalone page in headless Chromium measured
+   `offsetWidth - clientWidth`: hidden + stable reserves 15px, hidden alone
+   0px, the textarea (auto + stable) 15px. The layers agree; NOT-A-DEFECT.
+   Three LOW: the second port-3000 guard in `run-e2e.sh` was unreachable
+   (removed, `688c76c`); the overlay wrap beat's width check had an
+   always-true `or` disjunct and compared nothing (replaced with a direct
+   clientWidth parity check, `688c76c`, given teeth by the measurement above);
+   `TRAILING_VALUE_RE` colours a value word under any key (`name: Store`
+   renders as a type value), cosmetic, listed as a follow-up in the PR.
+

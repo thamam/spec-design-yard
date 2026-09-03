@@ -690,5 +690,43 @@
         ]
       }
     ]
+  },
+  "pr_stage": {
+    "round": "PR stage: bot reviews on PR #14, the merge of origin/main (PR #15), and a fresh-context pre-merge adversary pass (verification.md, 'PR stage')",
+    "note": "One code fix (FIX GGG, user-facing, red-first), one merge reconciliation, one harness dead-guard removal, one e2e check given teeth, one adversary MEDIUM refuted by measurement, one cosmetic follow-up.",
+    "links": [
+      {
+        "fix": "FIX GGG — a bare modifier keydown spent the Esc escape latch, so Esc then Shift+Tab outdented instead of escaping backwards",
+        "requirement": "spec-editor/Tab key behaviour",
+        "design": "No design decision: a behaviour fix inside the Tab key requirement (the escape hatch's own rule, WCAG 2.1.2)",
+        "tasks": [
+          "Task 1: Tab / Shift+Tab indentation"
+        ]
+      },
+      {
+        "fix": "Merge of origin/main (PR #15): per-axis coordinate fallback combined with the finite-and-bounded check; the identity latch keeps its empty-scene behaviour over main's sceneElements copies",
+        "requirement": "diagram-canvas/Fit on content load",
+        "design": "Decision 7: footer fit control (unchanged); the per-axis rule is main's, adopted as merged",
+        "tasks": [
+          "Task 5: Zoom to fit — affordance, prop plumbing, shortcut, re-fit"
+        ]
+      },
+      {
+        "fix": "The overlay wrap beat asserts scrollbar-gutter parity (textarea clientWidth == overlay clientWidth) instead of an always-true disjunct",
+        "requirement": "spec-editor/Syntax colouring",
+        "design": "Decision 3: Syntax colour via a highlight overlay, not an editor swap",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      },
+      {
+        "fix": "run-e2e.sh: the second port-3000 guard was shadowed by the derived-range loop and is removed",
+        "requirement": "spec-editor/Test coverage for editor behaviours, diagnostics-panel/Test coverage for panel behaviours, diagram-canvas/Test coverage for canvas behaviours",
+        "design": "Decision 6: Invariants carried as requirements",
+        "tasks": [
+          "Task 6: Quality gate"
+        ]
+      }
+    ]
   }
 }
