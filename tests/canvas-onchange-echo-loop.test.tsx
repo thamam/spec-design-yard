@@ -121,8 +121,9 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     await elapse(200)
     const before = captured.onChangeCalls
     expect(() => drive(scene, { cursorButton: 'down' })).not.toThrow()
-    // One report plus at most a couple of echoes — not fifty.
-    expect(captured.onChangeCalls - before).toBeLessThan(6)
+    // The report itself, plus at most one echo should React render the
+    // parent once before bailing out of the same-state update — not fifty.
+    expect(captured.onChangeCalls - before).toBeLessThanOrEqual(2)
     drive(scene, { cursorButton: 'up' })
 
     // The staged move still lands, exactly once, when the debounce elapses.
@@ -131,8 +132,9 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     const rects = onCanvasChange.mock.calls[0][0]
     expect(Array.isArray(rects)).toBe(true)
     expect(rects.map((r: any) => r.id)).toEqual(['inbox'])
-    expect(rects[0].x).toBe(inbox.x)
-    expect(rects[0].y).toBe(inbox.y)
+    // Literal coordinates: `rects[0]` is the live scene object the test
+    // mutated, so comparing it with `inbox` would prove nothing.
+    expect(rects[0]).toMatchObject({ x: 140, y: 125 })
   })
 
   test('a move that changes while the pointer is down is re-staged and the debounce restarts', async () => {
@@ -151,7 +153,7 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
 
     await elapse(300)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
-    expect(onCanvasChange.mock.calls[0][0][0].x).toBe(inbox.x)
+    expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 180 })
   })
 
   test('a drag that starts inside the debounce holds the writeback until it ends', async () => {
@@ -182,8 +184,7 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     expect(onCanvasChange).not.toHaveBeenCalled()
     await elapse(250)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
-    expect(onCanvasChange.mock.calls[0][0][0].x).toBe(inbox.x)
-    expect(inbox.x).toBe(180)
+    expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 180 })
   })
 
   test('the same move reported with its rects in another order is not restaged', async () => {
