@@ -466,12 +466,14 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
       endBinding: { elementId: 'vault' },
     }
 
+    captured.api.updateScene.mockClear()
     act(() => {
       captured.props.onChange([...compiled, far], { cursorButton: 'up' })
     })
     expect(onCanvasChange).not.toHaveBeenCalled()
     expect(captured.api.updateScene).toHaveBeenCalled()
     const dropped = captured.api.updateScene.mock.calls[0][0].elements.find((el: any) => el.id === 'aFar')
+    expect(dropped).toBeTruthy()
     expect(dropped.isDeleted).toBe(true)
 
     captured.api.updateScene.mockClear()
