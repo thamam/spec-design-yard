@@ -449,5 +449,7 @@ describe('Workspace Split-Pane Spec-Diagram View', () => {
     expect(threatTextWithOverlay.text).toContain('Spoofing')
     expect(threatZoneWithOverlay.strokeColor).toBe('#f43f5e')
     expect(threatZoneWithOverlay.strokeStyle).toBe('dashed')
+    expect(threatTextWithOverlay.locked).toBe(true)
+    expect(threatZoneWithOverlay.locked).toBe(true)
   })
 })

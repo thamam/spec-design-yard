@@ -209,6 +209,42 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     expect(onCanvasChange).not.toHaveBeenCalled()
   })
 
+  test('a staged drag is held across a recompile that did not change those ids\' coords', async () => {
+    const { onCanvasChange, rerenderWith } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+    const dragged = moveInboxRect(compiled, 140, 125)
+
+    act(() => {
+      captured.props.onChange(dragged, { cursorButton: 'down' })
+    })
+    act(() => {
+      captured.props.onChange(dragged, { cursorButton: 'up' })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+
+    // Focus/YAML recompile: name changed, inbox coords did not. Dropping the
+    // staged dest here is the silent position-loss the first-release audit
+    // caught — the node snaps back when the user types during the debounce.
+    await rerenderWith({
+      system: {
+        name: 'Test System',
+        components: [{ id: 'inbox', name: 'Mailbox', type: 'Stage', x: 100, y: 100 }],
+      },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0].find((el: any) => el.id === 'inbox')).toMatchObject({
+      x: 140,
+      y: 125,
+    })
+  })
+
   test('a staged drag is dropped when a newer compile lands inside its debounce', async () => {
     const { onCanvasChange, rerenderWith } = await mountCanvas()
     const compiled = compileSpecToExcalidrawElements(parsedSpec)
@@ -359,5 +395,37 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
     const payload = onCanvasChange.mock.calls[0][0]
     expect(payload.find((el: any) => el.id === 'inbox')).toMatchObject({ x: 200, y: 175 })
+  })
+
+  test('selection sync skips STRIDE overlay ids and picks the compiled component', async () => {
+    const setSelectedUnit = vi.fn()
+    render(
+      <ExcalidrawCanvas
+        parsedSpec={parsedSpec}
+        setSelectedUnit={setSelectedUnit}
+        selectedUnit={null}
+      />
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(captured.props).not.toBeNull()
+
+    act(() => {
+      captured.props.onChange([], {
+        selectedElementIds: { 'threat-zone-inbox-0': true },
+      })
+    })
+    expect(setSelectedUnit).not.toHaveBeenCalled()
+
+    act(() => {
+      captured.props.onChange([], {
+        selectedElementIds: {
+          'threat-zone-inbox-0': true,
+          inbox: true,
+        },
+      })
+    })
+    expect(setSelectedUnit).toHaveBeenCalledWith('inbox')
   })
 })

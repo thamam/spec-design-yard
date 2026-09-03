@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within, cleanup } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 // Custom presets were plain useState until the SpecStore seam landed; they
 // looked saved in the UI but vanished on reload. These tests prove the full
@@ -28,8 +29,9 @@ describe('Custom simulation presets persist across remounts', () => {
     localStorage.removeItem(PRESETS_KEY)
   })
 
-  test('a created preset survives a full unmount/remount and keeps its values', () => {
+  test('a created preset survives a full unmount/remount and keeps its values', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     openMetricsTab()
     createPreset('Persisted Preset')
 
@@ -38,6 +40,7 @@ describe('Custom simulation presets persist across remounts', () => {
 
     cleanup()
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     openMetricsTab()
 
     const presetSelect = screen.getByTestId('sim-preset-select') as HTMLSelectElement
@@ -49,8 +52,9 @@ describe('Custom simulation presets persist across remounts', () => {
     expect((screen.getByTestId('sim-loss-slider') as HTMLInputElement).value).toBe('15')
   })
 
-  test('a deleted preset stays gone after remount', () => {
+  test('a deleted preset stays gone after remount', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     openMetricsTab()
     createPreset('Doomed Preset')
     expect(localStorage.getItem(PRESETS_KEY) || '').toContain('Doomed Preset')
@@ -60,6 +64,7 @@ describe('Custom simulation presets persist across remounts', () => {
 
     cleanup()
     render(<Workspace />)
+    await waitForWorkspaceHydration()
     openMetricsTab()
 
     const presetSelect = screen.getByTestId('sim-preset-select') as HTMLSelectElement

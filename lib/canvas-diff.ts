@@ -93,6 +93,86 @@ export function positionKey(el: any): string {
   return `${Math.round(el?.x ?? 0)},${Math.round(el?.y ?? 0)}`
 }
 
+/** STRIDE threat chrome: never a real component, never a connect target. */
+export function isOverlayElementId(id: unknown): boolean {
+  return typeof id === "string" && (id.startsWith("threat-zone-") || id.startsWith("threat-text-"))
+}
+
+/** How close an unbound arrow end must be to a compiled rect to snap (px). */
+export const ARROW_SNAP_DISTANCE = 80
+
+/**
+ * A staged drag is only stale when the *new* compile moved those ids.
+ * A recompile that only changed a name/comment keeps the same coords, and
+ * dropping the dest in that case is silent position loss.
+ */
+export function stagedMoveInvalidatedByCompile(
+  stagedRects: any[],
+  compileAtStage: any[],
+  nextCompile: any[]
+): boolean {
+  return stagedRects.some((r) => {
+    const was = compileAtStage.find((el: any) => el.id === r.id)
+    const now = nextCompile.find((el: any) => el.id === r.id)
+    if (!was || !now) return true
+    return positionKey(was) !== positionKey(now)
+  })
+}
+
+function arrowEndpoint(arrow: any, which: "start" | "end"): { x: number; y: number } {
+  const pts = Array.isArray(arrow?.points) ? arrow.points : []
+  const pt = which === "start" ? pts[0] : pts[pts.length - 1]
+  const ox = Array.isArray(pt) ? Number(pt[0]) || 0 : which === "end" ? Number(arrow?.width) || 0 : 0
+  const oy = Array.isArray(pt) ? Number(pt[1]) || 0 : which === "end" ? Number(arrow?.height) || 0 : 0
+  return { x: (Number(arrow?.x) || 0) + ox, y: (Number(arrow?.y) || 0) + oy }
+}
+
+function distanceToRect(px: number, py: number, rect: any): number {
+  const x = Number(rect?.x) || 0
+  const y = Number(rect?.y) || 0
+  const w = Number(rect?.width) || 0
+  const h = Number(rect?.height) || 0
+  const cx = Math.max(x, Math.min(px, x + w))
+  const cy = Math.max(y, Math.min(py, y + h))
+  return Math.hypot(px - cx, py - cy)
+}
+
+function compiledComponentRects(compiledElements: any[]): any[] {
+  return compiledElements.filter(
+    (el: any) => el.type === "rectangle" && !el.isDeleted && !isOverlayElementId(el.id)
+  )
+}
+
+function nearestCompiledRect(
+  point: { x: number; y: number },
+  compiledElements: any[],
+  maxDist = ARROW_SNAP_DISTANCE
+): any | null {
+  let best: any = null
+  let bestDist = maxDist
+  for (const rect of compiledComponentRects(compiledElements)) {
+    const d = distanceToRect(point.x, point.y, rect)
+    if (d <= bestDist) {
+      best = rect
+      bestDist = d
+    }
+  }
+  return best
+}
+
+function resolveArrowEnd(
+  bindingId: unknown,
+  point: { x: number; y: number },
+  compiledElements: any[],
+  parsedSpec: any
+): string | null {
+  const bound = typeof bindingId === "string" && !isOverlayElementId(bindingId) ? bindingId : ""
+  const snapped = bound || nearestCompiledRect(point, compiledElements)?.id || ""
+  if (!snapped) return null
+  const exists = parsedSpec?.system?.components?.some((c: any) => c.id === snapped)
+  return exists ? snapped : null
+}
+
 /** Copy-on-write set insert: returns the same set when nothing changes. */
 function withId(set: Set<string>, id: string): Set<string> {
   if (set.has(id)) return set
@@ -259,6 +339,7 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
     const newlyDeletedRects = updatedElements.filter(
       (el: any) =>
         el.type === "rectangle" &&
+        !isOverlayElementId(el.id) &&
         el.isDeleted &&
         !deletedIds.has(el.id) &&
         compiledElements.some((old: any) => old.id === el.id && !old.isDeleted)
@@ -323,6 +404,7 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
     const newlyCreatedRects = updatedElements.filter(
       (el: any) =>
         el.type === "rectangle" &&
+        !isOverlayElementId(el.id) &&
         !el.isDeleted &&
         !addedIds.has(el.id) &&
         !currentElementIds.has(el.id) &&
@@ -351,20 +433,26 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
       (el: any) =>
         el.type === "arrow" &&
         !el.isDeleted &&
-        el.startBinding?.elementId &&
-        el.endBinding?.elementId &&
         !connectedArrows.has(el.id) &&
         !currentElementIds.has(el.id) &&
         !state.compiledIds.has(el.id)
     )
     if (newlyCreatedArrows.length > 0) {
       const arrow = newlyCreatedArrows[0]
-      const source = arrow.startBinding.elementId
-      const target = arrow.endBinding.elementId
-      const sourceExists = parsedSpec?.system?.components?.some((c: any) => c.id === source)
-      const targetExists = parsedSpec?.system?.components?.some((c: any) => c.id === target)
+      const source = resolveArrowEnd(
+        arrow.startBinding?.elementId,
+        arrowEndpoint(arrow, "start"),
+        compiledElements,
+        parsedSpec
+      )
+      const target = resolveArrowEnd(
+        arrow.endBinding?.elementId,
+        arrowEndpoint(arrow, "end"),
+        compiledElements,
+        parsedSpec
+      )
 
-      if (sourceExists && targetExists) {
+      if (source && target && source !== target) {
         connectedArrows = withId(connectedArrows, arrow.id)
         changes.push({ type: "connect", payload: { source, target } })
         return finish()
@@ -462,7 +550,7 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
   // materialised every auto-layout coordinate into the YAML on any drag.
   if (hasScene && gestureSeen) {
     const moved = updatedElements.filter((r: any) => {
-      if (r.type !== 'rectangle' || r.isDeleted) return false
+      if (r.type !== 'rectangle' || r.isDeleted || isOverlayElementId(r.id)) return false
       const current = compiledElements.find((el: any) => el.id === r.id)
       return !!current && positionKey(r) !== positionKey(current)
     })

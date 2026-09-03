@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Elite Interactive Grid Explorer & Directory', () => {
-  test('renders Grid controls panel in Grid View', () => {
+  test('renders Grid controls panel in Grid View', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -28,8 +30,9 @@ describe('Elite Interactive Grid Explorer & Directory', () => {
     expect(sortSelect).toBeInTheDocument()
   })
 
-  test('filters component cards by search input term', () => {
+  test('filters component cards by search input term', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -48,8 +51,9 @@ describe('Elite Interactive Grid Explorer & Directory', () => {
     expect(screen.queryByRole('button', { name: /Select component digest_stage/i })).not.toBeInTheDocument()
   })
 
-  test('filters component cards by type select', () => {
+  test('filters component cards by type select', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -67,8 +71,9 @@ describe('Elite Interactive Grid Explorer & Directory', () => {
     expect(screen.getByRole('button', { name: /Select component digest_stage/i })).toBeInTheDocument()
   })
 
-  test('filters component cards by issue status', () => {
+  test('filters component cards by issue status', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -84,8 +89,9 @@ describe('Elite Interactive Grid Explorer & Directory', () => {
     // If we filter, some cards are shown or hidden. We can assert at least some change or presence of warning badge.
   })
 
-  test('sorts component cards', () => {
+  test('sorts component cards', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })
@@ -102,8 +108,9 @@ describe('Elite Interactive Grid Explorer & Directory', () => {
     expect(buttonsBefore.length).toBeGreaterThan(0)
   })
 
-  test('renders warnings or errors badges on component cards with diagnostics', () => {
+  test('renders warnings or errors badges on component cards with diagnostics', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Grid View
     const gridViewBtn = screen.getByRole('tab', { name: /Grid/i })

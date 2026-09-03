@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Dynamic Simulation Configuration Settings', () => {
-  test('renders Simulation Configuration controls with correct initial states', () => {
+  test('renders Simulation Configuration controls with correct initial states', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -25,6 +27,7 @@ describe('Dynamic Simulation Configuration Settings', () => {
 
   test('allows changing simulated packet count and packet loss', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -44,6 +47,7 @@ describe('Dynamic Simulation Configuration Settings', () => {
 
   test('resets simulation state when config changes', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -80,6 +84,7 @@ describe('Dynamic Simulation Configuration Settings', () => {
 
   test('applies packet count and packet loss to running and completing the simulation', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

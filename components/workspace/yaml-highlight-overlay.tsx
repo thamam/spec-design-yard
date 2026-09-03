@@ -11,6 +11,7 @@ const TOKEN_CLASS_STYLES: Record<Exclude<TokenClass, "plain">, string> = {
 
 interface YamlHighlightOverlayProps {
   value: string
+  wrap?: boolean
 }
 
 /**
@@ -20,7 +21,7 @@ interface YamlHighlightOverlayProps {
  * re-render of the tokenised content.
  */
 export const YamlHighlightOverlay = forwardRef<HTMLDivElement, YamlHighlightOverlayProps>(
-  function YamlHighlightOverlay({ value }, ref) {
+  function YamlHighlightOverlay({ value, wrap = true }, ref) {
     const lines = tokenizeSpec(value)
 
     return (
@@ -32,7 +33,7 @@ export const YamlHighlightOverlay = forwardRef<HTMLDivElement, YamlHighlightOver
         // so both layers reserve the same width whether or not a scrollbar is
         // actually showing — otherwise a line near the wrap boundary can wrap
         // in one layer and not the other, displacing every highlight below it.
-        className="absolute inset-0 pointer-events-none overflow-hidden p-5 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words w-full h-full [scrollbar-gutter:stable]"
+        className={`absolute inset-0 pointer-events-none overflow-hidden p-5 font-mono text-[13px] leading-6 w-full h-full [scrollbar-gutter:stable] ${wrap ? "whitespace-pre-wrap break-words" : "whitespace-pre"}`}
       >
         {lines.map((tokens, i) => {
           const blank = tokens.every((t) => t.text.length === 0)

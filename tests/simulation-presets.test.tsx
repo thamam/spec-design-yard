@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation Configuration Presets', () => {
-  test('renders Simulation Presets select with correct choices', () => {
+  test('renders Simulation Presets select with correct choices', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -24,8 +26,9 @@ describe('Simulation Configuration Presets', () => {
     expect(screen.getByText('Sanity Check')).toBeInTheDocument()
   })
 
-  test('selecting a preset automatically updates packets and loss values', () => {
+  test('selecting a preset automatically updates packets and loss values', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -57,8 +60,9 @@ describe('Simulation Configuration Presets', () => {
     expect(screen.getByTestId('sim-loss-val').textContent).toBe('0%')
   })
 
-  test('manually modifying values changes the selected preset to custom', () => {
+  test('manually modifying values changes the selected preset to custom', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

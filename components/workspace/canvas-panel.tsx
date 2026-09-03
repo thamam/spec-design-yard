@@ -14,7 +14,7 @@ import {
   Trash2,
   ShieldAlert,
 } from "lucide-react"
-import { useState, useMemo, useEffect, useCallback, useRef } from "react"
+import { useState, useMemo, useCallback, useRef } from "react"
 import { CanvasChange, autoLayoutDiagram } from "../../lib/reconciler"
 import { Diagnostic } from "../../lib/linter"
 import { isFixable } from "../../lib/quick-fixes"
@@ -79,6 +79,7 @@ export function CanvasPanel({
   activeTab,
   onZoomToFitReady,
   specIdentity,
+  isHydrated = true,
 }: {
   parsedSpec?: any
   selectedUnit?: string | null
@@ -93,11 +94,13 @@ export function CanvasPanel({
   onZoomToFitReady?: (fit: (() => void) | null) => void
   /** Identity of the loaded spec/project — the automatic fit's latch key. */
   specIdentity?: string
+  /** Until hydration resolves, do not compile a scene from the seed spec. */
+  isHydrated?: boolean
 }) {
   const [view, setView] = useState<CanvasView>("diagram")
   const [fullscreen, setFullscreen] = useState(false)
   const [hiddenTypes, setHiddenTypes] = useState<string[]>([])
-  const [showSecurityOverlay, setShowSecurityOverlay] = useState(false)
+  const [overlayPinned, setOverlayPinned] = useState(false)
 
   // The canvas hands its zoomToFit() up by prop; window.excalidrawAPI keeps
   // its existing consumers but gains no new ones.
@@ -107,12 +110,8 @@ export function CanvasPanel({
     onZoomToFitReady?.(fit)
   }, [onZoomToFitReady])
 
-  // Auto-enable security overlay when on Security Tab
-  useEffect(() => {
-    if (activeTab === "security") {
-      setShowSecurityOverlay(true)
-    }
-  }, [activeTab])
+  // Auto-on while the Security tab is open; auto-off on leave unless pinned.
+  const showSecurityOverlay = overlayPinned || activeTab === "security"
 
   const handleAutoLayout = () => {
     if (!onCanvasChange || !parsedSpec) return
@@ -130,7 +129,8 @@ export function CanvasPanel({
   return (
     <section
       data-testid="canvas-panel"
-      className="flex flex-col h-full relative"
+      data-fullscreen={fullscreen ? "true" : "false"}
+      className={fullscreen ? "fixed inset-0 z-50 flex flex-col" : "flex flex-col h-full relative"}
       style={{ background: "var(--background)" }}
       aria-label="Visual canvas"
     >
@@ -177,7 +177,13 @@ export function CanvasPanel({
 
         {/* Canvas actions */}
         <div className="flex items-center gap-1">
-          <CanvasToolButton icon={<EyeIcon size={12} />} label="Preview" onClick={() => {}} />
+          <CanvasToolButton
+            icon={<EyeIcon size={12} />}
+            label="Preview"
+            title="Not available — canvas preview is not implemented"
+            onClick={() => {}}
+            disabled
+          />
           <CanvasToolButton
             icon={<ScanSearch size={12} />}
             label="Zoom to fit"
@@ -192,7 +198,7 @@ export function CanvasPanel({
           <CanvasToolButton
             icon={<ShieldAlert size={12} />}
             label="Security Threats Overlay"
-            onClick={() => setShowSecurityOverlay(!showSecurityOverlay)}
+            onClick={() => setOverlayPinned((p) => !p)}
             active={showSecurityOverlay}
           />
           <CanvasToolButton
@@ -232,6 +238,7 @@ export function CanvasPanel({
       {/* Canvas content */}
       <div className="flex flex-col flex-1 min-h-0 relative overflow-hidden">
         {view === "diagram" && (
+          isHydrated ? (
           <ExcalidrawCanvas
             parsedSpec={parsedSpec}
             selectedUnit={selectedUnit}
@@ -244,6 +251,9 @@ export function CanvasPanel({
             specIdentity={specIdentity}
             onZoomToFitReady={handleZoomToFitReady}
           />
+          ) : (
+            <CanvasSkeleton />
+          )
         )}
         {view === "grid" && (
           <GridView
@@ -869,20 +879,29 @@ function CanvasToolButton({
   onClick,
   active,
   testId,
+  disabled,
+  title,
 }: {
   icon: React.ReactNode
   label: string
   onClick: () => void
   active?: boolean
   testId?: string
+  disabled?: boolean
+  title?: string
 }) {
   return (
     <button
-      onClick={onClick}
-      title={label}
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={title || label}
       aria-label={label}
+      aria-pressed={active}
       data-testid={testId}
-      className="flex items-center justify-center w-7 h-7 rounded transition-colors"
+      className={`flex items-center justify-center w-7 h-7 rounded transition-colors ${
+        disabled ? "opacity-40 cursor-not-allowed" : ""
+      }`}
       style={{
         color: active ? "var(--accent)" : "var(--foreground-muted)",
         background: active ? "var(--accent-dim)" : "transparent",

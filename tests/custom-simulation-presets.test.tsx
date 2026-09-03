@@ -2,10 +2,12 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Custom Simulation Presets Management UI', () => {
-  test('supports creating, selecting, and deleting custom simulation presets', () => {
+  test('supports creating, selecting, and deleting custom simulation presets', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -59,8 +61,9 @@ describe('Custom Simulation Presets Management UI', () => {
     expect(within(presetSelect).queryByText('My Custom Preset (Custom)')).not.toBeInTheDocument()
   })
 
-  test('prevents shadowing built-in simulation preset names', () => {
+  test('prevents shadowing built-in simulation preset names', async () => {
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })

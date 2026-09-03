@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
+import { waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation History Log & JSON/CSV Report Exports', () => {
   beforeEach(() => {
@@ -17,6 +18,7 @@ describe('Simulation History Log & JSON/CSV Report Exports', () => {
     const createElementSpy = vi.spyOn(document, 'createElement')
     
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 1. Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
@@ -129,6 +131,7 @@ describe('Simulation History Log & JSON/CSV Report Exports', () => {
     localStorage.setItem('simulation_history', JSON.stringify([mockRun]))
 
     render(<Workspace />)
+    await waitForWorkspaceHydration()
 
     // 2. Switch to Metrics Tab
     const metricsTabButton = screen.getByRole('tab', { name: /Metrics/i })
