@@ -42,6 +42,8 @@ interface EditorPanelProps {
   setActiveTab?: (tab: TabId) => void
   /** False while the workspace is hydrating; the editor refuses input until then. */
   isHydrated?: boolean
+  /** False while a first-run project decision is still in front of the user. */
+  isInteractive?: boolean
 }
 
 // The pane measurement has to happen before paint, but this page is
@@ -54,10 +56,12 @@ interface CodeTabProps {
   value: string
   onChange: (val: string) => void
   disabled?: boolean
+  /** Hydrating — distinct from first-run lock so aria-busy is honest. */
+  loading?: boolean
   wordWrap?: boolean
 }
 
-function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTabProps) {
+function CodeTab({ value, onChange, disabled = false, loading = false, wordWrap = true }: CodeTabProps) {
   const [cursorPos, setCursorPos] = useState<number | null>(null)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
   const [suppressAutocomplete, setSuppressAutocomplete] = useState(false)
@@ -77,6 +81,13 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTab
   // selection over the block it had just indented. jsdom's fake timers hid it;
   // scripts/e2e-editor-ergonomics.py asserts the real selection bounds.
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  // Last caret the user placed. Canvas drag writeback (and Auto-Fix) rewrite
+  // `value` from the parent; a controlled textarea then jumps to EOF unless
+  // we put this range back. Distinct from pendingSelectionRef, which is an
+  // explicit post-edit landing the Tab/Enter/autocomplete path armed.
+  const lastSelectionRef = useRef<{ start: number; end: number } | null>(null)
+  const lastValueRef = useRef(value)
+  const typedThisCommitRef = useRef(false)
 
   /**
    * Hand the edited text to the parent and say where the selection must end
@@ -128,17 +139,41 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTab
   // that carries the new value is the one that moved the caret.
   useIsomorphicLayoutEffect(() => {
     const pending = pendingSelectionRef.current
-    if (!pending) return
-    pendingSelectionRef.current = null
+    if (pending) {
+      pendingSelectionRef.current = null
+      typedThisCommitRef.current = false
+      lastValueRef.current = value
+      const textarea = textareaRef.current
+      if (!textarea) return
+      textarea.focus()
+      textarea.setSelectionRange(pending.start, pending.end)
+      lastSelectionRef.current = pending
+      setCursorPos(pending.start)
+      return
+    }
+
+    const typed = typedThisCommitRef.current
+    typedThisCommitRef.current = false
+    const valueChanged = lastValueRef.current !== value
+    lastValueRef.current = value
+    // User keystrokes already placed the caret. An external rewrite
+    // (canvas coords, Auto-Fix All) would otherwise drop it at EOF.
+    if (!valueChanged || typed) return
     const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.focus()
-    textarea.setSelectionRange(pending.start, pending.end)
-    setCursorPos(pending.start)
+    const sel = lastSelectionRef.current
+    if (!textarea || !sel) return
+    if (document.activeElement !== textarea) return
+    const max = textarea.value.length
+    const start = Math.min(sel.start, max)
+    const end = Math.min(sel.end, max)
+    textarea.setSelectionRange(start, end)
+    setCursorPos(start)
   })
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextVal = e.target.value
+    typedThisCommitRef.current = true
+    lastSelectionRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
     onChange(nextVal)
     setCursorPos(e.target.selectionStart)
     setSuppressAutocomplete(false)
@@ -146,6 +181,10 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTab
   }
 
   const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    lastSelectionRef.current = {
+      start: e.currentTarget.selectionStart,
+      end: e.currentTarget.selectionEnd,
+    }
     setCursorPos(e.currentTarget.selectionStart)
   }
 
@@ -297,8 +336,8 @@ function CodeTab({ value, onChange, disabled = false, wordWrap = true }: CodeTab
         onKeyDown={handleKeyDown}
         onScroll={handleTextareaScroll}
         disabled={disabled}
-        aria-label={disabled ? "Loading spec" : "Spec YAML"}
-        aria-busy={disabled}
+        aria-label={loading ? "Loading spec" : disabled ? "Choose a project folder before editing" : "Spec YAML"}
+        aria-busy={loading}
         // scrollbar-gutter:stable must match the overlay's (yaml-highlight-overlay.tsx)
         // so both layers agree on content width when a scrollbar appears.
         className={`w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 p-5 text-transparent caret-zinc-300 font-mono resize-none leading-6 overflow-y-auto [scrollbar-gutter:stable]${wordWrap ? " whitespace-pre-wrap break-words" : " whitespace-pre"}${disabled ? " opacity-40 cursor-wait" : ""}`}
@@ -2274,6 +2313,7 @@ export function EditorPanel({
   activeTab: propActiveTab,
   setActiveTab: propSetActiveTab,
   isHydrated: propIsHydrated,
+  isInteractive: propIsInteractive,
 }: EditorPanelProps) {
   const [localSelectedUnit, setLocalSelectedUnit] = useState<string | null>(null)
   const selectedUnit = propSelectedUnit !== undefined ? propSelectedUnit : localSelectedUnit
@@ -2706,7 +2746,13 @@ export function EditorPanel({
         className={activeTab === "code" ? "flex flex-col flex-1 min-h-0 overflow-hidden" : "hidden"}
         style={{ background: "var(--background)" }}
       >
-        <CodeTab value={specText} onChange={(val) => setSpecText(val, { isTyping: true })} disabled={propIsHydrated === false} wordWrap={wordWrap} />
+        <CodeTab
+          value={specText}
+          onChange={(val) => setSpecText(val, { isTyping: true })}
+          disabled={propIsHydrated === false || propIsInteractive === false}
+          loading={propIsHydrated === false}
+          wordWrap={wordWrap}
+        />
       </div>
 
       <div

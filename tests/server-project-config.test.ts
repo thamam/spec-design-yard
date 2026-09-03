@@ -7,6 +7,7 @@ import {
   getProjectEpoch,
   getProjectStatus,
   getSuggestedProjectDir,
+  readGitBranch,
   resetProjectStateForTests,
   setActiveProject,
   setStandaloneMode,
@@ -43,6 +44,31 @@ describe('project config registry', () => {
     expect(getActiveProjectDir()).toBeNull()
     expect(getSuggestedProjectDir()).toContain('spec-yard-projects')
     expect(path.isAbsolute(getSuggestedProjectDir())).toBe(true)
+    expect(fs.existsSync(path.join(configDir, 'config.json'))).toBe(false)
+    expect(status.recents).toEqual([])
+  })
+
+  test('the suggested dir is never persisted until setActiveProject', () => {
+    const suggested = getSuggestedProjectDir()
+    getProjectStatus()
+    expect(fs.existsSync(path.join(configDir, 'config.json'))).toBe(false)
+    setActiveProject(suggested)
+    expect(readConfigFile().activeProject).toBe(suggested)
+    expect(readConfigFile().recentProjects).toContain(suggested)
+  })
+
+  test('readGitBranch returns a named branch or null', () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-git-'))
+    try {
+      expect(readGitBranch(repo)).toBeNull()
+      fs.mkdirSync(path.join(repo, '.git'))
+      fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/release-1\n')
+      expect(readGitBranch(repo)).toBe('release-1')
+      fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'abc123def\n')
+      expect(readGitBranch(repo)).toBeNull()
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true })
+    }
   })
 
   test('setActiveProject persists: a fresh session resumes the last project', () => {

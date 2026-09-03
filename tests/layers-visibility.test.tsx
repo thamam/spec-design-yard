@@ -3,9 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Layer Visibility System', () => {
+  seedDemoSpecBeforeEach()
   test('compileSpecToExcalidrawElements supports hiding specific component types', () => {
     const mockSpec = {
       system: {

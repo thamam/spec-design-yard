@@ -3,9 +3,10 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Workspace Metrics Tab Feature', () => {
+  seedDemoSpecBeforeEach()
   test('renders Metrics tab in the Editor Panel and shows component counts', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()
@@ -48,7 +49,7 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.click(metricsTabButton)
 
     // Find the link or button for 'inbox' in the metrics list and click it
-    const inboxItem = screen.getByRole('button', { name: /inbox/i })
+    const inboxItem = screen.getByRole('button', { name: /^inbox/i })
     expect(inboxItem).toBeInTheDocument()
     fireEvent.click(inboxItem)
 
@@ -89,8 +90,8 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.click(metricsTabButton)
 
     // Initially, inbox and digest_stage are in the list
-    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /digest_stage/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^digest_stage/i })).toBeInTheDocument()
 
     // Find search input
     const searchInput = screen.getByPlaceholderText(/Search components.../i)
@@ -100,7 +101,7 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.change(searchInput, { target: { value: 'inbox' } })
 
     // Only inbox should be shown now
-    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^inbox/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
   })
 
@@ -112,8 +113,8 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.click(metricsTabButton)
 
     // Initially, inbox (Store) and digest_stage (Stage) are visible
-    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /digest_stage/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^digest_stage/i })).toBeInTheDocument()
 
     // Find type filter select
     const typeSelect = screen.getByRole('combobox', { name: /Filter by Type/i })
@@ -123,7 +124,7 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.change(typeSelect, { target: { value: 'store' } })
 
     // Store should be visible, stage should be hidden
-    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^inbox/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /digest_stage/i })).not.toBeInTheDocument()
   })
 
@@ -143,12 +144,12 @@ describe('Workspace Metrics Tab Feature', () => {
     fireEvent.change(severitySelect, { target: { value: 'info' } })
 
     // Inbox has missing-metadata-description which is an Info issue
-    expect(screen.getByRole('button', { name: /inbox/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^inbox/i })).toBeInTheDocument()
     
     // Check for "Error" selection. Since there are no errors in the initial spec,
     // selecting "error" should result in an empty or nearly empty list (excluding components with no error)
     fireEvent.change(severitySelect, { target: { value: 'error' } })
-    expect(screen.queryByRole('button', { name: /inbox/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^inbox/i })).not.toBeInTheDocument()
   })
 
   test('displays system metadata block and handles initializing system metadata', async () => {

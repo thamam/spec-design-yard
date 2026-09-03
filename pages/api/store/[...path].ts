@@ -139,7 +139,8 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
     // The mode rides along because the two no-project states are different
     // stories: "unconfigured" has chosen nothing yet and must open a calm
     // blank slate behind the picker, while "standalone" is a deliberate
-    // browser-only opt-out that keeps the demo spec to play with.
+    // browser-only opt-out that keeps the current spec (or a blank slate
+    // when the browser cache is empty) — never a surprise demo.
     return res.status(200).json({ enabled: false, mode: status.mode })
   }
   const projectDir = status.dir

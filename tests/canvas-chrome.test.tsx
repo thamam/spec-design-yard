@@ -6,6 +6,13 @@ import { CanvasPanel } from '../components/workspace/canvas-panel'
 const emptySpec = { system: { name: 'Test', components: [] } }
 
 describe('Canvas chrome honesty', () => {
+  test('loading skeleton is a pulse, not a fake diagram', () => {
+    render(<CanvasPanel parsedSpec={emptySpec} isHydrated={false} />)
+    expect(screen.getByLabelText('Loading canvas')).toBeInTheDocument()
+    expect(screen.getByTestId('canvas-skeleton-pulse')).toBeInTheDocument()
+    expect(screen.getByLabelText('Loading canvas').querySelector('svg')).toBeNull()
+  })
+
   test('Preview is disabled with a not-available title and still occupies the toolbar', () => {
     render(<CanvasPanel parsedSpec={emptySpec} />)
     const preview = screen.getByRole('button', { name: 'Preview' })

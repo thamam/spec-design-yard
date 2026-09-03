@@ -2,11 +2,12 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpec, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation History Log & JSON/CSV Report Exports', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    seedDemoSpec()
   })
 
   afterEach(() => {

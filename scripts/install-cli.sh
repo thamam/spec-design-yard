@@ -10,12 +10,13 @@ TARGET="$TARGET_DIR/spec-yard"
 mkdir -p "$TARGET_DIR"
 ln -sf "$REPO/bin/spec-yard" "$TARGET"
 echo "linked $TARGET -> $REPO/bin/spec-yard"
+echo "To run it from any directory, ~/.local/bin must be on your PATH:"
+echo "  export PATH=\"$TARGET_DIR:\$PATH\""
 
 case ":$PATH:" in
-  *":$TARGET_DIR:"*) echo "'spec-yard' is ready — run it from any client repo." ;;
+  *":$TARGET_DIR:"*) echo "'spec-yard' is on PATH — run it from any client repo." ;;
   *)
     echo "WARNING: $TARGET_DIR is not on your PATH."
-    echo "Add this to your shell rc file, then open a new shell:"
-    echo "  export PATH=\"$TARGET_DIR:\$PATH\""
+    echo "Add the export above to your shell rc file, then open a new shell."
     ;;
 esac

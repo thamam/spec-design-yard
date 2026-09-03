@@ -194,7 +194,12 @@ describe("diffScene", () => {
         ],
       },
     ]
-    expect(run(far, compiled, stateFor(compiled)).changes).toEqual([])
+    const farResult = run(far, compiled, stateFor(compiled))
+    expect(farResult.changes).toEqual([])
+    // Leftover ink is consumed and marked for drop so it cannot starve a
+    // later bind — but it is never turned into a connection.
+    expect(farResult.dropArrowIds).toEqual(["aFar"])
+    expect(farResult.nextState.connectedArrows.has("aFar")).toBe(true)
 
     const deleted = [
       ...compiled,
@@ -211,6 +216,73 @@ describe("diffScene", () => {
       },
     ]
     expect(run(deleted, compiled, stateFor(compiled)).changes).toEqual([])
+    expect(run(deleted, compiled, stateFor(compiled)).dropArrowIds).toEqual([])
+  })
+
+  it("a later good bind still writes after an unresolved far-miss", () => {
+    const compiled = compiledScene()
+    const far = {
+      type: "arrow",
+      id: "aFar",
+      isDeleted: false,
+      x: 2000,
+      y: 2000,
+      width: 10,
+      height: 0,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+    }
+    const good = {
+      type: "arrow",
+      id: "aGood",
+      isDeleted: false,
+      startBinding: { elementId: "digest" },
+      endBinding: { elementId: "inbox" },
+    }
+
+    // Same scene: far-miss listed first, the way leftover ink sits at [0].
+    const sameScene = run([...compiled, far, good], compiled, stateFor(compiled))
+    expect(sameScene.changes).toEqual([{ type: "connect", payload: { source: "digest", target: "inbox" } }])
+    expect(sameScene.dropArrowIds).toEqual(["aFar"])
+    expect(sameScene.nextState.connectedArrows.has("aFar")).toBe(true)
+    expect(sameScene.nextState.connectedArrows.has("aGood")).toBe(true)
+
+    // Sequential, matching the live beta: far-miss first, then a later bind.
+    const first = run([...compiled, far], compiled, stateFor(compiled))
+    expect(first.changes).toEqual([])
+    expect(first.dropArrowIds).toEqual(["aFar"])
+
+    const second = run([...compiled, far, good], compiled, first.nextState)
+    expect(second.changes).toEqual([{ type: "connect", payload: { source: "digest", target: "inbox" } }])
+    expect(second.dropArrowIds).toEqual([])
+  })
+
+  it("still emits only one connect per pass when two good arrows land together", () => {
+    const compiled = compiledScene()
+    const firstGood = {
+      type: "arrow",
+      id: "aFirst",
+      isDeleted: false,
+      startBinding: { elementId: "digest" },
+      endBinding: { elementId: "inbox" },
+    }
+    const secondGood = {
+      type: "arrow",
+      id: "aSecond",
+      isDeleted: false,
+      startBinding: { elementId: "inbox" },
+      endBinding: { elementId: "digest" },
+    }
+    const scene = [...compiled, firstGood, secondGood]
+    const first = run(scene, compiled, stateFor(compiled))
+    expect(first.changes).toEqual([{ type: "connect", payload: { source: "digest", target: "inbox" } }])
+    expect(first.nextState.connectedArrows.has("aFirst")).toBe(true)
+    expect(first.nextState.connectedArrows.has("aSecond")).toBe(false)
+
+    const second = run(scene, compiled, first.nextState)
+    expect(second.changes).toEqual([{ type: "connect", payload: { source: "inbox", target: "digest" } }])
   })
 
   it("does not treat a threat-zone overlay rect as a connect target or a move", () => {

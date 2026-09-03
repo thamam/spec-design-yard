@@ -12,6 +12,8 @@ import {
   Redo,
 } from "lucide-react"
 import { ProjectPicker } from "./project-picker"
+import { formatSaveButtonLabel } from "../../lib/status-copy"
+import type { SyncState } from "../../lib/db"
 
 export function WorkspaceHeader({
   canUndo = false,
@@ -21,6 +23,9 @@ export function WorkspaceHeader({
   onRedo,
   onSave,
   onRun,
+  onStandalone,
+  blockingFirstRun = false,
+  storageMode,
 }: {
   canUndo?: boolean
   canRedo?: boolean
@@ -29,22 +34,37 @@ export function WorkspaceHeader({
   onRedo?: () => void
   onSave?: () => void
   onRun?: () => void
+  onStandalone?: () => void
+  blockingFirstRun?: boolean
+  storageMode?: SyncState["status"]
 }) {
-  const [saved, setSaved] = useState(true)
+  const [savePhase, setSavePhase] = useState<"idle" | "saving" | "saved">("idle")
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [gitBranch, setGitBranch] = useState<string | null>(null)
 
   useEffect(() => {
     return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
       if (savedTimer.current) clearTimeout(savedTimer.current)
     }
   }, [])
 
   const handleSave = () => {
     onSave?.()
-    setSaved(false)
+    setSavePhase("saving")
+    if (saveTimer.current) clearTimeout(saveTimer.current)
     if (savedTimer.current) clearTimeout(savedTimer.current)
-    savedTimer.current = setTimeout(() => setSaved(true), 800)
+    saveTimer.current = setTimeout(() => {
+      setSavePhase("saved")
+      savedTimer.current = setTimeout(() => setSavePhase("idle"), 1200)
+    }, 400)
   }
+
+  const standaloneLike = storageMode === "local-only" || storageMode === "unconfigured"
+  const crumbRoot = storageMode === "unconfigured" ? "spec-yard" : standaloneLike ? "browser" : "workspace"
+  const crumbMid = storageMode === "unconfigured" ? "new spec" : standaloneLike ? "main.spec" : "spec-editor"
+  const showSpecCrumb = !standaloneLike
 
   return (
     <header
@@ -70,35 +90,46 @@ export function WorkspaceHeader({
           </svg>
         </div>
 
-        {/* Breadcrumb */}
+        {/* Breadcrumb — softened when there is no project / git repo */}
         <nav className="flex items-center gap-1 text-[12px] min-w-0" aria-label="Breadcrumb">
-          <span style={{ color: "var(--foreground-muted)" }}>workspace</span>
-          <span style={{ color: "var(--foreground-dim)" }}>/</span>
-          <span style={{ color: "var(--foreground)" }} className="font-medium truncate">spec-editor</span>
+          <span style={{ color: "var(--foreground-muted)" }}>{crumbRoot}</span>
           <span style={{ color: "var(--foreground-dim)" }}>/</span>
           <span
-            className="truncate font-mono"
-            style={{ color: "var(--accent)" }}
+            className={showSpecCrumb ? "font-medium truncate" : "truncate font-mono"}
+            style={{ color: showSpecCrumb ? "var(--foreground)" : "var(--accent)" }}
           >
-            main.spec
+            {crumbMid}
           </span>
+          {showSpecCrumb && (
+            <>
+              <span style={{ color: "var(--foreground-dim)" }}>/</span>
+              <span className="truncate font-mono" style={{ color: "var(--accent)" }}>
+                main.spec
+              </span>
+            </>
+          )}
         </nav>
 
-        {/* Branch pill */}
-        <div
-          className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded text-[11px]"
-          style={{
-            background: "var(--surface-overlay)",
-            border: "1px solid var(--border-subtle)",
-            color: "var(--foreground-muted)",
-          }}
-        >
-          <GitBranchIcon size={10} />
-          <span>main</span>
-        </div>
+        {gitBranch && (
+          <div
+            data-testid="git-branch-chip"
+            className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded text-[11px]"
+            style={{
+              background: "var(--surface-overlay)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--foreground-muted)",
+            }}
+          >
+            <GitBranchIcon size={10} />
+            <span>{gitBranch}</span>
+          </div>
+        )}
 
-        {/* Persistence mode + active project (click to switch) */}
-        <ProjectPicker />
+        <ProjectPicker
+          onStandalone={onStandalone}
+          blockingFirstRun={blockingFirstRun}
+          onInfo={(info) => setGitBranch(info.mode === "project" ? info.gitBranch ?? null : null)}
+        />
       </div>
 
       {/* Center — title */}
@@ -120,9 +151,9 @@ export function WorkspaceHeader({
         />
         <HeaderButton
           icon={<SaveIcon size={13} />}
-          label={saved ? "Save" : "Saving…"}
+          label={formatSaveButtonLabel(savePhase)}
           onClick={handleSave}
-          active={!saved}
+          active={savePhase !== "idle"}
           disabled={!canSave}
         />
         <HeaderButton

@@ -85,6 +85,19 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.pendingMeta.clear()
   }
 
+  /**
+   * Soft-switch to browser storage without remounting the workspace.
+   * The current spec stays in the local cache; file mirroring stops.
+   */
+  adoptStandalone(): void {
+    this.fileModeDisabled = true
+    this.serverEpoch = null
+    this.setSyncState({ status: "local-only" })
+    // Keep a browser-only sketch portable into the next project the user
+    // picks — same tag loadFromServer already treats as adoptable.
+    if (this.local.getSpec("main")) this.setCacheOrigin("main", "standalone")
+  }
+
   getSyncState(): SyncState {
     return this.syncState
   }

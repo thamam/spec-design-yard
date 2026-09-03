@@ -34,6 +34,7 @@ vi.mock('@excalidraw/excalidraw', () => {
 import Workspace from '../components/Workspace'
 import { compileSpecToExcalidrawElements } from '../components/workspace/excalidraw-canvas'
 import { parseSpec } from '../lib/spec-model'
+import { seedDemoSpec } from './demo-spec'
 
 /** Flush hydration + the next/dynamic import until the stub has captured Excalidraw's props. */
 async function flushUntilCanvasMounted() {
@@ -50,6 +51,7 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
   beforeEach(() => {
     captured.props = null
     vi.useFakeTimers()
+    seedDemoSpec()
   })
 
   afterEach(() => {
@@ -166,5 +168,157 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     expect(inbox!.x).toBe(Math.round(dragX))
     expect(inbox!.y).toBe(Math.round(dragY))
     expect(textarea.value).toContain('typed during debounce')
+  })
+
+  test('drag writeback keeps the YAML caret where the user was typing', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const { spec } = parseSpec(textarea.value)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    const inboxRect = compiled.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    const scene = captured.props.initialData.elements
+    const sceneInbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+
+    const caret = textarea.value.indexOf('# Attaching Bricks')
+    expect(caret).toBeGreaterThan(0)
+    textarea.focus()
+    textarea.setSelectionRange(caret, caret)
+    fireEvent.select(textarea)
+    expect(textarea.selectionStart).toBe(caret)
+
+    const dragX = inboxRect.x + 40
+    const dragY = inboxRect.y + 25
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'down' })
+    })
+    sceneInbox.x = dragX
+    sceneInbox.y = dragY
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'up' })
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+
+    // Type a comment at the caret during the 450ms debounce — the live
+    // report: position holds and the comment survives, then writeback
+    // jumped the caret to EOF so further keystrokes appended at the bottom.
+    const insertion = '\n    # typed during debounce'
+    const nextValue = textarea.value.slice(0, caret) + insertion + textarea.value.slice(caret)
+    const afterType = caret + insertion.length
+    fireEvent.change(textarea, {
+      target: { value: nextValue, selectionStart: afterType, selectionEnd: afterType },
+    })
+    textarea.setSelectionRange(afterType, afterType)
+    fireEvent.select(textarea)
+    expect(textarea.selectionStart).toBe(afterType)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    const { spec: updated } = parseSpec(textarea.value)
+    const inbox = updated?.system?.components?.find((c: any) => c.id === 'inbox')
+    expect(inbox!.x).toBe(Math.round(dragX))
+    expect(inbox!.y).toBe(Math.round(dragY))
+    expect(textarea.value).toContain('typed during debounce')
+    expect(textarea.selectionStart).toBe(afterType)
+    expect(textarea.selectionEnd).toBe(afterType)
+    expect(textarea.selectionStart).not.toBe(textarea.value.length)
+  })
+
+  test('drag writeback does not steal focus back into the YAML editor', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const { spec } = parseSpec(textarea.value)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    const inboxRect = compiled.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+    const scene = captured.props.initialData.elements
+    const sceneInbox = scene.find((el: any) => el.id === 'inbox' && el.type === 'rectangle')
+
+    textarea.focus()
+    textarea.setSelectionRange(32, 32)
+    fireEvent.select(textarea)
+    textarea.blur()
+    expect(document.activeElement).not.toBe(textarea)
+
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'down' })
+    })
+    sceneInbox.x = inboxRect.x + 40
+    sceneInbox.y = inboxRect.y + 25
+    act(() => {
+      captured.props.onChange(scene, { cursorButton: 'up' })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    expect(document.activeElement).not.toBe(textarea)
+  })
+
+  test('a far-miss leftover arrow does not starve a later good bind from writing YAML', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    const simple = `system:
+  name: Beta
+  components:
+    - id: orphan
+      type: Stage
+      name: Orphan
+    - id: vault
+      type: Store
+      name: Vault
+`
+    fireEvent.change(textarea, { target: { value: simple } })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const { spec } = parseSpec(textarea.value)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    const far = {
+      type: 'arrow',
+      id: 'aFar',
+      isDeleted: false,
+      x: 2000,
+      y: 2000,
+      width: 10,
+      height: 0,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+    }
+    const good = {
+      type: 'arrow',
+      id: 'aGood',
+      isDeleted: false,
+      startBinding: { elementId: 'orphan' },
+      endBinding: { elementId: 'vault' },
+    }
+
+    act(() => {
+      captured.props.onChange([...compiled, far], { cursorButton: 'up' })
+    })
+    expect(textarea.value).not.toMatch(/target:\s*vault/)
+
+    act(() => {
+      captured.props.onChange([...compiled, far, good], { cursorButton: 'up' })
+    })
+
+    const { spec: updated } = parseSpec(textarea.value)
+    const orphan = updated?.system?.components?.find((c: any) => c.id === 'orphan')
+    const targets = (orphan?.connections || []).map((c: any) => (typeof c === 'string' ? c : c.target))
+    expect(targets).toContain('vault')
+    // The far-miss itself must not invent a connection.
+    expect(textarea.value.match(/target:/g)?.length).toBe(1)
   })
 })

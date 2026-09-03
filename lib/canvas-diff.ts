@@ -74,6 +74,12 @@ export interface DiffSceneResult {
   changes: CanvasChange[]
   /** Moved rectangles awaiting the caller's debounce, or null. */
   pendingElements: any[] | null
+  /**
+   * User-drawn arrows that did not resolve to a spec connection. The canvas
+   * must drop this leftover ink: leaving it in the scene kept it as
+   * `newlyCreatedArrows[0]` forever and starved later good binds.
+   */
+  dropArrowIds: string[]
   nextState: CanvasDiffState
 }
 
@@ -299,6 +305,7 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
 
   const changes: CanvasChange[] = []
   let pendingElements: any[] | null = null
+  const dropArrowIds: string[] = []
 
   const finish = (): DiffSceneResult => {
     const unchanged =
@@ -309,6 +316,7 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
     return {
       changes,
       pendingElements,
+      dropArrowIds,
       nextState: unchanged ? state : { ...state, deletedIds, addedIds, connectedArrows, pendingRename },
     }
   }
@@ -427,7 +435,9 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
     }
   }
 
-  // 2c. Sync connection/arrow creations back to editor spec
+  // 2c. Sync connection/arrow creations back to editor spec.
+  // Scan every new arrow, not just [0]: a far-miss that we neither consume
+  // nor drop stays at the front of the list and starves later good binds.
   if (hasScene) {
     const newlyCreatedArrows = updatedElements.filter(
       (el: any) =>
@@ -437,8 +447,8 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
         !currentElementIds.has(el.id) &&
         !state.compiledIds.has(el.id)
     )
-    if (newlyCreatedArrows.length > 0) {
-      const arrow = newlyCreatedArrows[0]
+    let emittedConnect = false
+    for (const arrow of newlyCreatedArrows) {
       const source = resolveArrowEnd(
         arrow.startBinding?.elementId,
         arrowEndpoint(arrow, "start"),
@@ -453,11 +463,19 @@ export function diffScene(input: DiffSceneInput): DiffSceneResult {
       )
 
       if (source && target && source !== target) {
+        if (emittedConnect) continue
+        // One connect per pass, same stability rule as newly-created rects.
         connectedArrows = withId(connectedArrows, arrow.id)
         changes.push({ type: "connect", payload: { source, target } })
-        return finish()
+        emittedConnect = true
+      } else {
+        // Unresolved (far-miss, overlay, unknown endpoint): do not invent a
+        // connection, but consume the stroke so it cannot block the next bind.
+        connectedArrows = withId(connectedArrows, arrow.id)
+        dropArrowIds.push(arrow.id)
       }
     }
+    if (emittedConnect) return finish()
   }
 
   // 3. Sync renames back to editor spec

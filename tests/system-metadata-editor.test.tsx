@@ -4,9 +4,10 @@ import React from 'react'
 import Workspace from '../components/Workspace'
 import { reconcileSpec } from '../lib/reconciler'
 import yaml from 'yaml'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Global System Specification Settings in Focus Tab', () => {
+  seedDemoSpecBeforeEach()
   test('direct reconcileSpec test for system properties', () => {
     const initialSpec = `system:
   name: External Brain v0.2

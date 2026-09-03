@@ -42,6 +42,14 @@ describe('EditorPanel hydration guard', () => {
     expect(screen.getByRole('button', { name: 'Toggle word wrap' })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  test('textarea stays disabled when hydrated but not interactive', () => {
+    render(<EditorPanel specText={'system: {}\n'} isHydrated isInteractive={false} />)
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(true)
+    expect(textarea).toHaveAttribute('aria-busy', 'false')
+    expect(textarea).toHaveAttribute('aria-label', 'Choose a project folder before editing')
+  })
+
   test('textarea is enabled once hydrated (and by default)', () => {
     const { unmount } = render(<EditorPanel specText={'system: {}\n'} isHydrated={true} />)
     expect((screen.getByTestId('spec-textarea') as HTMLTextAreaElement).disabled).toBe(false)

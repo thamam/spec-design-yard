@@ -34,6 +34,24 @@ describe('project API route', () => {
     expect(res.body.mode).toBe('unconfigured')
     expect(typeof res.body.suggestedDir).toBe('string')
     expect(res.body.recents).toEqual([])
+    expect(fs.existsSync(path.join(configDir, 'config.json'))).toBe(false)
+  })
+
+  test('GET project includes gitBranch when .git/HEAD names a branch', () => {
+    process.env.SPEC_YARD_PROJECT_DIR = projectDir
+    fs.mkdirSync(path.join(projectDir, '.git'))
+    fs.writeFileSync(path.join(projectDir, '.git', 'HEAD'), 'ref: refs/heads/feature-x\n')
+    const res = mockRes()
+    projectHandler(projectReq('GET'), res)
+    expect(res.body.mode).toBe('project')
+    expect(res.body.gitBranch).toBe('feature-x')
+  })
+
+  test('GET project reports gitBranch null when there is no repo', () => {
+    process.env.SPEC_YARD_PROJECT_DIR = projectDir
+    const res = mockRes()
+    projectHandler(projectReq('GET'), res)
+    expect(res.body.gitBranch).toBeNull()
   })
 
   test('GET under an env-var launch reports the project with source env', () => {

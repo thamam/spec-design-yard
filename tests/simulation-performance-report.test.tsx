@@ -2,9 +2,10 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation Performance Report & Diagnostic Analysis', () => {
+  seedDemoSpecBeforeEach()
   test('displays performance diagnostic report when simulation completes', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()

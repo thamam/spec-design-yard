@@ -1,6 +1,7 @@
-# Sentinel Smoke Run
+# Archived — Sentinel Smoke Run
 
-- **Run Date:** 2026-06-25 11:26:20 UTC
-- **v0 Chat ID:** `pPQv8618aSJ`
-- **File Written:** `pages/hello-sentinel.tsx`
-- **Next Steps:** Implement a GitHub workflow action to automatically deploy pages on commit.
+This file was a v0.dev bootstrap note from 2026-06-25 (`pages/hello-sentinel.tsx`,
+auto-deploy next steps). It is **not** a product smoke test.
+
+Current verification: `npm test`, `npm run test:e2e`, `npm run build`.
+See [docs/getting-started.md](./docs/getting-started.md).

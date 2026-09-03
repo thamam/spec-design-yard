@@ -75,10 +75,11 @@ with sync_playwright() as p:
     time.sleep(2)
 
     ta = page.locator('[data-testid="spec-textarea"]')
-    check("the opt-out keeps the built-in demo to play with", "External Brain" in ta.input_value(),
+    check("standalone opens a blank slate, not the demo",
+          "External Brain" not in ta.input_value() and "New System" in ta.input_value(),
           ta.input_value()[:120])
 
-    edited = ta.input_value().replace("External Brain v0.2", "Standalone Local System")
+    edited = ta.input_value().replace("New System", "Standalone Local System")
     ta.fill(edited)
     time.sleep(2.5)  # autosave debounce
 

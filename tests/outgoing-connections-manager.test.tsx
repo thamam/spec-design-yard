@@ -3,9 +3,10 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
 import yaml from 'yaml'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Outgoing Connections Manager in Focus Tab', () => {
+  seedDemoSpecBeforeEach()
   test('lists existing outgoing connections, supports updating labels, and supports disconnecting them', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()
@@ -15,7 +16,7 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     fireEvent.click(metricsTabBtn)
 
     // 2. Select inbox component via clicking its button in the directory
-    const inboxBtn = screen.getByRole('button', { name: /inbox/i })
+    const inboxBtn = screen.getByRole('button', { name: /^inbox/i })
     fireEvent.click(inboxBtn)
 
     // 3. Switch to Focus Tab
@@ -74,7 +75,7 @@ describe('Outgoing Connections Manager in Focus Tab', () => {
     const metricsTabBtn = screen.getByRole('tab', { name: /Metrics/i })
     fireEvent.click(metricsTabBtn)
 
-    const digestBtn = screen.getByRole('button', { name: /digest_stage/i })
+    const digestBtn = screen.getByRole('button', { name: /^digest_stage/i })
     fireEvent.click(digestBtn)
 
     // 2. Switch to Focus Tab

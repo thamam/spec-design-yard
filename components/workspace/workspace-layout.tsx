@@ -10,7 +10,7 @@ import { useUndoRedo } from "./use-undo-redo"
 import { lintSpec, droppedConnectionDiagnostics } from "../../lib/linter"
 import { parseSpec, normalizeLineEndings, type DroppedConnection } from "../../lib/spec-model"
 import { clampSplitPercent } from "../../lib/panel-split"
-import { formatIssueCount } from "../../lib/status-copy"
+import { formatIssueCount, formatSyncLabel, isWorkspaceInteractive } from "../../lib/status-copy"
 import { rememberSpecDraft, readCrashDraft, clearCrashDraft } from "../../lib/spec-draft"
 import { triggerDownload } from "./download"
 
@@ -107,6 +107,13 @@ system:
   components: []
 `
 
+// Standalone with nothing cached: a blank slate, never the External Brain demo.
+const STANDALONE_BLANK_SPEC = `# Browser storage — this spec stays in this browser until you pick a project.
+system:
+  name: New System
+  components: []
+`
+
 export function WorkspaceLayout() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [splitPercent, setSplitPercent] = useState(DEFAULT_SPLIT)
@@ -162,9 +169,9 @@ export function WorkspaceLayout() {
   // Sync keyboard shortcuts and track user keystroke grouping
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      const isInputOrTextarea = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-      const isSpecTextarea = target && target.getAttribute("data-focus-field") === "spec-textarea"
+      const target = e.target as HTMLElement | null
+      const isInputOrTextarea = !!(target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"))
+      const isSpecTextarea = !!(target && typeof target.getAttribute === "function" && target.getAttribute("data-focus-field") === "spec-textarea")
 
       if (isInputOrTextarea && !isSpecTextarea) {
         return
@@ -197,6 +204,8 @@ export function WorkspaceLayout() {
   const [pathTarget, setPathTarget] = useState<string>("")
 
   const [isHydrated, setIsHydrated] = useState(false)
+  const [lastPersisted, setLastPersisted] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   // Every committed spec, including one that has not reached the 1s autosave
   // yet. The error boundary persists this if a descendant render throws.
   // Gated on hydration so the pre-hydration template is never a crash draft.
@@ -208,6 +217,8 @@ export function WorkspaceLayout() {
   useEffect(() => db.subscribeSyncState(setSyncState), [])
 
   const lastLoadedSpecRef = useRef<string | null>(null)
+  const canInteract = isWorkspaceInteractive(isHydrated, syncState.status)
+  const isDirty = isHydrated && lastPersisted !== null && specText !== lastPersisted
 
   // Bumped once per spec/project LOAD, never per edit. The canvas uses it to
   // decide when a fresh zoom-to-fit is owed: hydration replaces the spec after
@@ -228,10 +239,10 @@ export function WorkspaceLayout() {
         if (cancelled) return
         const savedDoc = db.getSpec("main")
         // No spec anywhere. A file-backed project opens blank (the demo must
-        // never leak into a client repo), and so does a first run — opening a
-        // 59-diagnostic demo behind the "choose your project" prompt reads as
-        // noise, not as a welcome. Only a deliberate browser-storage opt-out
-        // keeps the demo, as something to play with.
+        // never leak into a client repo), and so does a first run or a
+        // standalone session with an empty cache — opening the External Brain
+        // demo uninvited (first-run prompt, opt-out, or empty browser
+        // storage) reads as noise, not as a welcome.
         const unconfigured = db.getSyncState().status === "unconfigured"
         // A crash draft is the last rendered spec the error boundary saved.
         // Prefer it over the project file so Reload after a crash does not
@@ -251,9 +262,10 @@ export function WorkspaceLayout() {
               ? FRESH_PROJECT_SPEC
               : unconfigured
               ? UNCONFIGURED_SPEC
-              : INITIAL_SPEC)
+              : STANDALONE_BLANK_SPEC)
         )
         lastLoadedSpecRef.current = loaded
+        setLastPersisted(loaded)
         resetHistory(loaded)
         setLoadedSpecId((n) => n + 1)
       } catch (e) {
@@ -265,6 +277,7 @@ export function WorkspaceLayout() {
         const savedDoc = db.getSpec("main")
         const loaded = normalizeLineEndings(readCrashDraft() || savedDoc?.yamlContent || UNCONFIGURED_SPEC)
         lastLoadedSpecRef.current = loaded
+        setLastPersisted(loaded)
         resetHistory(loaded)
         setLoadedSpecId((n) => n + 1)
       } finally {
@@ -285,11 +298,12 @@ export function WorkspaceLayout() {
     val: string | ((prev: string) => string),
     options?: { isTyping?: boolean; immediate?: boolean }
   ) => {
-    if (!isHydrated) return
+    if (!canInteract) return
     setSpecText(val, options)
-  }, [isHydrated, setSpecText])
+  }, [canInteract, setSpecText])
 
   const persistSpec = useCallback((text: string) => {
+    setIsSaving(true)
     const { spec } = parseSpec(text)
     const systemName = spec?.system?.name
     const title =
@@ -298,13 +312,19 @@ export function WorkspaceLayout() {
         : db.getSpec("main")?.title || "Untitled Spec"
     db.saveSpec("main", title, text)
     lastLoadedSpecRef.current = text
+    setLastPersisted(text)
     clearCrashDraft()
+    queueMicrotask(() => setIsSaving(false))
   }, [])
 
   const handleSave = useCallback(() => {
-    if (!isHydrated) return
+    if (!canInteract) return
     persistSpec(specText)
-  }, [isHydrated, specText, persistSpec])
+  }, [canInteract, specText, persistSpec])
+
+  const handleStandalone = useCallback(() => {
+    db.adoptStandalone()
+  }, [])
 
   // Save current spec to DB on modification (once hydrated) with debouncing to prevent lagging synchronous LocalStorage writes
   useEffect(() => {
@@ -326,7 +346,7 @@ export function WorkspaceLayout() {
   specTextRef.current = specText
 
   const handleCanvasChange = useCallback((change: any[] | { type: string; payload: any }) => {
-    if (!isHydrated) return
+    if (!canInteract) return
     const current = specTextRef.current
     if (Array.isArray(change)) {
       const updated = reconcileSpec(current, { type: "coords", payload: change })
@@ -339,7 +359,7 @@ export function WorkspaceLayout() {
         setSpecText(updated, { immediate: true })
       }
     }
-  }, [isHydrated, setSpecText])
+  }, [canInteract, setSpecText])
 
   // Dynamically parse the YAML as user types
   useEffect(() => {
@@ -415,19 +435,29 @@ export function WorkspaceLayout() {
       <WorkspaceHeader
         canUndo={canUndo}
         canRedo={canRedo}
-        canSave={isHydrated}
+        canSave={canInteract}
         onUndo={undo}
         onRedo={redo}
         onSave={handleSave}
         onRun={() => setActiveTab("metrics")}
+        onStandalone={handleStandalone}
+        blockingFirstRun={syncState.status === "unconfigured"}
+        storageMode={syncState.status}
       />
 
       {/* Split pane body */}
-      <div
-        ref={containerRef}
-        className="flex flex-1 min-h-0 overflow-hidden"
-        style={{ cursor: isDragging ? "col-resize" : "auto" }}
-      >
+        <div
+          ref={containerRef}
+          className="flex flex-1 min-h-0 overflow-hidden relative"
+          style={{ cursor: isDragging ? "col-resize" : "auto" }}
+        >
+        {syncState.status === "unconfigured" && (
+          <div
+            data-testid="workspace-inert-gate"
+            className="absolute inset-0 z-20"
+            aria-hidden="true"
+          />
+        )}
         {/* Left — editor */}
         <div
           style={{ width: `${splitPercent}%`, minWidth: 0 }}
@@ -446,6 +476,7 @@ export function WorkspaceLayout() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             isHydrated={isHydrated}
+            isInteractive={canInteract}
           />
         </div>
 
@@ -507,7 +538,7 @@ export function WorkspaceLayout() {
             setActiveTab={setActiveTab}
             diagnostics={diagnostics}
             activeTab={activeTab}
-            isHydrated={isHydrated}
+            isHydrated={canInteract}
           />
         </div>
       </div>
@@ -516,6 +547,8 @@ export function WorkspaceLayout() {
       <StatusBar
         syncState={syncState}
         isHydrated={isHydrated}
+        isDirty={isDirty}
+        isSaving={isSaving}
         issueCount={diagnostics.length}
         specText={specText}
         onRetrySave={handleSave}
@@ -534,26 +567,28 @@ function downloadSpec(text: string) {
 function StatusBar({
   syncState,
   isHydrated,
+  isDirty,
+  isSaving,
   issueCount,
   specText,
   onRetrySave,
 }: {
   syncState: SyncState
   isHydrated: boolean
+  isDirty: boolean
+  isSaving: boolean
   issueCount: number
   specText: string
   onRetrySave: () => void
 }) {
   const halted = syncState.status === "halted"
-  const label = !isHydrated
-    ? "Loading workspace…"
-    : syncState.status === "synced"
-    ? "Synced to project"
-    : halted
-    ? syncState.reason || "Saving halted — reload the workspace"
-    : syncState.status === "unconfigured"
-    ? "No project chosen — pick a folder to save to files"
-    : "Browser storage only"
+  const label = formatSyncLabel({
+    isHydrated,
+    isDirty,
+    isSaving,
+    status: syncState.status,
+    haltedReason: syncState.reason,
+  })
   const issueLabel = formatIssueCount(issueCount)
   return (
     <footer
@@ -573,6 +608,8 @@ function StatusBar({
                 ? "var(--foreground-muted)"
                 : halted
                 ? "var(--warning)"
+                : isSaving || isDirty
+                ? "var(--accent)"
                 : syncState.status === "synced"
                 ? "var(--success)"
                 : "var(--foreground-muted)",

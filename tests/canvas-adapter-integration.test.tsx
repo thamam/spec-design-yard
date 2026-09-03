@@ -6,6 +6,7 @@ import React from 'react'
 // file's imports) close over a mutable object we can also read from tests.
 const captured = vi.hoisted(() => ({
   props: null as any,
+  api: null as any,
   // Set by a test to fire during the stub's commit, standing in for the real
   // Excalidraw calling `onChange` from `componentDidUpdate`.
   onCommitUpdate: null as null | ((props: any) => void),
@@ -19,13 +20,15 @@ vi.mock('@excalidraw/excalidraw', () => {
     captured.props = props
     const mounted = React.useRef(false)
     React.useEffect(() => {
-      props.excalidrawAPI?.({
+      const api = {
         updateScene: vi.fn(),
         scrollToContent: vi.fn(),
         // The zoom-to-fit path calls this; the real API has it and the stub
         // must too, or the adapter throws on mount.
         getSceneElements: vi.fn(() => []),
-      })
+      }
+      captured.api = api
+      props.excalidrawAPI?.(api)
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
     // The real Excalidraw is a class component that reports scene changes from
@@ -85,6 +88,7 @@ function moveInboxRect(scene: any[], x: number, y: number) {
 describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () => {
   beforeEach(() => {
     captured.props = null
+    captured.api = null
     captured.onCommitUpdate = null
     vi.useFakeTimers()
   })
@@ -427,5 +431,97 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
       })
     })
     expect(setSelectedUnit).toHaveBeenCalledWith('inbox')
+  })
+
+  test('drops far-miss leftover ink so a later bind still emits connect', async () => {
+    const spec = {
+      system: {
+        name: 'Beta',
+        components: [
+          { id: 'orphan', name: 'Orphan', type: 'Stage', x: 100, y: 100 },
+          { id: 'vault', name: 'Vault', type: 'Store', x: 400, y: 100 },
+        ],
+      },
+    }
+    const { onCanvasChange } = await mountCanvas(spec)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    const far = {
+      type: 'arrow',
+      id: 'aFar',
+      isDeleted: false,
+      x: 2000,
+      y: 2000,
+      width: 10,
+      height: 0,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+    }
+    const good = {
+      type: 'arrow',
+      id: 'aGood',
+      isDeleted: false,
+      startBinding: { elementId: 'orphan' },
+      endBinding: { elementId: 'vault' },
+    }
+
+    captured.api.updateScene.mockClear()
+    act(() => {
+      captured.props.onChange([...compiled, far], { cursorButton: 'up' })
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    expect(captured.api.updateScene).toHaveBeenCalled()
+    const dropped = captured.api.updateScene.mock.calls[0][0].elements.find((el: any) => el.id === 'aFar')
+    expect(dropped).toBeTruthy()
+    expect(dropped.isDeleted).toBe(true)
+
+    captured.api.updateScene.mockClear()
+    act(() => {
+      captured.props.onChange([...compiled, far, good], { cursorButton: 'up' })
+    })
+    expect(onCanvasChange).toHaveBeenCalledWith({
+      type: 'connect',
+      payload: { source: 'orphan', target: 'vault' },
+    })
+  })
+
+  test('a failed drop of unresolved ink is logged instead of tearing the canvas down', async () => {
+    const spec = {
+      system: {
+        name: 'Beta',
+        components: [{ id: 'orphan', name: 'Orphan', type: 'Stage', x: 100, y: 100 }],
+      },
+    }
+    const { onCanvasChange } = await mountCanvas(spec)
+    const compiled = compileSpecToExcalidrawElements(spec)
+    captured.api.updateScene.mockImplementationOnce(() => {
+      throw new Error('drop failed')
+    })
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    act(() => {
+      captured.props.onChange(
+        [
+          ...compiled,
+          {
+            type: 'arrow',
+            id: 'aFar',
+            isDeleted: false,
+            x: 2000,
+            y: 2000,
+            width: 10,
+            height: 0,
+            points: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+        ],
+        { cursorButton: 'up' }
+      )
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    expect(err).toHaveBeenCalled()
+    err.mockRestore()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import React from 'react'
 import { WorkspaceHeader } from '../components/workspace/workspace-header'
 
@@ -38,19 +38,55 @@ describe('WorkspaceHeader chrome', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 
-  test('Save shows brief Saving… feedback and cleans up its timer', () => {
+  test('Save shows Saving… then Saved, then returns to Save', () => {
     vi.useFakeTimers()
     const onSave = vi.fn()
     const { unmount } = render(<WorkspaceHeader onSave={onSave} canSave />)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument()
     act(() => {
-      vi.advanceTimersByTime(800)
+      vi.advanceTimersByTime(400)
+    })
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(1200)
     })
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     unmount()
+  })
+
+  test('hides the git chip and softens the breadcrumb in standalone', () => {
+    render(<WorkspaceHeader canSave storageMode="local-only" />)
+    expect(screen.queryByTestId('git-branch-chip')).toBeNull()
+    expect(screen.getByLabelText('Breadcrumb').textContent).toMatch(/browser/i)
+    expect(screen.getByLabelText('Breadcrumb').textContent).not.toMatch(/spec-editor/)
+  })
+
+  test('shows a real git branch when the project API reports one', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        mode: 'project',
+        dir: '/tmp/p',
+        exists: true,
+        source: 'config',
+        recents: [],
+        gitBranch: 'release-1',
+      }),
+    }) as any))
+    render(<WorkspaceHeader canSave storageMode="synced" />)
+    await waitFor(() => {
+      expect(screen.getByTestId('git-branch-chip').textContent).toContain('release-1')
+    })
+  })
+
+  test('hides the git chip on first run', () => {
+    render(<WorkspaceHeader canSave storageMode="unconfigured" blockingFirstRun />)
+    expect(screen.queryByTestId('git-branch-chip')).toBeNull()
+    expect(screen.getByLabelText('Breadcrumb').textContent).toMatch(/spec-yard/i)
   })
 
   test('Save without an onSave handler does not throw', () => {

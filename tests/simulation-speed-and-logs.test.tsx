@@ -2,9 +2,10 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Simulation Speed Controls & Tracing Logs', () => {
+  seedDemoSpecBeforeEach()
   test('supports pausing, speed adjustment, single stepping, and displays dynamic terminal logs', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()

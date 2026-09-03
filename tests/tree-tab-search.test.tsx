@@ -2,9 +2,10 @@ import { describe, test, expect } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import Workspace from '../components/Workspace'
-import { waitForWorkspaceHydration } from './wait-for-hydration'
+import { seedDemoSpecBeforeEach, waitForWorkspaceHydration } from './wait-for-hydration'
 
 describe('Tree Tab Interactive Component Search and Filtering', () => {
+  seedDemoSpecBeforeEach()
   test('renders tree search input and type filter dropdown inside Tree tab', async () => {
     render(<Workspace />)
     await waitForWorkspaceHydration()

@@ -68,6 +68,7 @@ describe('ProjectPicker — project mode (the default story)', () => {
 
     await waitFor(() => expect(reload).toHaveBeenCalled())
     expect(puts).toEqual([{ dir: '/tmp/proj-beta' }])
+    expect(screen.getByTestId('workspace-switch-overlay').textContent).toMatch(/switching project/i)
   })
 
   test('a recent entry switches with one click', async () => {
@@ -178,16 +179,44 @@ describe('ProjectPicker — first run (unconfigured)', () => {
     expect(puts).toEqual([{ dir: '/Users/dev/spec-yard-projects/my-system', create: true }])
   })
 
-  test('Escape closes the first-run panel; the input is focused when it opens', async () => {
+  test('Escape does not dismiss the first-run panel; the input is focused when it opens', async () => {
     installProjectFetch({
       info: { mode: 'unconfigured', suggestedDir: '/tmp/suggested', recents: [] },
     })
     render(<ProjectPicker />)
     const panel = await screen.findByTestId('project-picker-panel')
     expect(panel.getAttribute('role')).toBe('dialog')
+    expect(screen.getByTestId('first-run-overlay')).toBeTruthy()
     await waitFor(() => expect(screen.getByTestId('project-dir-input')).toHaveFocus())
     fireEvent.keyDown(window, { key: 'Escape' })
-    await waitFor(() => expect(screen.queryByTestId('project-picker-panel')).toBeNull())
+    expect(screen.getByTestId('project-picker-panel')).toBeTruthy()
+    expect(screen.getByTestId('first-run-overlay')).toBeTruthy()
+  })
+
+  test('opt-out calls onStandalone and does not reload', async () => {
+    const { puts } = installProjectFetch({
+      info: { mode: 'unconfigured', suggestedDir: '/tmp/suggested', recents: [] },
+      putResponses: [{ status: 200, body: { ok: true, mode: 'standalone' } }],
+    })
+    const reload = vi.fn()
+    const onStandalone = vi.fn()
+    render(<ProjectPicker reload={reload} onStandalone={onStandalone} />)
+    await screen.findByTestId('project-picker-panel')
+    fireEvent.click(screen.getByTestId('project-standalone-button'))
+    await waitFor(() => expect(onStandalone).toHaveBeenCalled())
+    expect(reload).not.toHaveBeenCalled()
+    expect(puts).toEqual([{ mode: 'standalone' }])
+    expect(screen.queryByTestId('first-run-overlay')).toBeNull()
+  })
+
+  test('blockingFirstRun shows the overlay before the project GET returns', async () => {
+    let resolveGet: (v: any) => void = () => {}
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveGet = resolve })))
+    render(<ProjectPicker blockingFirstRun />)
+    expect(screen.getByTestId('first-run-overlay')).toBeTruthy()
+    expect(screen.getByTestId('first-run-loading')).toBeTruthy()
+    resolveGet({ ok: true, status: 200, json: async () => ({ mode: 'unconfigured', suggestedDir: '/tmp/s', recents: [] }) })
+    await waitFor(() => expect(screen.getByTestId('project-dir-input')).toBeTruthy())
   })
 })
 
@@ -215,6 +244,18 @@ describe('ProjectPicker — standalone mode (secondary)', () => {
 describe('ProjectPicker — degraded', () => {
   test('an unreachable project API degrades to an unknown badge, never a false Browser storage', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down') }))
+    render(<ProjectPicker />)
+    const badge = await screen.findByTestId('project-picker-badge')
+    await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))
+    expect(badge.textContent).not.toMatch(/browser storage/i)
+  })
+
+  test('a 200 with a non-object body is unknown, never a false Browser storage', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => null,
+    }) as any))
     render(<ProjectPicker />)
     const badge = await screen.findByTestId('project-picker-badge')
     await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))

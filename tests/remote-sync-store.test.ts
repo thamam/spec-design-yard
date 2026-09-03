@@ -487,6 +487,21 @@ describe('RemoteSyncSpecStore sync-state visibility', () => {
     vi.unstubAllGlobals()
   })
 
+  test('adoptStandalone flips to local-only without wiping the spec', async () => {
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': { status: 200, body: { found: false, epoch: 'e1' } },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'Keep Me', 'system:\n  name: Keep Me\n')
+    expect(store.getSyncState().status).toBe('synced')
+    store.adoptStandalone()
+    expect(store.getSyncState().status).toBe('local-only')
+    expect(store.getSpec('main')?.yamlContent).toContain('Keep Me')
+    expect(localStorage.getItem('spec_main_origin')).toBe('standalone')
+  })
+
   test('standalone is a calm local-only state, not an alarm', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ enabled: false }) }) as any))
     const store = new RemoteSyncSpecStore()
