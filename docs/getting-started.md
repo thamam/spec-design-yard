@@ -31,9 +31,10 @@ npm install
 In the project directory, you can run the following commands:
 
 ### `npm run dev`
-Runs the app in development mode.
-- Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Runs the app in development mode, bound to loopback (`127.0.0.1`) only.
+- Open [http://127.0.0.1:3000](http://127.0.0.1:3000) (or [http://localhost:3000](http://localhost:3000)) to view it in your browser.
 - The page will hot-reload automatically if you make changes to the workspace code.
+- The project and store APIs have no authentication. Do not re-bind with `-H 0.0.0.0` or expose the port on an untrusted network.
 
 ### `npm run build`
 Builds the Next.js application for production.
@@ -41,9 +42,10 @@ Builds the Next.js application for production.
 - This command performs thorough type checking and linting of the TypeScript/React code.
 
 ### `npm run start`
-Starts the Next.js production server.
+Starts the Next.js production server, also bound to loopback (`127.0.0.1`) only.
 - Must be run *after* executing `npm run build`.
 - Serves the compiled production-ready bundles.
+- Same network warning as `npm run dev`: this is a local tool, not a public service.
 
 ### `npm run test`
 Runs the entire Vitest test suite once.
@@ -58,8 +60,8 @@ Runs Vitest in watch mode.
 ## Quick-Start Workflow
 
 1. **Install dependencies:** `npm install`
-2. **Launch the development server:** `npm run dev`
-3. **Open the browser:** Go to `http://localhost:3000`
+2. **Launch the development server:** `npm run dev` (listens on `127.0.0.1` only)
+3. **Open the browser:** Go to `http://127.0.0.1:3000`
 4. **Make adjustments:** Edit the system architecture spec directly inside the Editor's **Code Tab** using YAML syntax, watch the live linter update inline, and view the visual graph adjust in real time on the canvas.
 5. **Verify stability:** Run `npm run test` to confirm all system unit and integration tests are passing perfectly.
 
@@ -113,8 +115,10 @@ using the header picker. The equivalent manual command seeds the project via
 an environment variable:
 
 ```bash
-SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev -- -H 127.0.0.1
+SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev
 ```
+
+(`npm run dev` already passes `-H 127.0.0.1`. You can still append the flag; it is redundant, not a different bind.)
 
 Either way the folder is recorded as the active project for future launches.
 
@@ -140,8 +144,9 @@ version.
 
 **Network exposure:** the store and project APIs have no authentication by
 design — this is a local-dev tool, and any launch can write into the chosen
-project folder. Keep the dev server bound to loopback (`-H 127.0.0.1`; the
-launcher does this) and never expose it on an untrusted network: anyone who
-can reach the port can read and overwrite files under the active project
-directory. The project API additionally refuses non-loopback `Host` headers
-and non-JSON writes.
+project folder. Default launch paths (`npm run dev`, `npm run start`,
+`spec-yard`) already bind loopback (`-H 127.0.0.1`). Never re-bind to all
+interfaces or expose the port on an untrusted network: anyone who can reach
+the port can read and overwrite files under the active project directory.
+The project API additionally refuses non-loopback `Host` headers and
+non-JSON writes.

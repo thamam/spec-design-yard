@@ -1,0 +1,39 @@
+Copyright (c) 2026 Tomer Hamam. All rights reserved.
+
+SPEC-DESIGN-YARD
+Proprietary Source-Available License
+
+This software and its source code are the confidential and proprietary
+property of Tomer Hamam ("Licensor").
+
+1. Grant of Use
+   Use of this software is permitted only under a separate written license
+   agreement with Licensor. Licensed customers may install and use the
+   software for their internal architecture-design work in accordance with
+   that agreement.
+
+2. Source Availability
+   Source code may be provided for review, support, and licensed
+   modification. Availability of the source does not grant an open-source
+   license. This is not MIT, Apache-2.0, GPL, or any OSI-approved license.
+
+3. Restrictions
+   Except as expressly permitted by a written license from Licensor, you
+   may not copy, modify, merge, publish, distribute, sublicense, or sell
+   copies of the software, and you may not remove or alter proprietary
+   notices.
+
+4. No Trademark License
+   This license does not grant rights to the Spec-Design-Yard or Spec-Yard
+   names or marks.
+
+5. Disclaimer
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+   OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+   THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing inquiries, contact the copyright holder.

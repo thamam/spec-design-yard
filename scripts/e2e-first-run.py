@@ -9,7 +9,7 @@ and the files that land on disk.
 Run the server it talks to like this (config dir MUST be a throwaway, or the
 run overwrites your real ~/.specyard registry):
 
-    SPEC_YARD_CONFIG_DIR=/tmp/specyard-firstrun-config npx next dev -p 3110
+    SPEC_YARD_CONFIG_DIR=/tmp/specyard-firstrun-config npx next dev -H 127.0.0.1 -p 3110
 
 Screenshots land in /tmp/specyard-firstrun-shots/.
 

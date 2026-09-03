@@ -4,7 +4,8 @@ Single-page Next.js app: a visual IDE for editing a YAML "system spec" (componen
 
 ## Commands
 
-- `npm run dev` — dev server
+- `npm run dev` — dev server on loopback (`127.0.0.1`)
+- `npm run start` — production server on loopback (`127.0.0.1`)
 - `npm run install-cli` — one-time setup: symlinks `bin/spec-yard` into `~/.local/bin`; afterwards `spec-yard [client-repo]` launches file-backed mode from anywhere
 - `npm test` — vitest run (jsdom, `globals: true`, setup in `tests/setup.ts`)
 - `npm run test:e2e` — real-browser scenarios (`scripts/run-e2e.sh`; add a scenario name to run just one: `file-mode`, `first-run`, `standalone`, `editor-ergonomics`, `focus-disclosure`, `arrow-anchors`). Needs `playwright` + `playwright install chromium`. Each scenario gets its own dev server on 3109-3114, its own project folders, and its own `SPEC_YARD_CONFIG_DIR` under a temp root — never point it at your own registry or at port 3000. Failing scenarios leave their screenshots in `.e2e-failures/`.
