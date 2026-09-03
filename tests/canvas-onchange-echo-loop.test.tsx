@@ -126,8 +126,11 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     expect(captured.onChangeCalls - before).toBeLessThanOrEqual(2)
     drive(scene, { cursorButton: 'up' })
 
-    // The staged move still lands, exactly once, when the debounce elapses.
+    // The staged move still lands, exactly once -- a full quiet period after
+    // the click ended (at 200ms), not on the original 450ms deadline.
     await elapse(250)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(200)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
     const rects = onCanvasChange.mock.calls[0][0]
     expect(Array.isArray(rects)).toBe(true)
@@ -212,6 +215,28 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 140 })
   })
 
+  test('a gesture that starts and ends between two ticks still delays the landing', async () => {
+    const { onCanvasChange, scene, rect } = await mountCanvas()
+    const inbox = rect('inbox')
+
+    dragBy(scene, inbox, 40, 0)
+
+    // Down at 300ms, up at 440ms: no tick of the timer ever sees it live.
+    // The landing still moves to a full quiet period after the release,
+    // not the original 450ms tick.
+    await elapse(300)
+    drive(scene, { cursorButton: 'down' })
+    await elapse(140)
+    drive(scene, { cursorButton: 'up' })
+    await elapse(20)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(420)
+    expect(onCanvasChange).not.toHaveBeenCalled()
+    await elapse(30)
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    expect(onCanvasChange.mock.calls[0][0][0]).toMatchObject({ id: 'inbox', x: 140 })
+  })
+
   test('the same move reported with its rects in another order is not restaged', async () => {
     const { onCanvasChange, scene, rect } = await mountCanvas()
     const inbox = rect('inbox')
@@ -224,12 +249,16 @@ describe('a staged move must not be re-staged by its own onChange echo', () => {
     drive(scene, { cursorButton: 'up' })
 
     // A pointer-down inside the debounce reports the scene with the two rects
-    // swapped. Same move: the debounce must not restart.
+    // swapped. Same move: it must not be restaged -- a restage re-renders,
+    // and the stub echoes every re-render, so the echo count is the tell.
     await elapse(300)
     const swapped = [...scene].reverse()
+    const before = captured.onChangeCalls
     drive(swapped, { cursorButton: 'down' })
+    expect(captured.onChangeCalls - before).toBeLessThanOrEqual(2)
     drive(swapped, { cursorButton: 'up' })
-    await elapse(150)
+    // Lands once, a quiet period after the click, with both rects.
+    await elapse(450)
     expect(onCanvasChange).toHaveBeenCalledTimes(1)
     expect(onCanvasChange.mock.calls[0][0].map((r: any) => r.id).sort()).toEqual(['inbox', 'outbox'])
   })

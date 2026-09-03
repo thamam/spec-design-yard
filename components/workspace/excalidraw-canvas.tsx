@@ -718,9 +718,13 @@ export function ExcalidrawCanvas({
   // release can arrive before the final coordinates are committed, which would
   // drop real drags.
   const gestureCompileRef = useRef<any>(null)
-  // Whether Excalidraw's latest report had a pointer gesture in progress. The
-  // writeback timer reads it to wait out a gesture rather than land under it.
+  // Whether Excalidraw's latest report had a pointer gesture in progress, and
+  // when the last one ended. The writeback timer reads both: it waits a live
+  // gesture out rather than land under it, and it lands no sooner than 450ms
+  // after the last gesture ended -- stamped at the transition, so a gesture
+  // that starts and ends between two ticks of the timer still counts.
   const gestureLiveRef = useRef(false)
+  const gestureEndedAtRef = useRef(0)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
   }, [elements])
@@ -780,21 +784,21 @@ export function ExcalidrawCanvas({
     // spec, the scene is resnapped under the user's cursor, and the drag in
     // progress is retired as stale. Wait the gesture out instead; its release
     // either restages a real move (which restarts the debounce) or leaves
-    // this one to land -- after a full quiet period of its own, not on the
-    // next tick of the original phase, so a release arriving just before a
-    // tick cannot land the older move under the coordinates it is about to
-    // report.
+    // this one to land -- no sooner than a full quiet period after the moment
+    // the gesture ended, never on a tick of the original phase. The end is
+    // the handler's timestamp, not what a tick happens to observe, so a
+    // gesture that starts and ends between two ticks delays the landing just
+    // the same: a release arriving ahead of the coordinates it is about to
+    // report must not have the older move land under them.
     let timer: ReturnType<typeof setTimeout>
-    let held = false
     const deliver = () => {
       if (gestureLiveRef.current) {
-        held = true
         timer = setTimeout(deliver, 450)
         return
       }
-      if (held) {
-        held = false
-        timer = setTimeout(deliver, 450)
+      const sinceGestureEnd = Date.now() - gestureEndedAtRef.current
+      if (sinceGestureEnd < 450) {
+        timer = setTimeout(deliver, 450 - sinceGestureEnd)
         return
       }
       onCanvasChange(pendingMove.rects)
@@ -982,6 +986,7 @@ export function ExcalidrawCanvas({
             !!appState?.selectedElementsAreBeingDragged ||
             !!appState?.newElement ||
             !!appState?.resizingElement
+          if (gestureLiveRef.current && !gestureLive) gestureEndedAtRef.current = Date.now()
           gestureLiveRef.current = gestureLive
           if (gestureLive) {
             gestureSeenRef.current = true
