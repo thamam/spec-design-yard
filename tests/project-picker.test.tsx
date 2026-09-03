@@ -250,6 +250,18 @@ describe('ProjectPicker — degraded', () => {
     expect(badge.textContent).not.toMatch(/browser storage/i)
   })
 
+  test('a 200 with a non-object body is unknown, never a false Browser storage', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => null,
+    }) as any))
+    render(<ProjectPicker />)
+    const badge = await screen.findByTestId('project-picker-badge')
+    await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))
+    expect(badge.textContent).not.toMatch(/browser storage/i)
+  })
+
   test('a non-OK project API response shows an unknown badge, never a false Browser storage', async () => {
     // e.g. the workspace was opened via a non-loopback address: /api/project
     // 403s while the store route may still be writing files — claiming

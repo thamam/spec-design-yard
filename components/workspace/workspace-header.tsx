@@ -64,7 +64,7 @@ export function WorkspaceHeader({
   const standaloneLike = storageMode === "local-only" || storageMode === "unconfigured"
   const crumbRoot = storageMode === "unconfigured" ? "spec-yard" : standaloneLike ? "browser" : "workspace"
   const crumbMid = storageMode === "unconfigured" ? "new spec" : standaloneLike ? "main.spec" : "spec-editor"
-  const showSpecCrumb = !standaloneLike && storageMode !== "unconfigured"
+  const showSpecCrumb = !standaloneLike
 
   return (
     <header
