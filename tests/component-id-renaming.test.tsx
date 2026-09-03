@@ -49,9 +49,9 @@ describe('Interactive Component ID Renaming in Focus Tab', () => {
     fireEvent.click(renameBtn)
     expect(screen.getByTestId('focus-id-error')).toHaveTextContent('ID cannot be empty.')
 
-    // 9. Perform a valid ID rename
+    // 9. Perform a valid ID rename (Enter on the input, not only the button)
     fireEvent.change(idInput, { target: { value: 'processing_engine' } })
-    fireEvent.click(renameBtn)
+    fireEvent.keyDown(idInput, { key: 'Enter' })
 
     // 10. Verify that selection remains active with the new ID
     expect(screen.getByText('Selected Unit: processing_engine')).toBeInTheDocument()
