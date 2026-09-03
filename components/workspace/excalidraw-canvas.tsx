@@ -615,14 +615,23 @@ export function ExcalidrawCanvas({
   // this ref is just its storage cell.
   const diffStateRef = useRef(createCanvasDiffState())
 
-  // Set the moment Excalidraw reports a pointer gesture on the canvas, and
-  // cleared once the resulting move has been staged. Coordinates may only flow
-  // back into the YAML while this is set: every other `onChange` is either our
-  // own `updateScene` echoing back or the scene still catching up with the
-  // spec, and treating those as drags overwrote whatever the user was typing.
+  // Set the moment the user acts on the canvas -- a pointer gesture Excalidraw
+  // reports, or an arrow-key nudge -- and cleared once the resulting move has
+  // been staged. Coordinates may only flow back into the YAML while this is
+  // set: every other `onChange` is either our own `updateScene` echoing back or
+  // the scene still catching up with the spec, and treating those as drags
+  // overwrote whatever the user was typing.
   const gestureSeenRef = useRef(false)
   useEffect(() => {
     diffStateRef.current = registerCompiledElements(diffStateRef.current, elements)
+    // A fresh compile retires any gesture still on the books. Gestures that
+    // move nothing -- a click that only selects, a draw handled by the add path
+    // -- never reach the staging branch that clears the flag, so without this
+    // it latches on and the next spec edit is read as a drag: the flicker,
+    // back again by way of a stray click. Clearing here rather than on pointer
+    // release is deliberate; a release can be reported before Excalidraw has
+    // committed the final coordinates, and clearing then would drop real drags.
+    gestureSeenRef.current = false
   }, [elements])
   const lastSelectedUnitRef = useRef<string | null>(null)
 
@@ -709,7 +718,17 @@ export function ExcalidrawCanvas({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 min-h-0 w-full h-full relative">
+    <div
+      ref={containerRef}
+      className="flex-1 min-h-0 w-full h-full relative"
+      // Excalidraw nudges the selection with the arrow keys and reports no
+      // pointer gesture for it, so the writeback gate below would discard the
+      // move and the nudge would silently fail to persist. Captured on the way
+      // down, because the canvas handles the key before it can bubble.
+      onKeyDownCapture={(e) => {
+        if (e.key.startsWith("Arrow")) gestureSeenRef.current = true
+      }}
+    >
       <ExcalidrawComponent
         excalidrawAPI={handleExcalidrawRef}
         theme="dark"

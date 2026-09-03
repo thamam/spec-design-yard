@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, act } from '@testing-library/react'
+import { render, act, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 // `vi.hoisted` lets the mock factory below (which vitest hoists above this
@@ -36,14 +36,21 @@ const parsedSpec = {
 }
 
 /** Mount the adapter and flush the dynamic import + mount effects so the stub has captured its props. */
-async function mountCanvas() {
+async function mountCanvas(spec: any = parsedSpec) {
   const onCanvasChange = vi.fn()
-  render(<ExcalidrawCanvas parsedSpec={parsedSpec} onCanvasChange={onCanvasChange} />)
+  const view = render(<ExcalidrawCanvas parsedSpec={spec} onCanvasChange={onCanvasChange} />)
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0)
   })
   expect(captured.props).not.toBeNull()
-  return { onCanvasChange }
+  /** Stand in for the user editing the YAML: the spec moves, the scene does not. */
+  const rerenderWith = async (next: any) => {
+    view.rerender(<ExcalidrawCanvas parsedSpec={next} onCanvasChange={onCanvasChange} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+  }
+  return { onCanvasChange, rerenderWith, container: view.container }
 }
 
 function moveInboxRect(scene: any[], x: number, y: number) {
@@ -99,6 +106,61 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     const payload = onCanvasChange.mock.calls[0][0]
     expect(Array.isArray(payload)).toBe(true)
     expect(payload.find((el: any) => el.id === 'inbox')).toMatchObject({ x: 140, y: 125 })
+  })
+
+  test('a gesture that moved nothing is retired by the next compile', async () => {
+    const { onCanvasChange, rerenderWith } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+
+    // A click that only selects a component: pointer goes down, nothing moves.
+    act(() => {
+      captured.props.onChange(compiled, { cursorButton: 'down' })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(onCanvasChange).not.toHaveBeenCalled()
+
+    // The user now types a new y in the YAML. The spec moves to 300; the scene
+    // Excalidraw is still holding says 100 until the next updateScene lands.
+    await rerenderWith({
+      system: {
+        name: 'Test System',
+        components: [{ id: 'inbox', name: 'Inbox', type: 'Stage', x: 100, y: 300 }],
+      },
+    })
+
+    act(() => {
+      captured.props.onChange(compiled, {})
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    // The click never reached the staging branch that clears the gesture flag,
+    // so without retiring it on compile the stale y:100 scene is written back
+    // over the y:300 the user just typed - the flicker, by way of a stray click.
+    expect(onCanvasChange).not.toHaveBeenCalled()
+  })
+
+  test('an arrow-key nudge counts as a gesture, so the move still reaches the YAML', async () => {
+    const { onCanvasChange, container } = await mountCanvas()
+    const compiled = compileSpecToExcalidrawElements(parsedSpec)
+    const nudged = moveInboxRect(compiled, 110, 100)
+
+    // Excalidraw moves the selection with the arrow keys and reports no pointer
+    // gesture for it, so the writeback gate would drop the move on the floor.
+    fireEvent.keyDown(container.firstChild as Element, { key: 'ArrowRight' })
+    act(() => {
+      captured.props.onChange(nudged, {})
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450)
+    })
+
+    expect(onCanvasChange).toHaveBeenCalledTimes(1)
+    const payload = onCanvasChange.mock.calls[0][0]
+    expect(payload.find((el: any) => el.id === 'inbox')).toMatchObject({ x: 110, y: 100 })
   })
 
   test('a genuinely new user rectangle produces an add change immediately', async () => {
