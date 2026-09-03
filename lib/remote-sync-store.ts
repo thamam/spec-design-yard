@@ -10,10 +10,10 @@
 // - All PUTs check res.ok and are serialized per URL (spec via specPutChain,
 //   meta via per-URL chains) — parallel fire-and-forget would race the
 //   optimistic-concurrency base and can land out of order.
-// - Spec writes carry a baseRev token. A 409 triggers a reconcile: if the
-//   server holds exactly what we last sent, our ack was merely lost — adopt
-//   the fresh rev and retry once. A real divergence latches file mode off
-//   with a loud reload instruction rather than clobbering the external change.
+// - Spec writes carry a baseRev token. A 409 triggers a reconcile:
+//   disk === this write → we already won (lost ack / other tab echoed us);
+//   disk === our baseline → this session is ahead, retry, never "disk won";
+//   disk is something else → real fork, latch off with Download + discard-reload.
 
 import {
   LocalStorageSpecStore,
@@ -22,6 +22,12 @@ import {
   type SpecDocument,
   type SpecStore,
 } from "./spec-store"
+import { normalizeLineEndings } from "./spec-model"
+
+function sameYaml(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a == null || b == null) return false
+  return normalizeLineEndings(a) === normalizeLineEndings(b)
+}
 
 /**
  * Where saves are going, for the UI to display.
@@ -204,7 +210,7 @@ export class RemoteSyncSpecStore implements SpecStore {
         // standalone-adoption check below — fail closed against bleed.
         this.setCacheOrigin(body.id, this.serverEpoch ?? "unknown-project")
         this.serverRev = typeof body.rev === "string" ? body.rev : null
-        this.lastMirroredYaml = body.yamlContent
+        this.lastMirroredYaml = normalizeLineEndings(body.yamlContent)
       } else {
         // {found:false}: file mode on, nothing stored for THIS project.
         // A cache tagged "standalone" is the user's browser-only sketch and
@@ -256,7 +262,7 @@ export class RemoteSyncSpecStore implements SpecStore {
     // What the server should hold if our PREVIOUS (serialized) PUT landed —
     // the reference point for distinguishing a lost ack from a real conflict.
     const prevMirrored = this.lastMirroredYaml
-    this.lastMirroredYaml = body.yamlContent
+    this.lastMirroredYaml = normalizeLineEndings(body.yamlContent)
     try {
       const res = await this.putJson(url, { ...body, baseRev: this.serverRev })
       if (res.status === 409) {
@@ -300,10 +306,9 @@ export class RemoteSyncSpecStore implements SpecStore {
   }
 
   /**
-   * A 409 is genuine when the server holds something other than what we last
-   * sent. When it holds exactly our last PUT, that write landed but its ack
-   * was lost — adopt the fresh rev and retry once. Genuine conflicts latch
-   * file mode off with a reload instruction.
+   * Classify a 409 against what disk actually holds. Own-session writeback
+   * (canvas connect, drag) often 409s because the index mtime/rev drifted
+   * while yaml did not — that is never "disk won".
    */
   private async reconcileAfterConflict(
     url: string,
@@ -314,26 +319,54 @@ export class RemoteSyncSpecStore implements SpecStore {
       const res = await fetch(url)
       if (res.ok) {
         const current = await res.json().catch(() => null)
-        if (current && current.yamlContent === prevMirrored && typeof current.rev === "string") {
-          this.serverRev = current.rev
-          const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
-          if (retry.ok) {
-            await this.adoptAckRev(retry)
-            return
+        const disk = typeof current?.yamlContent === "string" ? current.yamlContent : null
+        if (sameYaml(disk, body.yamlContent)) {
+          if (typeof current.rev === "string") this.serverRev = current.rev
+          this.lastMirroredYaml = normalizeLineEndings(body.yamlContent)
+          if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
+          return
+        }
+        if (sameYaml(disk, prevMirrored)) {
+          if (typeof current.rev === "string") {
+            this.serverRev = current.rev
+            const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
+            if (retry.ok) {
+              await this.adoptAckRev(retry)
+              if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
+              return
+            }
           }
+          // Disk never moved. Roll lastMirroredYaml back to that baseline so
+          // Retry save does not treat the unsaved buffer as "what disk has".
+          this.lastMirroredYaml = prevMirrored != null ? normalizeLineEndings(prevMirrored) : null
+          this.latchBufferAhead()
+          return
         }
       }
     } catch {
-      // Fall through to latch-off below.
+      // Fall through to a real-fork latch below.
     }
     this.fileModeDisabled = true
     this.setSyncState({
       status: "halted",
       haltKind: "adopt",
-      reason: "main.spec.yaml changed outside this session. Download your copy, or reload to use the file on disk.",
+      reason:
+        "main.spec.yaml differs from this session. Download your copy to keep it. Reload discards this session and uses the file on disk.",
     })
     console.error(
-      "[spec-yard] Conflict: main.spec.yaml changed outside this session; not overwriting. Reload the workspace to adopt the external version."
+      "[spec-yard] Conflict: main.spec.yaml differs from this session; not overwriting. Download this copy, or reload to adopt the file on disk."
+    )
+  }
+
+  /** Disk still has what we last loaded/acked — this buffer is the newer copy. */
+  private latchBufferAhead(): void {
+    this.setSyncState({
+      status: "halted",
+      haltKind: "retry",
+      reason: "Could not save this session's edits. Download your copy — they have not reached disk yet.",
+    })
+    console.error(
+      "[spec-yard] Save refused but disk still matches this session's baseline; edits have not reached the file."
     )
   }
 

@@ -262,6 +262,28 @@ describe('canvas drag → YAML writeback (end-to-end through WorkspaceLayout)', 
     expect(document.activeElement).not.toBe(textarea)
   })
 
+  test('selecting a compiled rect does not steal the Code tab', async () => {
+    render(<Workspace />)
+    await flushUntilCanvasMounted()
+
+    const codeTab = screen.getByRole('tab', { name: /^code$/i })
+    expect(codeTab).toHaveAttribute('aria-selected', 'true')
+
+    const textarea = screen.getByTestId('spec-textarea') as HTMLTextAreaElement
+    textarea.focus()
+    expect(document.activeElement).toBe(textarea)
+
+    act(() => {
+      captured.props.onChange(captured.props.initialData.elements, {
+        cursorButton: 'up',
+        selectedElementIds: { inbox: true },
+      })
+    })
+
+    expect(codeTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /focus/i })).toHaveAttribute('aria-selected', 'false')
+  })
+
   test('a far-miss leftover arrow does not starve a later good bind from writing YAML', async () => {
     render(<Workspace />)
     await flushUntilCanvasMounted()

@@ -95,6 +95,43 @@ function resolveIndexPath(realRoot: string): string | null {
  * index is a fault — treating it as empty would make the PUT path treat a
  * tracked file as untracked and overwrite it.
  */
+/** Integer ms so a JSON round-trip cannot fail a later === against stat(). */
+function roundedMtimeMs(file: string): number {
+  return Math.round(fs.statSync(file).mtimeMs)
+}
+
+function mtimeMatches(entryMtime: number | undefined, file: string): boolean {
+  if (entryMtime == null || !Number.isFinite(entryMtime)) return false
+  return Math.round(entryMtime) === roundedMtimeMs(file)
+}
+
+function persistSpecIndex(indexPath: string, index: Record<string, SpecIndexEntry>): void {
+  writeFileAtomic(indexPath, JSON.stringify(index, null, 2), path.dirname(indexPath))
+}
+
+/**
+ * GET is the client's baseline. If the file was touched (copy, git checkout,
+ * an editor that did not change bytes) since the last index write, the stored
+ * mtime no longer matches and the next PUT would 409 even though this GET
+ * already returned the current yaml. Remint the rev and record the live
+ * mtime so this session's writeback can chain, while a tab that GETted the
+ * old rev still 409s.
+ */
+function refreshSpecIndexOnRead(
+  index: Record<string, SpecIndexEntry>,
+  indexPath: string,
+  specFile: string
+): void {
+  const entry = index[SPEC_ID]
+  if (!entry) return
+  const needsRev = entry.rev == null
+  const drifted = !mtimeMatches(entry.mtimeMs, specFile)
+  if (!needsRev && !drifted) return
+  entry.rev = randomUUID()
+  entry.mtimeMs = roundedMtimeMs(specFile)
+  persistSpecIndex(indexPath, index)
+}
+
 function readSpecIndex(indexPath: string): Record<string, SpecIndexEntry> {
   let raw: string
   try {
@@ -198,13 +235,9 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
         return res.status(500).json({ error: "Failed to read spec file" })
       }
       const index = readSpecIndex(indexPath)
-      // Migration: an entry written before rev existed gets one minted on
-      // read (fail-closed — without this, its writes would 409 forever).
-      if (index[SPEC_ID] && index[SPEC_ID].rev == null) {
-        index[SPEC_ID].rev = randomUUID()
-        index[SPEC_ID].mtimeMs = fs.statSync(target.file).mtimeMs
-        writeFileAtomic(indexPath, JSON.stringify(index, null, 2), path.dirname(indexPath))
-      }
+      // Mint a missing rev (legacy index) and remint when mtime drifted so
+      // the hydrating tab's next PUT is not a false 409 on our own writeback.
+      refreshSpecIndexOnRead(index, indexPath, target.file)
       return res.status(200).json({
         id: SPEC_ID,
         title: index[SPEC_ID]?.title || "Untitled Spec",
@@ -251,8 +284,23 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
       if (!fs.existsSync(target.file)) {
         return res.status(409).json({ conflict: true, reason: "deleted", current: { title: entry.title, updatedAt: entry.updatedAt } })
       }
-      const currentMtime = fs.statSync(target.file).mtimeMs
-      if (currentMtime !== entry.mtimeMs || body.baseRev !== entry.rev) {
+      const drifted = !mtimeMatches(entry.mtimeMs, target.file)
+      if (drifted || body.baseRev !== entry.rev) {
+        // Same bytes already on disk: a touch / lost-ack / two-tab echo of
+        // our own write. Refresh the index and ack instead of 409ing a no-op.
+        const onDisk = fs.readFileSync(target.file, "utf8")
+        if (onDisk === body.yamlContent) {
+          const updatedAt = new Date().toISOString()
+          const rev = randomUUID()
+          index[SPEC_ID] = {
+            title: typeof body.title === "string" ? body.title : entry.title || "Untitled Spec",
+            updatedAt,
+            rev,
+            mtimeMs: roundedMtimeMs(target.file),
+          }
+          persistSpecIndex(indexPath, index)
+          return res.status(200).json({ ok: true, updatedAt, rev })
+        }
         return res.status(409).json({ conflict: true, current: { title: entry.title, updatedAt: entry.updatedAt } })
       }
     }
@@ -263,9 +311,9 @@ function handle(req: NextApiRequest, res: NextApiResponse) {
       title: typeof body.title === "string" ? body.title : "Untitled Spec",
       updatedAt,
       rev,
-      mtimeMs: fs.statSync(target.file).mtimeMs,
+      mtimeMs: roundedMtimeMs(target.file),
     }
-    writeFileAtomic(indexPath, JSON.stringify(index, null, 2), path.dirname(indexPath))
+    persistSpecIndex(indexPath, index)
     // Echo rev so the client can chain its next PUT on it.
     return res.status(200).json({ ok: true, updatedAt, rev })
   }

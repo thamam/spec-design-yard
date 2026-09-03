@@ -241,6 +241,8 @@ describe('FocusTab disclosure via EditorPanel (no Workspace hydration)', () => {
         }}
         selectedUnit="inbox"
         setSelectedUnit={() => {}}
+        activeTab="focus"
+        setActiveTab={() => {}}
       />
     )
 
@@ -271,6 +273,8 @@ describe('FocusTab disclosure via EditorPanel (no Workspace hydration)', () => {
         }}
         selectedUnit="digest_stage"
         setSelectedUnit={() => {}}
+        activeTab="focus"
+        setActiveTab={() => {}}
       />
     )
 

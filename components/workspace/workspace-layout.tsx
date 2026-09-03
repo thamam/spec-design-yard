@@ -652,7 +652,7 @@ function StatusBar({
                 title="Reloads the project file and discards this browser copy"
                 style={{ color: "var(--warning)" }}
               >
-                Reload and discard
+                Reload and discard this session
               </button>
             )}
           </span>

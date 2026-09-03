@@ -249,6 +249,50 @@ describe('store API route — adversarial hardening', () => {
     expect(fs.readFileSync(path.join(projectDir, 'main.spec.yaml'), 'utf8')).toBe('v: EXTERNAL\n')
   })
 
+  test('a touch that leaves yaml unchanged is reminted on GET so the next PUT lands', () => {
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
+    const before = mockRes()
+    handler(storeReq('GET', ['spec', 'main']), before)
+    const staleRev = before.body.rev
+
+    const specPath = path.join(projectDir, 'main.spec.yaml')
+    fs.utimesSync(specPath, new Date(Date.now() + 2000), new Date(Date.now() + 2000))
+
+    const after = mockRes()
+    handler(storeReq('GET', ['spec', 'main']), after)
+    expect(after.statusCode).toBe(200)
+    expect(after.body.yamlContent).toBe('v: 1\n')
+    expect(after.body.rev).not.toBe(staleRev)
+
+    const stalePut = mockRes()
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev: staleRev }), stalePut)
+    expect(stalePut.statusCode).toBe(409)
+    expect(fs.readFileSync(specPath, 'utf8')).toBe('v: 1\n')
+
+    const freshPut = mockRes()
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'V2', yamlContent: 'v: 2\n', baseRev: after.body.rev }), freshPut)
+    expect(freshPut.statusCode).toBe(200)
+    expect(fs.readFileSync(specPath, 'utf8')).toBe('v: 2\n')
+  })
+
+  test('PUT of the bytes already on disk after an mtime-only touch is adopted, not a 409', () => {
+    handler(storeReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
+    const getRes = mockRes()
+    handler(storeReq('GET', ['spec', 'main']), getRes)
+
+    const specPath = path.join(projectDir, 'main.spec.yaml')
+    fs.utimesSync(specPath, new Date(Date.now() + 2000), new Date(Date.now() + 2000))
+
+    const putRes = mockRes()
+    handler(
+      storeReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: getRes.body.rev }),
+      putRes
+    )
+    expect(putRes.statusCode).toBe(200)
+    expect(typeof putRes.body.rev).toBe('string')
+    expect(fs.readFileSync(specPath, 'utf8')).toBe('v: 1\n')
+  })
+
   test('external deletion of a tracked spec is a 409, not a silent recreate', () => {
     handler(storeReq('PUT', ['spec', 'main'], { title: 'V1', yamlContent: 'v: 1\n', baseRev: null }), mockRes())
     fs.unlinkSync(path.join(projectDir, 'main.spec.yaml'))
