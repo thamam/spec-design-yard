@@ -396,4 +396,36 @@ describe('ExcalidrawCanvas adapter (react wrapper around lib/canvas-diff)', () =
     const payload = onCanvasChange.mock.calls[0][0]
     expect(payload.find((el: any) => el.id === 'inbox')).toMatchObject({ x: 200, y: 175 })
   })
+
+  test('selection sync skips STRIDE overlay ids and picks the compiled component', async () => {
+    const setSelectedUnit = vi.fn()
+    render(
+      <ExcalidrawCanvas
+        parsedSpec={parsedSpec}
+        setSelectedUnit={setSelectedUnit}
+        selectedUnit={null}
+      />
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(captured.props).not.toBeNull()
+
+    act(() => {
+      captured.props.onChange([], {
+        selectedElementIds: { 'threat-zone-inbox-0': true },
+      })
+    })
+    expect(setSelectedUnit).not.toHaveBeenCalled()
+
+    act(() => {
+      captured.props.onChange([], {
+        selectedElementIds: {
+          'threat-zone-inbox-0': true,
+          inbox: true,
+        },
+      })
+    })
+    expect(setSelectedUnit).toHaveBeenCalledWith('inbox')
+  })
 })
