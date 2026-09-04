@@ -9,7 +9,8 @@ import {
   setActiveProject,
   setStandaloneMode,
 } from "../../lib/server-project-config"
-import { isJsonContentType, isLoopbackHost } from "../../lib/server-request-guards"
+import { isJsonContentType } from "../../lib/server-request-guards"
+import { gateApiRequest } from "../../lib/server-auth"
 
 // Project selection for the workspace — the primary way users pick where
 // their specs live (project-first; see lib/server-project-config.ts).
@@ -20,10 +21,11 @@ import { isJsonContentType, isLoopbackHost } from "../../lib/server-request-guar
 // PUT { dir, create? }       -> switch to (optionally mkdir) a project folder
 // PUT { mode:"standalone" }  -> explicit opt-out of project files
 //
-// Safety model (the store API is unauthenticated by design, loopback only):
-// - Host header must be loopback: a DNS-rebinding page resolves to 127.0.0.1
-//   but still sends its own hostname, so this blocks it from reading the
-//   active path or retargeting writes.
+// Safety model:
+// - Local mode (default): Host must be loopback. Unauthenticated by design.
+// - Remote mode (SPEC_YARD_REMOTE=1): Host allowlist (loopback + this
+//   machine's Tailscale name/IPs + SPEC_YARD_REMOTE_HOST) AND a session
+//   cookie or Bearer token. Cookie mutations also need the CSRF header.
 // - PUT requires a JSON content type: cross-origin JSON needs a CORS
 //   preflight (which we never answer), so simple-request CSRF can't switch.
 // - The target must be an absolute path to an existing, writable directory
@@ -46,9 +48,8 @@ export default function projectHandler(req: NextApiRequest, res: NextApiResponse
 }
 
 function handle(req: NextApiRequest, res: NextApiResponse) {
-  if (!isLoopbackHost(req.headers.host)) {
-    return res.status(403).json({ error: "Project API is loopback-only" })
-  }
+  const access = gateApiRequest(req, "Project API is loopback-only")
+  if (!access.ok) return res.status(access.status).json(access.body)
 
   if (req.method === "GET") {
     const status = getProjectStatus()

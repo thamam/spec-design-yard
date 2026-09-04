@@ -50,8 +50,14 @@ const state: SessionState = ((globalThis as any).__specYardProjectState ??= {
 
 const RECENTS_CAP = 8
 
-function configDir(): string {
+/** Config dir for the project registry and remote-auth token — never the
+ *  project folder. Tests relocate it via SPEC_YARD_CONFIG_DIR. */
+export function getConfigDir(): string {
   return process.env.SPEC_YARD_CONFIG_DIR || path.join(os.homedir(), ".specyard")
+}
+
+function configDir(): string {
+  return getConfigDir()
 }
 
 function configPath(): string {

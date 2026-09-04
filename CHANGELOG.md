@@ -4,6 +4,16 @@ All notable packaging and product changes are recorded here.
 This project does **not** yet cut git tags or GitHub Releases; `package.json`
 version is the pinable artifact until a v1 is tagged.
 
+## Unreleased
+
+### Added
+
+- Opt-in remote access (Option A): `npm run dev:remote` / `spec-yard --remote`
+  generates a local token, requires a mobile-usable login session, and
+  allowlists this machine's Tailscale Host names. Default `npm run dev` /
+  `spec-yard` stay loopback and unauthenticated. Tailscale Funnel / public
+  URLs are out of scope.
+
 ## 0.2.0 — 2026-09-03
 
 Packaging and security-posture release for a first paying-customer local

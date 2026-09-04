@@ -23,6 +23,7 @@ import {
   type SpecStore,
 } from "./spec-store"
 import { normalizeLineEndings } from "./spec-model"
+import { apiFetch, redirectToLoginOnUnauthorized } from "./api-client"
 
 function sameYaml(a: string | null | undefined, b: string | null | undefined): boolean {
   if (a == null || b == null) return false
@@ -173,7 +174,8 @@ export class RemoteSyncSpecStore implements SpecStore {
   async loadFromServer(): Promise<boolean> {
     if (typeof window === "undefined") return false
     try {
-      const specRes = await fetch("/api/store/spec/main")
+      const specRes = await apiFetch("/api/store/spec/main")
+      if (redirectToLoginOnUnauthorized(specRes.status)) return false
       // File mode off: the route answers {enabled:false} (200) — or a legacy
       // 501 — so standalone mode stays quiet and local-only.
       if (specRes.status === 501) {
@@ -242,7 +244,8 @@ export class RemoteSyncSpecStore implements SpecStore {
 
   private async pullMeta(url: string, apply: (value: any[]) => void): Promise<void> {
     try {
-      const res = await fetch(url)
+      const res = await apiFetch(url)
+      if (redirectToLoginOnUnauthorized(res.status)) return
       if (!res.ok) {
         console.error(`[spec-yard] Failed to load ${url} (${res.status})`)
         return
@@ -265,6 +268,7 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.lastMirroredYaml = normalizeLineEndings(body.yamlContent)
     try {
       const res = await this.putJson(url, { ...body, baseRev: this.serverRev })
+      if (redirectToLoginOnUnauthorized(res.status)) return
       if (res.status === 409) {
         // The picker retargeted the server in another tab. Never reconcile
         // there — a lost-ack retry would push THIS project's spec into the
@@ -316,7 +320,8 @@ export class RemoteSyncSpecStore implements SpecStore {
     prevMirrored: string | null
   ): Promise<void> {
     try {
-      const res = await fetch(url)
+      const res = await apiFetch(url)
+      if (redirectToLoginOnUnauthorized(res.status)) return
       if (res.ok) {
         const current = await res.json().catch(() => null)
         const disk = typeof current?.yamlContent === "string" ? current.yamlContent : null
@@ -330,6 +335,7 @@ export class RemoteSyncSpecStore implements SpecStore {
           if (typeof current.rev === "string") {
             this.serverRev = current.rev
             const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
+            if (redirectToLoginOnUnauthorized(retry.status)) return
             if (retry.ok) {
               await this.adoptAckRev(retry)
               if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })
@@ -386,6 +392,7 @@ export class RemoteSyncSpecStore implements SpecStore {
   private async putMeta(url: string, body: unknown): Promise<void> {
     try {
       const res = await this.putJson(url, body)
+      if (redirectToLoginOnUnauthorized(res.status)) return
       if (res.status === 409 && (await this.isProjectSwitch(res))) {
         this.latchProjectSwitched()
         return
@@ -446,7 +453,7 @@ export class RemoteSyncSpecStore implements SpecStore {
    *  from). */
   private putJson(url: string, payload: unknown): Promise<Response> {
     const target = this.serverEpoch ? `${url}?epoch=${encodeURIComponent(this.serverEpoch)}` : url
-    return fetch(target, {
+    return apiFetch(target, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

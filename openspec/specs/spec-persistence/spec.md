@@ -36,15 +36,19 @@ its most-recent-first, deduplicated, capped recent-projects list.
 
 ### Requirement: GUI project selection
 
-The system SHALL expose a loopback-only project API: GET returns the current
+The system SHALL expose a project API: GET returns the current
 mode (`project` with directory/existence/source/recents, `standalone`, or
 `unconfigured` with a suggested directory); PUT switches the active project
 (`{dir, create?}`) or opts out to browser storage (`{mode:"standalone"}`).
 PUT SHALL require an absolute path to an existing, writable directory
-(optionally creating it when `create` is set), SHALL refuse non-loopback
-`Host` headers and non-JSON content types, and SHALL NOT require any launch
-flag — selecting projects is the primary, always-available flow. The header
-UI SHALL always show the active mode and project at a glance.
+(optionally creating it when `create` is set), SHALL refuse non-JSON content
+types, and SHALL NOT require any launch flag for local use — selecting
+projects is the primary, always-available flow. In the default local mode
+the API SHALL refuse non-loopback `Host` headers and SHALL NOT require a
+session. When remote mode is explicitly enabled the API SHALL require a
+valid session (or Bearer token) and SHALL refuse Host values outside the
+loopback + configured/detected Tailscale allowlist. The header UI SHALL
+always show the active mode and project at a glance.
 
 #### Scenario: Switching projects from the workspace
 
@@ -55,9 +59,18 @@ UI SHALL always show the active mode and project at a glance.
 
 #### Scenario: Non-loopback request refused
 
-- GIVEN a request whose `Host` header is not a loopback name
+- GIVEN local mode (remote flag off)
+- AND a request whose `Host` header is not a loopback name
 - WHEN it hits the project API
 - THEN it is refused and no mode or project changes
+
+#### Scenario: Remote mode requires a session
+
+- GIVEN remote mode is enabled and a remote token exists
+- AND a request whose Host is the allowlisted Tailscale name
+- AND the request has no session cookie or Bearer token
+- WHEN it hits the project or store API
+- THEN it is refused (401) and no project files are written
 
 ### Requirement: Project switch isolation (epoch)
 

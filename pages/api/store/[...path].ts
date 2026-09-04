@@ -4,7 +4,8 @@ import fs from "fs"
 import path from "path"
 import { writeFileAtomic } from "../../../lib/server-atomic-write"
 import { getProjectEpoch, getProjectStatus } from "../../../lib/server-project-config"
-import { isJsonContentType, isLoopbackHost, MAX_SPEC_YAML_BYTES } from "../../../lib/server-request-guards"
+import { isJsonContentType, MAX_SPEC_YAML_BYTES } from "../../../lib/server-request-guards"
+import { gateApiRequest } from "../../../lib/server-auth"
 
 // File-backed persistence for the workspace store, active only when the app is
 // launched with SPEC_YARD_PROJECT_DIR pointing at a client repo. Keys are
@@ -159,12 +160,11 @@ export default function storeHandler(req: NextApiRequest, res: NextApiResponse) 
 }
 
 function handle(req: NextApiRequest, res: NextApiResponse) {
-  // File persistence is armed by default (project-first), so this route needs
-  // the same DNS-rebinding defense as the project route — a rebinding page is
-  // same-origin and could otherwise read or overwrite the project's files.
-  if (!isLoopbackHost(req.headers?.host)) {
-    return res.status(403).json({ error: "Store API is loopback-only" })
-  }
+  // Local mode: loopback Host only (DNS-rebinding defense). Remote mode:
+  // allowlisted Host + session/Bearer. Anyone who can pass this gate can
+  // read and overwrite the active project — that is why remote is opt-in.
+  const access = gateApiRequest(req, "Store API is loopback-only")
+  if (!access.ok) return res.status(access.status).json(access.body)
 
   // Project-first resolution: session switch > SPEC_YARD_PROJECT_DIR >
   // persisted config (see lib/server-project-config.ts). Null means

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import {
   GitBranchIcon,
+  LogOut,
   PlayIcon,
   SaveIcon,
   SettingsIcon,
@@ -14,6 +15,7 @@ import {
 import { ProjectPicker } from "./project-picker"
 import { formatSaveButtonLabel } from "../../lib/status-copy"
 import type { SyncState } from "../../lib/db"
+import { apiFetch } from "../../lib/api-client"
 
 export function WorkspaceHeader({
   canUndo = false,
@@ -42,6 +44,30 @@ export function WorkspaceHeader({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [gitBranch, setGitBranch] = useState<string | null>(null)
+  const [showLogout, setShowLogout] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    apiFetch("/api/auth/session")
+      .then(async (res) => {
+        const body = await res.json().catch(() => null)
+        if (!cancelled && body && body.remote === true && body.authenticated === true) {
+          setShowLogout(true)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleLogout = () => {
+    apiFetch("/api/auth/logout", { method: "POST" })
+      .catch(() => {})
+      .finally(() => {
+        window.location.replace("/login")
+      })
+  }
 
   useEffect(() => {
     return () => {
@@ -194,6 +220,14 @@ export function WorkspaceHeader({
           onClick={() => {}}
           disabled
         />
+        {showLogout && (
+          <HeaderButton
+            icon={<LogOut size={13} />}
+            label="Log out"
+            title="End the remote session — project files stay on disk"
+            onClick={handleLogout}
+          />
+        )}
       </div>
     </header>
   )

@@ -33,7 +33,7 @@ Runs the app in development mode, bound to loopback (`127.0.0.1`) only.
 - Open [http://127.0.0.1:3000](http://127.0.0.1:3000) (or [http://localhost:3000](http://localhost:3000)) to view it in your browser.
 - Another port: `npm run dev -- -p 3011` (then open that port). Do not point customer checks at a leftover `:3000` if you launched with `-p`.
 - The page will hot-reload automatically if you make changes to the workspace code.
-- The project and store APIs have no authentication. Do not re-bind with `-H 0.0.0.0` or expose the port on an untrusted network.
+- The project and store APIs have no authentication in this default mode. Do not re-bind with `-H 0.0.0.0` or expose the port on an untrusted network. Opt-in remote access is a separate flag; see below.
 
 ### `npm run build`
 Builds the Next.js application for production.
@@ -118,6 +118,33 @@ SPEC_YARD_PROJECT_DIR=/path/to/client-repo npm run dev
 
 (`npm run dev` already passes `-H 127.0.0.1`. You can still append the flag; it is redundant, not a different bind.)
 
+### Opt-in remote access (Option A)
+
+To open the same project files from a phone on your Tailscale tailnet:
+
+```bash
+npm run dev:remote
+# or, from a client repo: spec-yard --remote
+```
+
+The process still listens on `127.0.0.1`. A remote token is generated once
+under `~/.specyard/remote-token` (not in the project folder) and printed to
+stdout. Then expose **Serve, not Funnel**:
+
+```bash
+tailscale serve --bg 3000
+```
+
+On the phone (signed into the same tailnet) open the MagicDNS HTTPS URL,
+paste the token, and you get the existing workspace. `SPEC_YARD_REMOTE_HOST`
+can add an extra allowed Host if Tailscale CLI detection is unavailable.
+
+Rotate by deleting `~/.specyard/remote-token` and restarting with the remote
+flag. Local `npm run dev` / `spec-yard` without `--remote` is unchanged
+(loopback, no login).
+
+Do not use `tailscale funnel` or any public URL. See [SECURITY.md](../SECURITY.md).
+
 Either way the folder is recorded as the active project for future launches.
 
 ### Working without a project (opt-out)
@@ -140,11 +167,11 @@ mount; if the file changes underneath an open session (external edit,
 conflict instead of overwriting — reload the workspace to adopt the external
 version.
 
-**Network exposure:** the store and project APIs have no authentication by
-design — this is a local-dev tool, and any launch can write into the chosen
-project folder. Default launch paths (`npm run dev`, `npm run start`,
-`spec-yard`) already bind loopback (`-H 127.0.0.1`). Never re-bind to all
-interfaces or expose the port on an untrusted network: anyone who can reach
-the port can read and overwrite files under the active project directory.
-The project API additionally refuses non-loopback `Host` headers and
-non-JSON writes.
+**Network exposure:** the default store and project APIs have no
+authentication — this is a local-dev tool, and any launch can write into
+the chosen project folder. Default launch paths (`npm run dev`,
+`npm run start`, `spec-yard`) already bind loopback (`-H 127.0.0.1`).
+Never re-bind to all interfaces. Remote access is an explicit
+`SPEC_YARD_REMOTE=1` / `--remote` mode that requires a login session and
+still does not bind `0.0.0.0`. Anyone who can authenticate in that mode
+can read and overwrite files under the active project directory.

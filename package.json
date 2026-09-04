@@ -5,6 +5,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
+    "dev:remote": "node scripts/ensure-remote-token.mjs && SPEC_YARD_REMOTE=1 next dev -H 127.0.0.1",
     "build": "next build",
     "start": "next start -H 127.0.0.1",
     "lint": "next lint",
