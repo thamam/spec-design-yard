@@ -29,18 +29,22 @@ describe('remote launch paths stay loopback-bound', () => {
 
   test('attach probes /api/auth/session before sending the remote token', () => {
     const cli = readFileSync(resolve(ROOT, 'bin/spec-yard'), 'utf8')
-    const attach = cli.slice(cli.indexOf('if curl -sf'))
+    const attach = cli.slice(cli.indexOf('if curl -sS --max-time 2 -o /dev/null "$URL"'))
     expect(attach).toMatch(/\/api\/auth\/session/)
     expect(attach.indexOf('/api/auth/session')).toBeLessThan(attach.indexOf('bearer_auth_args'))
     expect(attach).toMatch(/if session_is_remote/)
     expect(attach).toMatch(/without remote mode/)
     expect(attach).toMatch(/exit 1/)
+    // Occupancy must not use -sf: a 404 on / still means the port is taken.
+    expect(attach.slice(0, 80)).not.toMatch(/curl -sf/)
     // Token file is opened only inside bearer_auth_args, which attach calls
     // after the probe reports remote:true — never at launch.
     expect(cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")).toBeGreaterThan(
       cli.indexOf('bearer_auth_args()')
     )
-    expect(cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")).toBeLessThan(cli.indexOf('if curl -sf'))
+    expect(cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")).toBeLessThan(
+      cli.indexOf('if curl -sS --max-time 2 -o /dev/null "$URL"')
+    )
   })
 
   test('ensure-remote-token writes the same filename the server reads', () => {

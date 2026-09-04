@@ -67,7 +67,9 @@ bearer_auth_args() {
   fi
 }
 
-if curl -sf -o /dev/null "$URL"; then
+# Occupancy is "anything answers", not "GET / is 2xx". A compiling Next
+# instance 404s /; -sf would miss it and start a second process.
+if curl -sS --max-time 2 -o /dev/null "$URL"; then
   # Probe without credentials. Only attach a bearer token after this
   # reports remote:true. --remote refuses a local-mode (or non-Spec-Yard)
   # occupant rather than retargeting an unauthenticated process.
