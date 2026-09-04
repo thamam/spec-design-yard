@@ -12,6 +12,8 @@ describe("launch paths bind loopback", () => {
     const pkg = JSON.parse(read("package.json"))
     expect(pkg.scripts.dev).toMatch(/-H 127\.0\.0\.1/)
     expect(pkg.scripts.start).toMatch(/-H 127\.0\.0\.1/)
+    expect(pkg.scripts["dev:remote"]).toMatch(/-H 127\.0\.0\.1/)
+    expect(pkg.scripts["dev:remote"]).toMatch(/SPEC_YARD_REMOTE=1/)
   })
 
   test("screenshot CI starts next on 127.0.0.1", () => {

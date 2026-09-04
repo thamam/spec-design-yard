@@ -6,6 +6,7 @@ import { WorkspaceHeader } from '../components/workspace/workspace-header'
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('WorkspaceHeader chrome', () => {
@@ -118,5 +119,55 @@ describe('WorkspaceHeader chrome', () => {
     const terminal = screen.getByRole('button', { name: 'Terminal' })
     fireEvent.mouseEnter(terminal)
     fireEvent.mouseLeave(terminal)
+  })
+
+  test('shows Log out for a remote session and navigates to login', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => {
+      const url = String(input)
+      if (url.startsWith('/api/auth/session')) {
+        return { ok: true, status: 200, json: async () => ({ remote: true, authenticated: true }) } as any
+      }
+      if (url.startsWith('/api/auth/logout')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true }) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ mode: 'standalone', recents: [] }) } as any
+    }))
+    render(<WorkspaceHeader canSave />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Log out' }))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'))
+  })
+
+  test('logout still leaves the login page when the logout POST fails', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', vi.fn(async (input: any) => {
+      const url = String(input)
+      if (url.startsWith('/api/auth/session')) {
+        return { ok: true, status: 200, json: async () => ({ remote: true, authenticated: true }) } as any
+      }
+      if (url.startsWith('/api/auth/logout')) throw new Error('offline')
+      return { ok: true, status: 200, json: async () => ({}) } as any
+    }))
+    render(<WorkspaceHeader canSave />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Log out' }))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'))
+  })
+
+  test('ignores a late remote-session probe after unmount', async () => {
+    let resolve!: (v: any) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((r) => { resolve = r })))
+    const { unmount } = render(<WorkspaceHeader canSave />)
+    unmount()
+    resolve({ ok: true, status: 200, json: async () => ({ remote: true, authenticated: true }) })
+    await act(async () => { await Promise.resolve() })
+    expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull()
   })
 })

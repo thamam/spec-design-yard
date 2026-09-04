@@ -8,3 +8,5 @@ import path from 'path'
 // ones that merely resolve the active project — can touch the user's real
 // config.
 process.env.SPEC_YARD_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'specyard-test-config-'))
+delete process.env.SPEC_YARD_REMOTE
+delete process.env.SPEC_YARD_REMOTE_HOST

@@ -2,7 +2,7 @@
 # spec-yard: launch (or attach to) the spec-design-yard workspace in
 # file-backed mode against a client repo.
 #
-# Usage: spec-yard [project-dir]   (defaults to the current directory)
+# Usage: spec-yard [--remote] [project-dir]   (defaults to the current directory)
 #
 # Install once with: npm run install-cli
 set -euo pipefail
@@ -17,9 +17,44 @@ while [ -h "$SOURCE" ]; do
 done
 REPO="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
-DIR="${1:-$PWD}"
+REMOTE=0
+DIR=""
+for arg in "$@"; do
+  case "$arg" in
+    --remote)
+      REMOTE=1
+      ;;
+    --help|-h)
+      echo "Usage: spec-yard [--remote] [project-dir]"
+      echo "  --remote   opt-in remote access (auth + Tailscale Serve Host allowlist)"
+      exit 0
+      ;;
+    --*)
+      echo "spec-yard: unknown option: $arg" >&2
+      echo "Usage: spec-yard [--remote] [project-dir]" >&2
+      exit 1
+      ;;
+    *)
+      if [ -n "$DIR" ]; then
+        echo "spec-yard: unexpected extra argument: $arg" >&2
+        exit 1
+      fi
+      DIR="$arg"
+      ;;
+  esac
+done
+DIR="${DIR:-$PWD}"
 DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "spec-yard: no such directory: ${1:-$PWD}" >&2; exit 1; }
 URL="http://localhost:3000"
+
+TOKEN_FILE="${SPEC_YARD_CONFIG_DIR:-$HOME/.specyard}/remote-token"
+AUTH_ARGS=()
+if [ -f "$TOKEN_FILE" ]; then
+  TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+  if [ -n "$TOKEN" ]; then
+    AUTH_ARGS=(-H "Authorization: Bearer $TOKEN")
+  fi
+fi
 
 if curl -sf -o /dev/null "$URL"; then
   # A server is already up: retarget it to this project via the project API
@@ -28,6 +63,7 @@ if curl -sf -o /dev/null "$URL"; then
   # (or inject fields) for paths containing quotes/backslashes.
   BODY="$(python3 -c 'import json,sys; print(json.dumps({"dir": sys.argv[1]}))' "$DIR" 2>/dev/null || true)"
   if [ -n "$BODY" ] && curl -sf -o /dev/null -X PUT -H "Content-Type: application/json" \
+      ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
       -d "$BODY" "$URL/api/project"; then
     echo "spec-yard is already running — switched it to $DIR"
   else
@@ -40,6 +76,14 @@ fi
 
 cd "$REPO"
 export SPEC_YARD_PROJECT_DIR="$DIR"
+
+if [ "$REMOTE" = "1" ]; then
+  export SPEC_YARD_REMOTE=1
+  node "$REPO/scripts/ensure-remote-token.mjs"
+  echo "[spec-yard] Remote mode: bind stays 127.0.0.1. Expose on the tailnet only:"
+  echo "  tailscale serve --bg 3000"
+  echo "Do NOT use tailscale funnel (public internet). Phone must be on the tailnet."
+fi
 
 npm run dev -- -H 127.0.0.1 &
 SERVER_PID=$!

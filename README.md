@@ -25,7 +25,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Contributor checks (`npm test`, `npm run build`) are not part of launching the workspace.
 
-**Host bind:** every default launch path (`npm run dev`, `npm run start`, `spec-yard`, CI) listens on loopback `127.0.0.1` only. The project and store APIs have no authentication — anyone who can reach the port can read and overwrite files under the active project. Do not pass `-H 0.0.0.0` and do not put this process on an untrusted network.
+**Host bind:** every default launch path (`npm run dev`, `npm run start`, `spec-yard`, CI) listens on loopback `127.0.0.1` only and stays **unauthenticated**. Anyone who can reach that port can read and overwrite files under the active project. Do not pass `-H 0.0.0.0` and do not put the default process on an untrusted network.
+
+**Opt-in remote access (Option A):** to open the same project from a phone on your Tailscale tailnet, run `npm run dev:remote` or `spec-yard --remote`. That prints a one-time token, keeps the bind on `127.0.0.1`, and requires a login session before the project/store APIs answer. Then expose **only on the tailnet** with `tailscale serve --bg 3000` — not Funnel, not a public URL. See [SECURITY.md](./SECURITY.md) and [Getting Started](./docs/getting-started.md#opt-in-remote-access-option-a).
 
 Spec-Yard is **project-first**: on the very first launch it prompts once for a project folder, and your spec lives there as `main.spec.yaml` (committable, diffable). Every later launch reopens your last project; switch or create projects anytime from the header badge, or open a specific repo with `spec-yard <dir>`. See [Getting Started](./docs/getting-started.md) for details, including the browser-storage opt-out.
 

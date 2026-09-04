@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { DatabaseIcon, FolderIcon, TriangleAlertIcon } from "lucide-react"
+import { apiFetch, redirectToLoginOnUnauthorized } from "../../lib/api-client"
 
 // Header badge + dropdown for choosing where specs live. Project-first: the
 // main story in every state is picking (or creating) a project folder;
@@ -56,9 +57,10 @@ export function ProjectPicker({
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/project")
+    apiFetch("/api/project")
       .then(async (res) => {
         if (cancelled) return
+        if (redirectToLoginOnUnauthorized(res.status)) return
         if (!res.ok) {
           // 403/500: the store route may still be writing files — claiming
           // "Browser storage" here would mislabel where the user's data goes.
@@ -147,11 +149,15 @@ export function ProjectPicker({
     setError(null)
     setFailedDir(null)
     try {
-      const res = await fetch("/api/project", {
+      const res = await apiFetch("/api/project", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
+      if (redirectToLoginOnUnauthorized(res.status)) {
+        setBusy(false)
+        return
+      }
       const body = await res.json().catch(() => null)
       if (!res.ok) {
         setError(body && typeof body.error === "string" ? body : { error: `Switch failed (${res.status})` })
@@ -292,8 +298,9 @@ export function ProjectPicker({
             <div style={{ color: "var(--foreground-muted)" }}>
               The project service refused this request, so it is unknown where
               specs are being stored. If you opened the workspace via a network
-              address, use <span className="font-mono">http://localhost:3000</span>{" "}
-              instead — the project APIs only answer loopback requests.
+              address without signing in, open the login page or use{" "}
+              <span className="font-mono">http://localhost:3000</span> in local
+              mode.
             </div>
           ) : (
             <>

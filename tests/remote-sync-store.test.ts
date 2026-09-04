@@ -897,6 +897,59 @@ describe('RemoteSyncSpecStore round-3 fixes', () => {
     expect(store.getSimulationHistory()).toEqual([{ id: 'early-run' }])
   })
 
+  test('a 401 on loadFromServer redirects to login and does not latch local-only', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ error: 'Sign in required' }) })))
+    const store = new RemoteSyncSpecStore()
+    expect(await store.loadFromServer()).toBe(false)
+    expect(replace).toHaveBeenCalledWith('/login?expired=1')
+    expect(store.getSyncState().status).toBe('local-only')
+  })
+
+  test('a 401 on spec or meta PUT redirects to login instead of treating it as a save failure', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') return { ok: false, status: 401, json: async () => ({}) } as any
+      return { ok: true, status: 200, json: async () => ({ found: false, epoch: 'e1' }) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    store.saveSpec('main', 'T', 'system: {}\n')
+    store.saveSimulationHistory([{ id: 'r' }])
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+    expect(store.getSyncState().status).not.toBe('halted')
+  })
+
+  test('a 401 during conflict reconcile redirects instead of adopting disk', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    let puts = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        puts += 1
+        if (puts === 1) return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+        return { ok: false, status: 401, json: async () => ({}) } as any
+      }
+      return { ok: false, status: 401, json: async () => ({}) } as any
+    }))
+    const store = new RemoteSyncSpecStore()
+    store.arm()
+    store.saveSpec('main', 'T', 'system: {}\n')
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+  })
+
   test('a successful loadFromServer resets a previous failure latch', async () => {
     const store = new RemoteSyncSpecStore()
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down') }))

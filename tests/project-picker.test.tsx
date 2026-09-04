@@ -272,4 +272,42 @@ describe('ProjectPicker — degraded', () => {
     await waitFor(() => expect(badge.textContent).toMatch(/unknown/i))
     expect(badge.textContent).not.toMatch(/browser storage/i)
   })
+
+  test('unknown-state copy mentions login or localhost, not a loopback-only lie', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403, json: async () => ({ error: 'loopback only' }) }) as any))
+    render(<ProjectPicker />)
+    const badge = await screen.findByTestId('project-picker-badge')
+    fireEvent.click(badge)
+    expect(await screen.findByTestId('project-picker-panel')).toHaveTextContent(/login page/i)
+    expect(screen.getByTestId('project-picker-panel')).toHaveTextContent(/localhost:3000/)
+  })
+
+  test('a 401 project GET sends the operator to login without claiming browser storage', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401, json: async () => ({ error: 'Sign in required' }) }) as any))
+    render(<ProjectPicker />)
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+    expect(screen.queryByText(/browser storage/i)).toBeNull()
+  })
+
+  test('a 401 project PUT sends the operator to login', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    installProjectFetch({
+      info: { mode: 'project', dir: '/tmp/p', exists: true, source: 'config', recents: [] },
+      putResponses: [{ status: 401, body: { error: 'Sign in required' } }],
+    })
+    render(<ProjectPicker />)
+    fireEvent.click(await screen.findByTestId('project-picker-badge'))
+    fireEvent.change(screen.getByTestId('project-dir-input'), { target: { value: '/tmp/other' } })
+    fireEvent.click(screen.getByTestId('project-switch-button'))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+  })
 })
