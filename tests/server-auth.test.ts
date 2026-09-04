@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
+import { createHash, createHmac } from 'crypto'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -124,11 +125,15 @@ describe('session cookie', () => {
     expect(verifySessionCookie(`${cookie}x`)).toBe(false)
     const [payload] = cookie!.split('.')
     expect(verifySessionCookie(`${payload}.aaaa`)).toBe(false)
-    const badPayload = Buffer.from(JSON.stringify({ v: 2, exp: Date.now() + 99999 })).toString('base64url')
-    expect(verifySessionCookie(`${badPayload}.${cookie!.split('.')[1]}`)).toBe(false)
-    const junkPayload = Buffer.from('not-json').toString('base64url')
-    const junkMac = cookie!.split('.')[1]
-    expect(verifySessionCookie(`${junkPayload}.${junkMac}`)).toBe(false)
+    const token = readRemoteToken() as string
+    const key = createHash('sha256').update('spec-yard-session-v1\0').update(token).digest()
+    const signed = (obj: unknown) => {
+      const p = Buffer.from(typeof obj === 'string' ? obj : JSON.stringify(obj)).toString('base64url')
+      return `${p}.${createHmac('sha256', key).update(p).digest('base64url')}`
+    }
+    expect(verifySessionCookie(signed({ v: 2, exp: Date.now() + 99999 }))).toBe(false)
+    expect(verifySessionCookie(signed({ v: 1, exp: 'later' }))).toBe(false)
+    expect(verifySessionCookie(signed('not-json'))).toBe(false)
   })
 
   test('token rotation invalidates existing sessions', () => {
