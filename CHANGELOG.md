@@ -14,6 +14,16 @@ version is the pinable artifact until a v1 is tagged.
   `spec-yard` stay loopback and unauthenticated. Tailscale Funnel / public
   URLs are out of scope.
 
+### Fixed
+
+- Session expiry on a spec PUT keeps the in-flight YAML as a crash draft so
+  re-login hydration does not revert to the older project file.
+- Logout increments a session generation so a copied cookie dies immediately,
+  not only the browser that clicked Log out.
+- `spec-yard` probes `/api/auth/session` before sending the bearer token, and
+  `spec-yard --remote` refuses to attach to a local-mode (or non-Spec-Yard)
+  process on `:3000`.
+
 ## 0.2.0 — 2026-09-03
 
 Packaging and security-posture release for a first paying-customer local

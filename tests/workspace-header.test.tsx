@@ -138,7 +138,12 @@ describe('WorkspaceHeader chrome', () => {
       return { ok: true, status: 200, json: async () => ({ mode: 'standalone', recents: [] }) } as any
     }))
     render(<WorkspaceHeader canSave />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Log out' }))
+    const logout = await screen.findByRole('button', { name: 'Log out' })
+    expect(logout).toHaveAttribute(
+      'title',
+      'Sign out and revoke every remote session (including copied cookies). Project files stay on disk.'
+    )
+    fireEvent.click(logout)
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/login'))
   })
 

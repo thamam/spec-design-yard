@@ -42,8 +42,17 @@ tailscale serve --bg 3000   # tailnet only — not `tailscale funnel`
 ```
 
 Open `https://<your-machine>.<tailnet>.ts.net` on the phone, paste the
-token, and you get the same workspace. Log out from the header. If the
-session expires you return to login; files on disk are not wiped.
+token, and you get the same workspace. Log out from the header — that
+bumps a generation counter under the config dir so every copy of the
+session cookie dies, not just this browser. If the session expires
+mid-edit you return to login; the in-flight YAML is kept as a crash
+draft and restored on the next hydration, and files on disk are not
+wiped.
+
+`spec-yard` never sends `~/.specyard/remote-token` to `:3000` until
+`GET /api/auth/session` reports `"remote":true`. `spec-yard --remote`
+refuses to attach when something else (or a local-mode instance)
+already occupies the port.
 
 Rotate the token: delete `~/.specyard/remote-token` (or
 `$SPEC_YARD_CONFIG_DIR/remote-token`) and restart with `--remote`. The new
@@ -56,9 +65,10 @@ and unauthenticated.
 
 - Anyone on your tailnet who can reach Serve and knows (or guesses) the
   token has the same power as you: full read/write of the active project.
-- A stolen session cookie is full access until expiry (7 days) or logout /
-  token rotation. The cookie is HttpOnly + SameSite=Lax; Serve should be
-  HTTPS so it is also Secure.
+- A stolen session cookie is full access until expiry (7 days), logout
+  (which revokes every session, including copies), or token rotation.
+  The cookie is HttpOnly + SameSite=Lax; Serve should be HTTPS so it is
+  also Secure. Unauthenticated logout still clears this browser only.
 - The token is printed to your terminal. Shell history and scrollback can
   retain it. Do not commit it; it must never live in the project folder.
 - `SPEC_YARD_REMOTE=1` without a token file fails closed (APIs 503). It

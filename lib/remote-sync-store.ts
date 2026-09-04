@@ -24,6 +24,15 @@ import {
 } from "./spec-store"
 import { normalizeLineEndings } from "./spec-model"
 import { apiFetch, redirectToLoginOnUnauthorized } from "./api-client"
+import { persistSpecDraft, rememberSpecDraft } from "./spec-draft"
+
+/** 401 on a spec write: keep the YAML so re-login hydration can restore it. */
+function holdSpecAndRedirectIfUnauthorized(status: number, yaml: string): boolean {
+  if (status !== 401) return false
+  rememberSpecDraft(yaml)
+  persistSpecDraft()
+  return redirectToLoginOnUnauthorized(status)
+}
 
 function sameYaml(a: string | null | undefined, b: string | null | undefined): boolean {
   if (a == null || b == null) return false
@@ -268,7 +277,7 @@ export class RemoteSyncSpecStore implements SpecStore {
     this.lastMirroredYaml = normalizeLineEndings(body.yamlContent)
     try {
       const res = await this.putJson(url, { ...body, baseRev: this.serverRev })
-      if (redirectToLoginOnUnauthorized(res.status)) return
+      if (holdSpecAndRedirectIfUnauthorized(res.status, body.yamlContent)) return
       if (res.status === 409) {
         // The picker retargeted the server in another tab. Never reconcile
         // there — a lost-ack retry would push THIS project's spec into the
@@ -321,7 +330,7 @@ export class RemoteSyncSpecStore implements SpecStore {
   ): Promise<void> {
     try {
       const res = await apiFetch(url)
-      if (redirectToLoginOnUnauthorized(res.status)) return
+      if (holdSpecAndRedirectIfUnauthorized(res.status, body.yamlContent)) return
       if (res.ok) {
         const current = await res.json().catch(() => null)
         const disk = typeof current?.yamlContent === "string" ? current.yamlContent : null
@@ -335,7 +344,7 @@ export class RemoteSyncSpecStore implements SpecStore {
           if (typeof current.rev === "string") {
             this.serverRev = current.rev
             const retry = await this.putJson(url, { ...body, baseRev: this.serverRev })
-            if (redirectToLoginOnUnauthorized(retry.status)) return
+            if (holdSpecAndRedirectIfUnauthorized(retry.status, body.yamlContent)) return
             if (retry.ok) {
               await this.adoptAckRev(retry)
               if (this.syncState.status !== "synced") this.setSyncState({ status: "synced" })

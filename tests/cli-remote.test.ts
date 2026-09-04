@@ -27,6 +27,21 @@ describe('remote launch paths stay loopback-bound', () => {
     expect(cli).not.toMatch(/-H 0\.0\.0\.0/)
   })
 
+  test('attach probes /api/auth/session before sending the remote token', () => {
+    const cli = readFileSync(resolve(ROOT, 'bin/spec-yard'), 'utf8')
+    const sessionIdx = cli.indexOf('/api/auth/session')
+    const bearerIdx = cli.indexOf('Authorization: Bearer')
+    expect(sessionIdx).toBeGreaterThan(-1)
+    expect(bearerIdx).toBeGreaterThan(sessionIdx)
+    expect(cli).toMatch(/session_is_remote/)
+    expect(cli).toMatch(/"remote"/)
+    expect(cli).toMatch(/without remote mode/)
+    expect(cli).toMatch(/exit 1/)
+    // Token file is read only after the probe reports remote:true.
+    const tokenRead = cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")
+    expect(tokenRead).toBeGreaterThan(sessionIdx)
+  })
+
   test('ensure-remote-token writes the same filename the server reads', () => {
     const script = readFileSync(resolve(ROOT, 'scripts/ensure-remote-token.mjs'), 'utf8')
     expect(script).toContain(REMOTE_TOKEN_FILENAME)

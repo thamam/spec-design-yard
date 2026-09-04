@@ -140,7 +140,11 @@ paste the token, and you get the existing workspace. `SPEC_YARD_REMOTE_HOST`
 can add an extra allowed Host if Tailscale CLI detection is unavailable.
 
 Rotate by deleting `~/.specyard/remote-token` and restarting with the remote
-flag. Local `npm run dev` / `spec-yard` without `--remote` is unchanged
+flag. Log out revokes every session cookie (including copies). If a session
+expires mid-edit, the YAML is restored from a crash draft after you sign
+in again. `spec-yard` does not send the token to an unverified `:3000`
+occupant; `spec-yard --remote` exits if a local-mode server is already up.
+Local `npm run dev` / `spec-yard` without `--remote` is unchanged
 (loopback, no login).
 
 Do not use `tailscale funnel` or any public URL. See [SECURITY.md](../SECURITY.md).

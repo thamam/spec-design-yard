@@ -19,6 +19,7 @@ import { isLoopbackHost } from "./server-request-guards"
 import {
   REMOTE_CSRF_HEADER,
   REMOTE_CSRF_VALUE,
+  REMOTE_SESSION_GEN_FILENAME,
   REMOTE_TOKEN_FILENAME,
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SEC,
@@ -124,10 +125,37 @@ function sessionKey(token: string): Buffer {
   return createHash("sha256").update("spec-yard-session-v1\0").update(token).digest()
 }
 
+export function sessionGenPath(): string {
+  return path.join(getConfigDir(), REMOTE_SESSION_GEN_FILENAME)
+}
+
+/** Cookies carry this integer. Logout increments it so copied cookies die. */
+export function currentSessionGeneration(): number {
+  try {
+    const raw = fs.readFileSync(sessionGenPath(), "utf8").trim()
+    const n = Number.parseInt(raw, 10)
+    if (Number.isInteger(n) && n >= 0) return n
+  } catch {}
+  return 0
+}
+
+export function bumpSessionGeneration(): number {
+  const next = currentSessionGeneration() + 1
+  try {
+    fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 })
+    fs.writeFileSync(sessionGenPath(), `${next}\n`, { encoding: "utf8", mode: 0o600 })
+    return next
+  } catch {
+    return currentSessionGeneration()
+  }
+}
+
 export function mintSessionCookie(nowMs = Date.now()): string | null {
   const token = readRemoteToken()
   if (!token) return null
-  const payload = Buffer.from(JSON.stringify({ v: 1, exp: nowMs + SESSION_MAX_AGE_SEC * 1000 })).toString("base64url")
+  const payload = Buffer.from(
+    JSON.stringify({ v: 1, exp: nowMs + SESSION_MAX_AGE_SEC * 1000, g: currentSessionGeneration() })
+  ).toString("base64url")
   const mac = createHmac("sha256", sessionKey(token)).update(payload).digest("base64url")
   return `${payload}.${mac}`
 }
@@ -148,7 +176,14 @@ export function verifySessionCookie(cookieValue: string | null | undefined, nowM
   if (!timingSafeEqual(macBuf, expectedBuf)) return false
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"))
-    return data && data.v === 1 && typeof data.exp === "number" && data.exp > nowMs
+    return (
+      !!data &&
+      data.v === 1 &&
+      typeof data.exp === "number" &&
+      data.exp > nowMs &&
+      typeof data.g === "number" &&
+      data.g === currentSessionGeneration()
+    )
   } catch {
     return false
   }

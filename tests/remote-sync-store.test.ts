@@ -927,6 +927,7 @@ describe('RemoteSyncSpecStore round-3 fixes', () => {
     store.saveSimulationHistory([{ id: 'r' }])
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
     expect(store.getSyncState().status).not.toBe('halted')
+    expect(localStorage.getItem('spec_main_crash_draft')).toBe('system: {}\n')
   })
 
   test('a 401 during conflict reconcile redirects instead of adopting disk', async () => {
@@ -948,6 +949,38 @@ describe('RemoteSyncSpecStore round-3 fixes', () => {
     store.arm()
     store.saveSpec('main', 'T', 'system: {}\n')
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+    expect(localStorage.getItem('spec_main_crash_draft')).toBe('system: {}\n')
+  })
+
+  test('a 401 on the lost-ack retry PUT still keeps the in-flight YAML', async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', replace, href: '/' },
+    })
+    vi.stubGlobal('fetch', mockFetchSequence({
+      '/api/store/spec/main': {
+        status: 200,
+        body: { id: 'main', title: 'T', yamlContent: 'yaml-X', updatedAt: 't1', rev: 'r1' },
+      },
+    }))
+    const store = new RemoteSyncSpecStore()
+    await store.loadFromServer()
+    store.arm()
+    localStorage.removeItem('spec_main_crash_draft')
+
+    let putCount = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: any, init?: any) => {
+      if (init?.method === 'PUT') {
+        putCount += 1
+        if (putCount === 1) return { ok: false, status: 409, json: async () => ({ conflict: true }) } as any
+        return { ok: false, status: 401, json: async () => ({}) } as any
+      }
+      return { ok: true, status: 200, json: async () => ({ id: 'main', title: 'T', yamlContent: 'yaml-X', updatedAt: 't2', rev: 'r2' }) } as any
+    }))
+    store.saveSpec('main', 'T', 'yaml-Y\n')
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login?expired=1'))
+    expect(localStorage.getItem('spec_main_crash_draft')).toBe('yaml-Y\n')
   })
 
   test('a successful loadFromServer resets a previous failure latch', async () => {

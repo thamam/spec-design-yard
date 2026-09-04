@@ -4,7 +4,9 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import {
+  bumpSessionGeneration,
   clearSessionCookieHeader,
+  currentSessionGeneration,
   ensureRemoteToken,
   gateApiRequest,
   gateAuthEndpoint,
@@ -22,12 +24,13 @@ import {
   resetAuthStateForTests,
   sessionCookieHeader,
   sessionFromRequest,
+  sessionGenPath,
   setRemoteHostDetectorForTests,
   setRemoteStatusExecForTests,
   verifySessionCookie,
   workspacePageGuard,
 } from '../lib/server-auth'
-import { REMOTE_TOKEN_FILENAME, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SEC } from '../lib/remote-access'
+import { REMOTE_SESSION_GEN_FILENAME, REMOTE_TOKEN_FILENAME, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SEC } from '../lib/remote-access'
 
 let configDir: string
 
@@ -134,6 +137,35 @@ describe('session cookie', () => {
     expect(verifySessionCookie(signed({ v: 2, exp: Date.now() + 99999 }))).toBe(false)
     expect(verifySessionCookie(signed({ v: 1, exp: 'later' }))).toBe(false)
     expect(verifySessionCookie(signed('not-json'))).toBe(false)
+    expect(verifySessionCookie(signed({ v: 1, exp: Date.now() + 99999 }))).toBe(false)
+    expect(verifySessionCookie(signed({ v: 1, exp: Date.now() + 99999, g: 99 }))).toBe(false)
+  })
+
+  test('logout generation bump invalidates every cookie minted at the old gen', () => {
+    writeToken()
+    expect(sessionGenPath()).toBe(path.join(configDir, REMOTE_SESSION_GEN_FILENAME))
+    expect(currentSessionGeneration()).toBe(0)
+    const cookie = mintSessionCookie()
+    const copy = mintSessionCookie()
+    expect(verifySessionCookie(cookie)).toBe(true)
+    expect(bumpSessionGeneration()).toBe(1)
+    expect(currentSessionGeneration()).toBe(1)
+    expect(verifySessionCookie(cookie)).toBe(false)
+    expect(verifySessionCookie(copy)).toBe(false)
+    expect(verifySessionCookie(mintSessionCookie())).toBe(true)
+  })
+
+  test('a junk or missing generation file is treated as gen 0; a failed bump stays put', () => {
+    writeToken()
+    fs.writeFileSync(sessionGenPath(), 'nope\n')
+    expect(currentSessionGeneration()).toBe(0)
+    fs.writeFileSync(sessionGenPath(), '-3\n')
+    expect(currentSessionGeneration()).toBe(0)
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw new Error('ro')
+    })
+    expect(bumpSessionGeneration()).toBe(0)
+    spy.mockRestore()
   })
 
   test('token rotation invalidates existing sessions', () => {
