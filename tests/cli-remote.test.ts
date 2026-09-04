@@ -29,17 +29,18 @@ describe('remote launch paths stay loopback-bound', () => {
 
   test('attach probes /api/auth/session before sending the remote token', () => {
     const cli = readFileSync(resolve(ROOT, 'bin/spec-yard'), 'utf8')
-    const sessionIdx = cli.indexOf('/api/auth/session')
-    const bearerIdx = cli.indexOf('Authorization: Bearer')
-    expect(sessionIdx).toBeGreaterThan(-1)
-    expect(bearerIdx).toBeGreaterThan(sessionIdx)
-    expect(cli).toMatch(/session_is_remote/)
-    expect(cli).toMatch(/"remote"/)
-    expect(cli).toMatch(/without remote mode/)
-    expect(cli).toMatch(/exit 1/)
-    // Token file is read only after the probe reports remote:true.
-    const tokenRead = cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")
-    expect(tokenRead).toBeGreaterThan(sessionIdx)
+    const attach = cli.slice(cli.indexOf('if curl -sf'))
+    expect(attach).toMatch(/\/api\/auth\/session/)
+    expect(attach.indexOf('/api/auth/session')).toBeLessThan(attach.indexOf('bearer_auth_args'))
+    expect(attach).toMatch(/if session_is_remote/)
+    expect(attach).toMatch(/without remote mode/)
+    expect(attach).toMatch(/exit 1/)
+    // Token file is opened only inside bearer_auth_args, which attach calls
+    // after the probe reports remote:true — never at launch.
+    expect(cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")).toBeGreaterThan(
+      cli.indexOf('bearer_auth_args()')
+    )
+    expect(cli.indexOf("tr -d '[:space:]' < \"$TOKEN_FILE\"")).toBeLessThan(cli.indexOf('if curl -sf'))
   })
 
   test('ensure-remote-token writes the same filename the server reads', () => {
