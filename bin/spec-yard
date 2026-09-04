@@ -48,15 +48,42 @@ DIR="$(cd "$DIR" 2>/dev/null && pwd)" || { echo "spec-yard: no such directory: $
 URL="http://localhost:3000"
 
 TOKEN_FILE="${SPEC_YARD_CONFIG_DIR:-$HOME/.specyard}/remote-token"
-AUTH_ARGS=()
-if [ -f "$TOKEN_FILE" ]; then
+
+# Confirm the :3000 occupant is Spec-Yard in remote mode *before* sending
+# ~/.specyard/remote-token. An unrelated process (or a local-mode instance)
+# must never receive the bearer secret.
+session_is_remote() {
+  printf '%s' "$1" | grep -Eq '"remote"[[:space:]]*:[[:space:]]*true'
+}
+
+bearer_auth_args() {
+  AUTH_ARGS=()
+  if [ ! -f "$TOKEN_FILE" ]; then
+    return 0
+  fi
   TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
   if [ -n "$TOKEN" ]; then
     AUTH_ARGS=(-H "Authorization: Bearer $TOKEN")
   fi
-fi
+}
 
-if curl -sf -o /dev/null "$URL"; then
+# Occupancy is "anything answers", not "GET / is 2xx". A compiling Next
+# instance 404s /; -sf would miss it and start a second process.
+if curl -sS --max-time 2 -o /dev/null "$URL"; then
+  # Probe without credentials. Only attach a bearer token after this
+  # reports remote:true. --remote refuses a local-mode (or non-Spec-Yard)
+  # occupant rather than retargeting an unauthenticated process.
+  SESSION="$(curl -sS --max-time 2 "$URL/api/auth/session" || true)"
+  if [ "$REMOTE" = "1" ] && ! session_is_remote "$SESSION"; then
+    echo "spec-yard: a process is already listening on :3000 without remote mode." >&2
+    echo "Stop it, then restart with: spec-yard --remote" >&2
+    echo "Attaching --remote to a local unauthenticated server would leave it open." >&2
+    exit 1
+  fi
+  AUTH_ARGS=()
+  if session_is_remote "$SESSION"; then
+    bearer_auth_args
+  fi
   # A server is already up: retarget it to this project via the project API
   # (same thing the header picker does), then just open the browser.
   # JSON-encode the path properly — raw interpolation would corrupt the body

@@ -224,7 +224,7 @@ export function WorkspaceHeader({
           <HeaderButton
             icon={<LogOut size={13} />}
             label="Log out"
-            title="End the remote session — project files stay on disk"
+            title="Sign out and revoke every remote session (including copied cookies). Project files stay on disk."
             onClick={handleLogout}
           />
         )}

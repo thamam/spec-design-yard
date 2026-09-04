@@ -6,7 +6,7 @@ import sessionHandler from '../pages/api/auth/session'
 import loginHandler from '../pages/api/auth/login'
 import logoutHandler from '../pages/api/auth/logout'
 import * as serverAuth from '../lib/server-auth'
-import { mintSessionCookie, resetAuthStateForTests } from '../lib/server-auth'
+import { mintSessionCookie, resetAuthStateForTests, verifySessionCookie } from '../lib/server-auth'
 import { REMOTE_TOKEN_FILENAME, SESSION_COOKIE_NAME } from '../lib/remote-access'
 import { authReq, mockRes } from './api-test-doubles'
 
@@ -173,28 +173,37 @@ describe('POST /api/auth/logout', () => {
     process.env.SPEC_YARD_REMOTE = '1'
     process.env.SPEC_YARD_REMOTE_HOST = 'laptop.ts.net'
     writeToken('tok')
-    const cookie = `${SESSION_COOKIE_NAME}=${mintSessionCookie()}`
+    const cookieValue = mintSessionCookie() as string
+    const cookie = `${SESSION_COOKIE_NAME}=${cookieValue}`
     const csrf = mockRes()
     logoutHandler(authReq('POST', { host: 'laptop.ts.net', cookie }), csrf)
     expect(csrf.statusCode).toBe(403)
     expect(csrf.body.code).toBe('csrf')
+    expect(verifySessionCookie(cookieValue)).toBe(true)
 
     const ok = mockRes()
     logoutHandler(authReq('POST', { host: 'laptop.ts.net', cookie, csrf: true, proto: 'https' }), ok)
     expect(ok.statusCode).toBe(200)
     expect(String(ok.getHeader('set-cookie'))).toContain('Secure')
+    expect(verifySessionCookie(cookieValue)).toBe(false)
 
+    const next = mintSessionCookie() as string
+    expect(verifySessionCookie(next)).toBe(true)
     const bearer = mockRes()
-    logoutHandler(authReq('POST', { host: 'laptop.ts.net', cookie, authorization: 'Bearer tok' }), bearer)
+    logoutHandler(authReq('POST', { host: 'laptop.ts.net', cookie: `${SESSION_COOKIE_NAME}=${next}`, authorization: 'Bearer tok' }), bearer)
     expect(bearer.statusCode).toBe(200)
+    expect(verifySessionCookie(next)).toBe(false)
   })
 
-  test('logout without a session still clears the cookie', () => {
+  test('logout without a session still clears the cookie but does not revoke others', () => {
     process.env.SPEC_YARD_REMOTE = '1'
     process.env.SPEC_YARD_REMOTE_HOST = 'laptop.ts.net'
+    writeToken('tok')
+    const surviving = mintSessionCookie()
     const res = mockRes()
     logoutHandler(authReq('POST', { host: 'laptop.ts.net' }), res)
     expect(res.statusCode).toBe(200)
+    expect(verifySessionCookie(surviving)).toBe(true)
   })
 
   test('unsupported methods and bad hosts are refused; faults are 500', () => {

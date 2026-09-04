@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import {
+  bumpSessionGeneration,
   clearSessionCookieHeader,
   gateAuthEndpoint,
   getLocalTokenProvider,
@@ -28,11 +29,15 @@ export default function logoutHandler(req: NextApiRequest, res: NextApiResponse)
       const auth = headerValue(req.headers.authorization)
       const bearer = auth && /^Bearer\s+(\S+)/i.exec(auth.trim())
       const bearerOk = !!(bearer && getLocalTokenProvider().verifySecret(bearer[1]))
-      if (verifySessionCookie(cookie) && !bearerOk) {
+      const cookieOk = verifySessionCookie(cookie)
+      if (cookieOk && !bearerOk) {
         if (headerValue(req.headers[REMOTE_CSRF_HEADER]) !== REMOTE_CSRF_VALUE) {
           return res.status(403).json({ error: "CSRF header required", code: "csrf" })
         }
       }
+      // Only a proven session (cookie or Bearer) may revoke every copy.
+      // An unauthenticated POST still clears *this* browser's cookie.
+      if (cookieOk || bearerOk) bumpSessionGeneration()
     }
 
     res.setHeader("Set-Cookie", clearSessionCookieHeader(requestIsHttps(req.headers)))
